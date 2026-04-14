@@ -1,25 +1,52 @@
-import { readdir, stat, readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { readdir, lstat, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { join, relative, dirname } from 'node:path';
+import { existsSync } from 'node:fs';
+import { homedir, cpus, totalmem } from 'node:os';
 import { createIngestionWorkflow } from '../ingest/workflow.ts';
 import type { StoreProvider, EmbeddingProvider } from '../store/interface.ts';
+
+function defaultWorkers(): number {
+  const cpuCount = cpus().length;
+  const memGB = totalmem() / (1024 ** 3);
+  const byPool = 8;
+  const byCpu = Math.max(2, cpuCount);
+  const byMem = Math.floor(memGB * 2);
+  return Math.min(byPool, byCpu, byMem);
+}
 
 /**
  * Recursively find all markdown files in a directory.
  */
 async function findMarkdownFiles(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
+  const entries = await readdir(dir);
   const files: string[] = [];
 
   for (const entry of entries) {
-    const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
+    if (entry.startsWith('.')) continue;
+    if (entry === 'node_modules') continue;
+
+    const fullPath = join(dir, entry);
+    let statInfo;
+    try {
+      statInfo = await lstat(fullPath);
+    } catch {
+      console.warn(`[import] Skipping unreadable path: ${fullPath}`);
+      continue;
+    }
+
+    if (statInfo.isSymbolicLink()) {
+      console.warn(`[import] Skipping symlink: ${fullPath}`);
+      continue;
+    }
+
+    if (statInfo.isDirectory()) {
       files.push(...await findMarkdownFiles(fullPath));
-    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+    } else if (statInfo.isFile() && (entry.endsWith('.md') || entry.endsWith('.mdx'))) {
       files.push(fullPath);
     }
   }
 
-  return files;
+  return files.sort();
 }
 
 /**
@@ -28,11 +55,32 @@ async function findMarkdownFiles(dir: string): Promise<string[]> {
 export async function bulkImport(
   baseDir: string, 
   storeInstance?: StoreProvider, 
-  embedderInstance?: EmbeddingProvider
+  embedderInstance?: EmbeddingProvider,
+  options: { workerCount?: number, fresh?: boolean } = {}
 ): Promise<{ imported: number, skipped: number, failed: number }> {
   console.log(`Scanning ${baseDir} for markdown files...`);
-  const files = await findMarkdownFiles(baseDir);
-  console.log(`Found ${files.length} markdown files.`);
+  const allFiles = await findMarkdownFiles(baseDir);
+  console.log(`Found ${allFiles.length} markdown files.`);
+
+  const fresh = options.fresh || false;
+  const workerCount = options.workerCount || defaultWorkers();
+
+  const checkpointPath = join(homedir(), '.gbrain', 'import-checkpoint.json');
+  let files = allFiles;
+  let resumeIndex = 0;
+
+  if (!fresh && existsSync(checkpointPath)) {
+    try {
+      const cp = JSON.parse(await readFile(checkpointPath, 'utf-8'));
+      if (cp.dir === baseDir && cp.totalFiles === allFiles.length) {
+        resumeIndex = cp.processedIndex;
+        files = allFiles.slice(resumeIndex);
+        console.log(`Resuming from checkpoint: skipping ${resumeIndex} already-processed files`);
+      }
+    } catch {
+      // Invalid checkpoint, start fresh
+    }
+  }
 
   // If providers are not passed (CLI mode), we initialize default ones
   let activeStore = storeInstance;
@@ -54,13 +102,19 @@ export async function bulkImport(
     embedder: activeEmbedder
   });
 
-  const run = await workflow.createRun();
-  
+  const actualWorkers = Math.max(1, workerCount);
+  if (actualWorkers > 1) {
+    console.log(`Using ${actualWorkers} parallel workers`);
+  }
+
   let imported = 0;
   let skipped = 0;
   let failed = 0;
+  let processed = 0;
 
-  for (const file of files) {
+  async function processFile(file: string) {
+    // Each concurrent task should have its own run to avoid state conflicts
+    const run = await workflow.createRun();
     try {
       const content = await readFile(file, 'utf-8');
       const relativePath = relative(baseDir, file);
@@ -93,6 +147,48 @@ export async function bulkImport(
       failed++;
       console.log(`❌ Failed to read/process ${file}: ${error.message}`);
     }
+
+    processed++;
+    if (processed % 100 === 0 || processed === files.length) {
+      if (processed % 100 === 0) {
+        try {
+          const cpDir = join(homedir(), '.gbrain');
+          if (!existsSync(cpDir)) {
+            await mkdir(cpDir, { recursive: true });
+          }
+          await writeFile(checkpointPath, JSON.stringify({
+            dir: baseDir,
+            totalFiles: allFiles.length,
+            processedIndex: resumeIndex + processed,
+            timestamp: new Date().toISOString(),
+          }));
+        } catch { /* non-fatal */ }
+      }
+    }
+  }
+
+  // Concurrent execution
+  if (actualWorkers > 1) {
+    let queueIndex = 0;
+    await Promise.all(
+      Array.from({ length: actualWorkers }, async () => {
+        while (true) {
+          const idx = queueIndex++;
+          if (idx >= files.length) break;
+          await processFile(files[idx]);
+        }
+      })
+    );
+  } else {
+    for (const file of files) {
+      await processFile(file);
+    }
+  }
+
+  if (failed === 0 && existsSync(checkpointPath)) {
+    try { await rm(checkpointPath); } catch { /* non-fatal */ }
+  } else if (failed > 0 && existsSync(checkpointPath)) {
+    console.log(`  Checkpoint preserved (${failed} errors). Run again to retry failed files.`);
   }
 
   console.log('\n--- Import Summary ---');
@@ -104,8 +200,15 @@ export async function bulkImport(
 // Allow running directly from CLI
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  const dir = args[0] || '.';
-  bulkImport(dir)
+  const workersIdx = args.indexOf('--workers');
+  const workerCount = workersIdx !== -1 ? parseInt(args[workersIdx + 1], 10) : undefined;
+  const fresh = args.includes('--fresh');
+  
+  const flagValues = new Set<number>();
+  if (workersIdx !== -1) flagValues.add(workersIdx + 1);
+  const dir = args.find((a, i) => !a.startsWith('--') && !flagValues.has(i)) || '.';
+
+  bulkImport(dir, undefined, undefined, { workerCount, fresh })
     .then(() => process.exit(0))
     .catch((err) => {
       console.error('Fatal error:', err);

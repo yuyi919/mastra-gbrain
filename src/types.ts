@@ -64,6 +64,7 @@ export interface DatabaseHealth {
   ftsOk: boolean;
   tableDetails: Record<string, { ok: boolean; rows?: number; error?: string }>;
   vectorCoverage: { total: number; embedded: number };
+  schemaVersion?: { current: number; latest: number; ok: boolean };
 }
 
 export interface StaleChunk {

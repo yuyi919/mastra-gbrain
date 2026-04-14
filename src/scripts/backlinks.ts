@@ -1,7 +1,15 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, resolve, basename } from 'node:path';
+import { join, resolve, basename, dirname, relative } from 'node:path';
 import { remark } from 'remark';
 import { visit } from 'unist-util-visit';
+
+function extractPageTitle(content: string): string {
+  const fmMatch = content.match(/^title:\s*"?(.+?)"?\s*$/m);
+  if (fmMatch) return fmMatch[1];
+  const h1Match = content.match(/^#\s+(.+)$/m);
+  if (h1Match) return h1Match[1].trim();
+  return 'Untitled';
+}
 
 async function findMarkdownFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -18,7 +26,7 @@ async function findMarkdownFiles(dir: string): Promise<string[]> {
   return files;
 }
 
-export async function checkBacklinks(baseDir: string, fix: boolean = false): Promise<{ missingCount: number, missingBacklinks: Map<string, Set<string>> }> {
+export async function checkBacklinks(baseDir: string, fix: boolean = false, dryRun: boolean = false): Promise<{ missingCount: number, missingBacklinks: Map<string, Set<string>> }> {
   const files = await findMarkdownFiles(baseDir);
   const fileBasenames = new Map<string, string>(); // basename -> fullpath
 
@@ -77,21 +85,41 @@ export async function checkBacklinks(baseDir: string, fix: boolean = false): Pro
 
       if (fix) {
         const today = new Date().toISOString().split('T')[0];
-        const newEntries = Array.from(actuallyMissing).map(s => {
-          const sName = basename(s, '.md');
-          // simple relative path for now
-          return `- **${today}** | Referenced in [${sName}](./${basename(s)})`;
-        }).join('\n');
+        
+        const newEntries = [];
+        for (const s of actuallyMissing) {
+          const sContent = await readFile(s, 'utf-8');
+          const title = extractPageTitle(sContent);
+          let relPath = relative(dirname(target), s);
+          if (!relPath.startsWith('.')) {
+            relPath = './' + relPath;
+          }
+          newEntries.push(`- **${today}** | Referenced in [${title}](${relPath})`);
+        }
+        const entriesStr = newEntries.join('\n');
 
-        // Append below timeline marker if exists, else append at bottom
-        if (content.includes('\n---\n')) {
-          content += `${newEntries}\n`;
+        // Insert into Timeline section
+        if (content.includes('## Timeline')) {
+          const parts = content.split('## Timeline');
+          const afterTimeline = parts[1];
+          const nextSection = afterTimeline.match(/\n## /);
+          if (nextSection) {
+            const insertIdx = parts[0].length + '## Timeline'.length + nextSection.index!;
+            content = content.slice(0, insertIdx) + '\n' + entriesStr + content.slice(insertIdx);
+          } else {
+            content = content.trimEnd() + '\n' + entriesStr + '\n';
+          }
         } else {
-          content += `\n---\n${newEntries}\n`;
+          // Add Timeline section
+          content = content.trimEnd() + '\n\n## Timeline\n\n' + entriesStr + '\n';
         }
 
-        await writeFile(target, content, 'utf-8');
-        console.log(`🔧 Fixed ${target} by appending to Timeline.`);
+        if (!dryRun) {
+          await writeFile(target, content, 'utf-8');
+          console.log(`🔧 Fixed ${target} by appending to Timeline.`);
+        } else {
+          console.log(`🔍 [Dry Run] Would fix ${target} by appending to Timeline:\n${entriesStr}`);
+        }
       }
     } else {
       // Remove from map if not actually missing
@@ -109,15 +137,17 @@ export async function checkBacklinks(baseDir: string, fix: boolean = false): Pro
 }
 
 if (import.meta.main) {
-  const mode = process.argv[2]; // 'check' or 'fix'
-  const dir = process.argv[3] || '.';
+  const args = process.argv.slice(2);
+  const mode = args[0]; // 'check' or 'fix'
+  const dryRun = args.includes('--dry-run');
+  const dir = args.filter(a => a !== 'check' && a !== 'fix' && a !== '--dry-run')[0] || '.';
   
   if (mode !== 'check' && mode !== 'fix') {
-    console.error('Usage: bun run src/scripts/backlinks.ts <check|fix> <directory>');
+    console.error('Usage: bun run src/scripts/backlinks.ts <check|fix> <directory> [--dry-run]');
     process.exit(1);
   }
 
-  checkBacklinks(resolve(dir), mode === 'fix')
+  checkBacklinks(resolve(dir), mode === 'fix', dryRun)
     .then(({ missingCount }) => process.exit(missingCount > 0 && mode === 'check' ? 1 : 0))
     .catch(console.error);
 }

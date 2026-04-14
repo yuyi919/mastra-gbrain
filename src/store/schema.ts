@@ -1,6 +1,8 @@
 import { sqliteTable, text, integer, unique, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
+export const LATEST_VERSION = 1;
+
 export const pages = sqliteTable('pages', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   slug: text('slug').notNull().unique(),
