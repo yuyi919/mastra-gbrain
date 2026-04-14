@@ -1,0 +1,8 @@
+- [x] `SearchResult` interface includes `stale?: boolean`.
+- [x] `searchKeyword` returns `stale` based on `embedded_at` vs `updated_at`.
+- [x] `StoreProvider` interface exposes `getHealthReport()`, `getStaleChunks()`, `upsertVectors()`, and `markChunksEmbedded()`.
+- [x] `LibSQLStore` correctly implements the encapsulated methods.
+- [x] `src/scripts/doctor.ts` no longer casts to `LibSQLStore` or executes raw SQL queries.
+- [x] `src/scripts/embed.ts` no longer casts to `LibSQLStore` or executes raw SQL queries.
+- [x] `bun test` passes successfully for all tests.
+- [x] `bun tsc --noEmit` passes without errors.

@@ -1,0 +1,11 @@
+- [x] `/tmp/gbrain/TODOS.md` 和 `docs/` 目录被成功复制、翻译成中文并存放于 `references/` 目录。
+- [x] `CLAUDE.md` 中记录了“定期拉取 gbrain 文档与实现”的任务规范。
+- [x] `src/scripts/backlinks.ts` (AST解析) 能够正确扫描并报告/修复 Markdown 文件间的双向引用缺失。
+- [x] `src/scripts/doctor.ts` 能够检查 SQLite、FTS 以及计算向量块覆盖率并返回健康报告。
+- [x] `src/scripts/embed.ts --stale` 能够筛选未向量化的块并执行增量生成。
+- [x] `searchKeyword` 在 `LibSQLStore` 中得到了升级，支持 `type`, `exclude_slugs`, `detail` 过滤，并且做到了同一页面仅返回最佳 Chunk (去重)。
+- [x] `searchKeyword` 支持 `dedupe` 参数用于开启或关闭单页面去重。
+- [x] 系统移除了全局的硬编码 `store` 实例，所有的 `StoreProvider` 和 `EmbeddingProvider` 均重构为支持工厂函数传入。
+- [x] 默认环境使用内存 `LibSQLStore` (`file::memory:`) 和 Mock 数组生成的 `DummyEmbeddingProvider`。
+- [x] 所有的 TypeScript 类型检查（`tsc --noEmit`）均通过。
+- [x] 完成了整个阶段的最终总结并写入 `CLAUDE.md`。

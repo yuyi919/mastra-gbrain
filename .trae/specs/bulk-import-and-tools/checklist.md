@@ -1,0 +1,5 @@
+- [x] 在 `test/fixtures/docs` 创建了高质量的本地仿真文档库。
+- [x] 编写了 `src/scripts/import.ts` 能够递归读取本地目录并将所有的 `.md` 批量摄入知识库。
+- [x] 在 `src/tools/` 目录下封装了页面（Page）、标签（Tags）、链接（Links）、时间线（Timeline）和配置（Config）等公开 API 的大模型 Tools。
+- [x] 在 `src/index.ts` 注册了全部的新工具。
+- [x] 编写并跑通了 `test/integration.test.ts`，证明新工具和批量导入脚本能够完美处理多语言、带历史快照和 Timeline 结构的长篇文档内容。

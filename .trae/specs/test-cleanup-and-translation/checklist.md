@@ -1,0 +1,8 @@
+- [x] All `.md` files in `references/docs/`, `references/recipes/`, and `references/TODOS.md` are translated to Chinese.
+- [x] `references/AGENTS.md` is created and clearly explains the directory's origin.
+- [x] All test files use `file:./tmp/test-xxx.db` for database URLs.
+- [x] No `*.db*` files exist in the project root directory.
+- [x] `src/store/index.ts` exports factory functions instead of static instances.
+- [x] The hacky `Object.defineProperty` in `test/integration.test.ts` is removed and `bulkImport` uses DI correctly.
+- [x] `bun test` passes successfully.
+- [x] `bun tsc --noEmit` passes without errors.

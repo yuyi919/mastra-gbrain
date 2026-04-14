@@ -1,0 +1,8 @@
+- [x] `src/scripts/doctor.ts` and `src/scripts/embed.ts` accept an optional `storeInstance` parameter for testing.
+- [x] `src/scripts/backlinks.ts` returns actionable data instead of just logging.
+- [x] Fixtures in `test/fixtures/scripts/backlinks/` are created and contain realistic markdown linking scenarios.
+- [x] `test/scripts/backlinks.test.ts` covers both `check` and `fix` scenarios.
+- [x] `test/scripts/doctor.test.ts` correctly verifies a healthy store via DI.
+- [x] `test/scripts/embed.test.ts` successfully triggers `embedStale` on chunks without embeddings.
+- [x] `bun test` passes successfully for the new script tests.
+- [x] `bun tsc --noEmit` passes without errors.

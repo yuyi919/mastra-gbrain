@@ -1,0 +1,8 @@
+- [x] `src/types.ts` 包含了所有新增功能所需的类型声明。
+- [x] `LibSQLStore` 支持通过 slug 添加、删除、获取正向和反向链接。
+- [x] `LibSQLStore` 支持结构化时间线 (Timeline Entries) 的插入和读取。
+- [x] `LibSQLStore` 支持 Raw Data (原始上下文数据) 的存储与读取。
+- [x] `LibSQLStore` 支持文件元数据的记录。
+- [x] `LibSQLStore` 支持读取和更新 Config 配置项。
+- [x] `LibSQLStore` 支持日志记录 (Ingest Log, MCP Log) 及 Token 验证。
+- [x] 新增功能的所有单元测试均已通过，没有破坏原有的功能。

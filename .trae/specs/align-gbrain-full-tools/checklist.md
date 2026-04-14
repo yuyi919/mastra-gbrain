@@ -1,0 +1,7 @@
+- [x] `GBrainStore` 和 `LibSQLStore` 成功新增了 `getPageContent`, `listPages` 和 `deletePage` 方法。
+- [x] 成功将以上方法封装为大模型可以调用的 Mastra Tools (`readPageTool`, `listPagesTool`, `deletePageTool`)。
+- [x] 成功将 `src/scripts/import.ts` 封装为 `bulkImportTool`，供大模型批量导入本地文件夹。
+- [x] 成功封装了 Raw Data 的增删改查工具 (`getRawDataTool`, `putRawDataTool`)。
+- [x] 新的 Tools 已在 `src/index.ts` 和 `src/agent/index.ts` 注册，并更新了 Agent 指令。
+- [x] 编写了单元测试验证所有新增的 API 和工具。
+- [x] 所有的 `bun test` 单元测试及 TypeScript `tsc --noEmit` 类型检查均通过。
