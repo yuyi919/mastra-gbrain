@@ -53,6 +53,14 @@
 - **SearchResult `stale` 字段对齐**: 重新审查官方库并补齐了 `SearchResult` 缺失的 `stale` 字段。通过在 FTS5 检索时动态对比 `embedded_at` 和页面 `updated_at`，精准向 AI 暴露文本块的向量“过时”状态。
 - **Agent 自动化语义翻译**: 实现了利用专用智能体（Agent）直接对拉取到的全量英文文档进行原格式的高质量中文翻译，并添加了 `AGENTS.md` 来源说明。
 
+### Phase 9: 核心功能深度对齐与日常代码审查规范
+- **制定日常分析规范**: 建立了 `routine-alignment-analysis` 规范，利用大模型自动对比参考仓库 `/tmp/gbrain` 与本地代码的核心逻辑差异，发现并暴露了仅通过表面测试而遗漏深层边缘用例的风险。
+- **Search 去重逻辑重构**: 引入了原版的 4 层去重流水线（来源过滤、Jaccard 语义相似度过滤、类型多样性控制以及 `compiled_truth` 兜底保证），彻底解决了本地简单前缀匹配导致的搜索结果同质化和关键摘要丢失问题。
+- **反向链接安全回写**: 重构了 `check-backlinks` 脚本，引入了精确的相对路径计算（`relative` 与 `dirname`）以防止跨目录的 404 死链，并智能识别 `## Timeline` 锚点安全插入链接，增加了 `--dry-run` 预览模式。
+- **Doctor 健康检查增强**: 引入了数据库 Schema 版本检查 (`LATEST_VERSION`) 以及针对 CI/CD 友好的 `--json` 结构化输出支持，使得诊断结果可编程化。
+- **Import 工作流安全性与并发提升**: 针对批量导入增加了对符号链接 (`isSymbolicLink`) 的拦截以防止路径穿越提权漏洞，过滤了隐藏目录和 `node_modules`。同时引入了基于检查点 (Checkpoint) 的断点续传机制和基于系统资源自适应的多 Worker 并发处理队列，大幅提升了海量文档的入库稳定性和速度。
+- **严格的工作流纪律**: 巩固并执行了每次 Spec 完成后自动进行阶段总结与 Git 提交的硬性规定。
+
 ## 反思与迭代 (Reflections & Iterations)
 
 - **工作流纪律 (Workflow Discipline)**：**每次 Spec（规范）执行完成、代码修改与验证结束时，AI 助手必须自动进行阶段总结，并自动执行 Git 提交 (`git add .` 与语义化 `git commit`)。绝对无需等待用户反复提醒或指令！**
