@@ -1,10 +1,29 @@
-import { countWords, getSegments } from '../segmenter.ts';
+import { countWords, getSegments } from "../segmenter.js";
 
 const DELIMITERS: string[][] = [
-  ['\n\n'],
-  ['\n'],
-  ['. ', '! ', '? ', '.\n', '!\n', '?\n', '。', '！', '？', '．', '！', '？', '۔', '؟', '॥', '!', '?', '.'], // added full-width forms, Arabic, Hindi
-  ['; ', ': ', ', ', '；', '：', '，', '、', '،', '；', ':', ';', ','],
+  ["\n\n"],
+  ["\n"],
+  [
+    ". ",
+    "! ",
+    "? ",
+    ".\n",
+    "!\n",
+    "?\n",
+    "。",
+    "！",
+    "？",
+    "．",
+    "！",
+    "？",
+    "۔",
+    "؟",
+    "॥",
+    "!",
+    "?",
+    ".",
+  ], // added full-width forms, Arabic, Hindi
+  ["; ", ": ", ", ", "；", "：", "，", "、", "،", "；", ":", ";", ","],
   [],
 ];
 
@@ -60,7 +79,7 @@ function splitAtDelimiters(text: string, delimiters: string[]): string[] {
   let remaining = text;
   while (remaining.length > 0) {
     let earliest = -1;
-    let earliestDelim = '';
+    let earliestDelim = "";
     for (const delim of delimiters) {
       const idx = remaining.indexOf(delim);
       if (idx !== -1 && (earliest === -1 || idx < earliest)) {
@@ -78,21 +97,21 @@ function splitAtDelimiters(text: string, delimiters: string[]): string[] {
     }
     remaining = remaining.slice(earliest + earliestDelim.length);
   }
-  return pieces.filter(p => p.trim().length > 0);
+  return pieces.filter((p) => p.trim().length > 0);
 }
 
 function splitOnWhitespace(text: string, target: number): string[] {
   const segments = getSegments(text);
   if (segments.length === 0) return [];
   const pieces: string[] = [];
-  let currentPiece = '';
+  let currentPiece = "";
   let currentWords = 0;
   for (const s of segments) {
     currentPiece += s.segment;
     if (s.isWordLike) currentWords++;
     if (currentWords >= target) {
       pieces.push(currentPiece);
-      currentPiece = '';
+      currentPiece = "";
       currentWords = 0;
     }
   }
@@ -140,11 +159,20 @@ function extractTrailingContext(text: string, targetWords: number): string {
     if (wordsSeen >= targetWords) break;
   }
   if (startIndex < 0) startIndex = 0;
-  
-  const trailing = segments.slice(startIndex).map(s => s.segment).join('');
+
+  const trailing = segments
+    .slice(startIndex)
+    .map((s) => s.segment)
+    .join("");
   const boundaryMatch = trailing.match(/[.!?]\s+|[。！？]/);
-  if (boundaryMatch && boundaryMatch.index !== undefined && boundaryMatch.index < trailing.length / 2) {
-    const afterBoundary = trailing.slice(boundaryMatch.index + boundaryMatch[0].length);
+  if (
+    boundaryMatch &&
+    boundaryMatch.index !== undefined &&
+    boundaryMatch.index < trailing.length / 2
+  ) {
+    const afterBoundary = trailing.slice(
+      boundaryMatch.index + boundaryMatch[0].length
+    );
     if (afterBoundary.trim().length > 0) {
       return afterBoundary;
     }

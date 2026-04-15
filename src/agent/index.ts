@@ -1,24 +1,33 @@
-import { Agent } from '@mastra/core/agent';
-import { createIngestTool } from '../tools/ingest.ts';
-import { createSearchTool } from '../tools/search.ts';
-import { createPageTools } from '../tools/page.ts';
-import { createLinksTools } from '../tools/links.ts';
-import { createTimelineTool } from '../tools/timeline.ts';
-import { createConfigTools } from '../tools/config.ts';
-import { createListPagesTool } from '../tools/list.ts';
-import { createRawDataTools } from '../tools/raw.ts';
-import { createBulkImportTool } from '../tools/import.ts';
-import type { StoreProvider, EmbeddingProvider } from '../store/interface.ts';
+import { Agent } from "@mastra/core/agent";
+import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
+import { createConfigTools } from "../tools/config.js";
+import { createBulkImportTool } from "../tools/import.js";
+import { createIngestTool } from "../tools/ingest.js";
+import { createLinksTools } from "../tools/links.js";
+import { createListPagesTool } from "../tools/list.js";
+import { createPageTools } from "../tools/page.js";
+import { createRawDataTools } from "../tools/raw.js";
+import { createSearchTool } from "../tools/search.js";
+import { createTimelineTool } from "../tools/timeline.js";
 
-export function createGBrainAgent(store: StoreProvider, embedder: EmbeddingProvider) {
-  const { pageInfoTool, readPageTool, deletePageTool, addTagTool, removeTagTool } = createPageTools(store);
+export function createGBrainAgent(
+  store: StoreProvider,
+  embedder: EmbeddingProvider
+) {
+  const {
+    pageInfoTool,
+    readPageTool,
+    deletePageTool,
+    addTagTool,
+    removeTagTool,
+  } = createPageTools(store);
   const { linksTool, addLinkTool, removeLinkTool } = createLinksTools(store);
   const { configTool, setConfigTool } = createConfigTools(store);
   const { getRawDataTool, putRawDataTool } = createRawDataTools(store);
 
   return new Agent({
-    id: 'gbrain',
-    name: 'GBrain Agent',
+    id: "gbrain",
+    name: "GBrain Agent",
     instructions: `
 You are the GBrain AI Assistant, a local-first personal knowledge management system.
 You have access to a SQLite-backed vector and full-text search database.
@@ -36,7 +45,7 @@ Your core capabilities:
 
 When answering questions, always base your responses on the retrieved chunks or metadata from the database. Be concise and precise.
     `,
-    model: 'openai/gpt-4o-mini',
+    model: "openai/gpt-4o-mini",
     tools: {
       searchTool: createSearchTool(store, embedder),
       ingestTool: createIngestTool(store, embedder),
@@ -54,7 +63,7 @@ When answering questions, always base your responses on the retrieved chunks or 
       configTool,
       setConfigTool,
       getRawDataTool,
-      putRawDataTool
+      putRawDataTool,
     },
   });
 }

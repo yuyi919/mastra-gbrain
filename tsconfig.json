@@ -1,13 +1,39 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "Bundler",
-    "strict": true,
-    "noEmit": true,
+    "target": "esnext",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "types": ["bun"],
     "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "isolatedDeclarations": false,
+    "declaration": true,
+    "verbatimModuleSyntax": false,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "incremental": true,
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
     "allowImportingTsExtensions": true,
-    "types": ["bun-types"]
+    "rewriteRelativeImportExtensions": true,
+    "outDir": "./dist",
+    "rootDirs": ["./src", "./test"],
+    "declarationDir": "./dist",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "plugins": [
+      {
+        "name": "@effect/language-service"
+      }
+    ],
+    "emitDeclarationOnly": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

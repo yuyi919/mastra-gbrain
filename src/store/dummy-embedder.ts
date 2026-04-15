@@ -1,4 +1,4 @@
-import type { EmbeddingProvider } from './interface.ts';
+import type { EmbeddingProvider } from "./interface.js";
 
 export class DummyEmbeddingProvider implements EmbeddingProvider {
   public readonly dimension: number;
@@ -14,6 +14,8 @@ export class DummyEmbeddingProvider implements EmbeddingProvider {
 
   async embedBatch(texts: string[]): Promise<number[][]> {
     // Return mock vectors for each text
-    return texts.map(() => new Array(this.dimension).fill(0).map(() => Math.random()));
+    return texts.map(() =>
+      new Array(this.dimension).fill(0).map(() => Math.random())
+    );
   }
 }

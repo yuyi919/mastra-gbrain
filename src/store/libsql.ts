@@ -1,12 +1,40 @@
-import { Database } from 'bun:sqlite';
-import { LibSQLVector } from '@mastra/libsql';
-import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
-import { eq, and, sql, notInArray } from 'drizzle-orm';
-import type { ChunkInput, PageRecord, DatabaseHealth, StaleChunk } from '../types.ts';
-import { extractWordsForSearch } from '../segmenter.ts';
-import { pages, tags, chunks_fts, content_chunks, page_versions, links, timeline_entries, raw_data, files, config, ingest_log, access_tokens, mcp_request_log, LATEST_VERSION } from './schema.ts';
-import type { LinkRecord, TimelineEntry, RawDataRecord, FileRecord, ConfigRecord, IngestLog, AccessToken, McpRequestLog, SearchResult, ChunkSource } from '../types.ts';
-import type { StoreProvider, IngestionStore, SearchOpts } from './interface.ts';
+import { Database } from "bun:sqlite";
+import { LibSQLVector } from "@mastra/libsql";
+import { and, eq, notInArray, sql } from "drizzle-orm";
+import { type BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite";
+import { extractWordsForSearch } from "../segmenter.js";
+import type {
+  AccessToken,
+  ChunkInput,
+  ChunkSource,
+  DatabaseHealth,
+  FileRecord,
+  IngestLog,
+  LinkRecord,
+  McpRequestLog,
+  PageRecord,
+  RawDataRecord,
+  SearchResult,
+  StaleChunk,
+  TimelineEntry,
+} from "../types.js";
+import type { SearchOpts, StoreProvider } from "./interface.js";
+import {
+  access_tokens,
+  chunks_fts,
+  config,
+  content_chunks,
+  files,
+  ingest_log,
+  LATEST_VERSION,
+  links,
+  mcp_request_log,
+  page_versions,
+  pages,
+  raw_data,
+  tags,
+  timeline_entries,
+} from "./schema.js";
 
 // --- Deduplication Logic moved to src/search/hybrid.ts ---
 
@@ -23,7 +51,7 @@ export class LibSQLStore implements StoreProvider {
   private drizzleDb: BunSQLiteDatabase;
   public vectorStore: LibSQLVector;
   private inTransaction = false;
-  public indexName = 'gbrain_chunks';
+  public indexName = "gbrain_chunks";
   public readonly url: string;
   public readonly authToken?: string;
   public readonly dimension: number;
@@ -38,11 +66,15 @@ export class LibSQLStore implements StoreProvider {
       this.inTransaction = true;
       this.vectorStore = options.vectorStore;
     } else {
-      const filename = this.url.replace(/^file:/, '');
+      const filename = this.url.replace(/^file:/, "");
       this.db = new Database(filename);
-      this.vectorStore = new LibSQLVector({ id: 'gbrain', url: this.url, authToken: this.authToken });
+      this.vectorStore = new LibSQLVector({
+        id: "gbrain",
+        url: this.url,
+        authToken: this.authToken,
+      });
     }
-    
+
     // Initialize Drizzle ORM instance wrapping the Bun SQLite Database
     this.drizzleDb = drizzle(this.db);
   }
@@ -218,7 +250,7 @@ export class LibSQLStore implements StoreProvider {
       await this.vectorStore.createIndex({
         indexName: this.indexName,
         dimension: this.dimension, // Use configured dimension
-        metric: 'cosine'
+        metric: "cosine",
       });
     } catch (err) {
       // Ignore if index already exists
@@ -226,17 +258,19 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getPage(slug: string): Promise<{ content_hash: string } | null> {
-    const result = await this.drizzleDb.select({ content_hash: pages.content_hash })
+    const result = await this.drizzleDb
+      .select({ content_hash: pages.content_hash })
       .from(pages)
       .where(eq(pages.slug, slug))
       .limit(1);
-    
+
     if (result.length === 0 || !result[0].content_hash) return null;
     return { content_hash: result[0].content_hash };
   }
 
   async getPageContent(slug: string): Promise<PageRecord | null> {
-    const result = await this.drizzleDb.select()
+    const result = await this.drizzleDb
+      .select()
       .from(pages)
       .where(eq(pages.slug, slug))
       .limit(1);
@@ -251,48 +285,62 @@ export class LibSQLStore implements StoreProvider {
       type: result[0].type as any,
       title: result[0].title,
       tags,
-      frontmatter: typeof result[0].frontmatter === 'string' ? JSON.parse(result[0].frontmatter) : result[0].frontmatter,
+      frontmatter:
+        typeof result[0].frontmatter === "string"
+          ? JSON.parse(result[0].frontmatter)
+          : result[0].frontmatter,
       compiled_truth: result[0].compiled_truth,
       timeline: result[0].timeline,
-      content_hash: result[0].content_hash || '',
+      content_hash: result[0].content_hash || "",
       created_at: result[0].created_at,
-      updated_at: result[0].updated_at
+      updated_at: result[0].updated_at,
     };
   }
 
-  async listPages(options?: { type?: string, tag?: string }): Promise<{ slug: string, title: string, type: string }[]> {
-    let query = this.drizzleDb.select({
-      slug: pages.slug,
-      title: pages.title,
-      type: pages.type
-    }).from(pages).$dynamic();
-
-    if (options?.tag) {
-      query = this.drizzleDb.select({
+  async listPages(options?: {
+    type?: string;
+    tag?: string;
+  }): Promise<{ slug: string; title: string; type: string }[]> {
+    let query = this.drizzleDb
+      .select({
         slug: pages.slug,
         title: pages.title,
-        type: pages.type
+        type: pages.type,
       })
       .from(pages)
-      .innerJoin(tags, eq(pages.id, tags.page_id))
-      .where(eq(tags.tag, options.tag))
       .$dynamic();
+
+    if (options?.tag) {
+      query = this.drizzleDb
+        .select({
+          slug: pages.slug,
+          title: pages.title,
+          type: pages.type,
+        })
+        .from(pages)
+        .innerJoin(tags, eq(pages.id, tags.page_id))
+        .where(eq(tags.tag, options.tag))
+        .$dynamic();
     }
 
     const result = await query;
     let filtered = result;
-    
+
     if (options?.type) {
-      filtered = result.filter(r => r.type === options.type);
+      filtered = result.filter((r) => r.type === options.type);
     }
 
     return filtered;
   }
 
   async deletePage(slug: string): Promise<boolean> {
-    const pageResult = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1);
+    const pageResult = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, slug))
+      .limit(1);
     if (pageResult.length === 0) return false;
-    
+
     const page_id = pageResult[0].id;
 
     // Delete chunks (FTS and Vector store)
@@ -306,79 +354,101 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getTags(slug: string): Promise<string[]> {
-    const result = await this.drizzleDb.select({ tag: tags.tag })
+    const result = await this.drizzleDb
+      .select({ tag: tags.tag })
       .from(tags)
       .innerJoin(pages, eq(tags.page_id, pages.id))
       .where(eq(pages.slug, slug));
-    
-    return result.map(r => r.tag || '').filter(Boolean);
+
+    return result.map((r) => r.tag || "").filter(Boolean);
   }
 
   async createVersion(slug: string): Promise<void> {
-    const pageResult = await this.drizzleDb.select({
-      id: pages.id,
-      compiled_truth: pages.compiled_truth,
-      frontmatter: pages.frontmatter
-    })
-    .from(pages)
-    .where(eq(pages.slug, slug))
-    .limit(1);
+    const pageResult = await this.drizzleDb
+      .select({
+        id: pages.id,
+        compiled_truth: pages.compiled_truth,
+        frontmatter: pages.frontmatter,
+      })
+      .from(pages)
+      .where(eq(pages.slug, slug))
+      .limit(1);
 
     if (pageResult.length > 0) {
       await this.drizzleDb.insert(page_versions).values({
         page_id: pageResult[0].id,
-        compiled_truth: pageResult[0].compiled_truth || '',
-        frontmatter: pageResult[0].frontmatter || '{}'
+        compiled_truth: pageResult[0].compiled_truth || "",
+        frontmatter: pageResult[0].frontmatter || "{}",
       });
     }
   }
 
-  async putPage(slug: string, page: Omit<PageRecord, 'slug' | 'tags'>): Promise<void> {
-    await this.drizzleDb.insert(pages)
+  async putPage(
+    slug: string,
+    page: Omit<PageRecord, "slug" | "tags">
+  ): Promise<void> {
+    await this.drizzleDb
+      .insert(pages)
       .values({
         slug,
-        type: page.type ?? 'concept',
+        type: page.type ?? "concept",
         title: page.title ?? slug,
-        frontmatter: page.frontmatter ? JSON.stringify(page.frontmatter) : '{}',
-        compiled_truth: page.compiled_truth ?? '',
-        timeline: page.timeline ?? '',
-        content_hash: page.content_hash ?? null
+        frontmatter: page.frontmatter ? JSON.stringify(page.frontmatter) : "{}",
+        compiled_truth: page.compiled_truth ?? "",
+        timeline: page.timeline ?? "",
+        content_hash: page.content_hash ?? null,
       })
       .onConflictDoUpdate({
         target: pages.slug,
         set: {
-          type: page.type ?? 'concept',
+          type: page.type ?? "concept",
           title: page.title ?? slug,
-          frontmatter: page.frontmatter ? JSON.stringify(page.frontmatter) : '{}',
-          compiled_truth: page.compiled_truth ?? '',
-          timeline: page.timeline ?? '',
+          frontmatter: page.frontmatter
+            ? JSON.stringify(page.frontmatter)
+            : "{}",
+          compiled_truth: page.compiled_truth ?? "",
+          timeline: page.timeline ?? "",
           content_hash: page.content_hash ?? null,
-          updated_at: sql`CURRENT_TIMESTAMP`
-        }
+          updated_at: sql`CURRENT_TIMESTAMP`,
+        },
       });
-      
+
     await this.createVersion(slug);
   }
 
   async addTag(slug: string, tag: string): Promise<void> {
-    const pageResult = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1);
+    const pageResult = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, slug))
+      .limit(1);
     if (pageResult.length === 0) return;
-    
-    await this.drizzleDb.insert(tags)
+
+    await this.drizzleDb
+      .insert(tags)
       .values({ page_id: pageResult[0].id, tag })
       .onConflictDoNothing();
   }
 
   async removeTag(slug: string, tag: string): Promise<void> {
-    const pageResult = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1);
+    const pageResult = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, slug))
+      .limit(1);
     if (pageResult.length === 0) return;
-    
-    await this.drizzleDb.delete(tags)
+
+    await this.drizzleDb
+      .delete(tags)
       .where(and(eq(tags.page_id, pageResult[0].id), eq(tags.tag, tag)));
   }
 
   async upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void> {
-    const pageResult = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1);
+    const pageResult = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, slug))
+      .limit(1);
     if (pageResult.length === 0) return;
     const page_id = pageResult[0].id;
 
@@ -388,25 +458,25 @@ export class LibSQLStore implements StoreProvider {
     if (chunks.length > 0) {
       // Insert into content_chunks (real data)
       await this.drizzleDb.insert(content_chunks).values(
-        chunks.map(chunk => ({
+        chunks.map((chunk) => ({
           page_id,
           chunk_index: chunk.chunk_index,
           chunk_text: chunk.chunk_text,
           chunk_source: chunk.chunk_source,
           token_count: chunk.token_count ?? 0,
-          embedded_at: chunk.embedding ? sql`CURRENT_TIMESTAMP` : null
+          embedded_at: chunk.embedding ? sql`CURRENT_TIMESTAMP` : null,
         }))
       );
 
       // Then insert new chunks into FTS5 using Drizzle
       await this.drizzleDb.insert(chunks_fts).values(
-        chunks.map(chunk => ({
+        chunks.map((chunk) => ({
           page_id,
           chunk_index: chunk.chunk_index,
           chunk_text: chunk.chunk_text,
           chunk_source: chunk.chunk_source,
           token_count: chunk.token_count ?? 0,
-          chunk_text_segmented: extractWordsForSearch(chunk.chunk_text)
+          chunk_text_segmented: extractWordsForSearch(chunk.chunk_text),
         }))
       );
     }
@@ -414,8 +484,8 @@ export class LibSQLStore implements StoreProvider {
     // Now upsert embeddings using LibSQLVector
     // We only use LibSQLVector if embeddings are provided
     const vectorData = chunks
-      .filter(c => c.embedding)
-      .map(c => ({
+      .filter((c) => c.embedding)
+      .map((c) => ({
         id: `${slug}::${c.chunk_index}`,
         vector: c.embedding!,
         metadata: {
@@ -423,16 +493,16 @@ export class LibSQLStore implements StoreProvider {
           chunk_index: c.chunk_index,
           chunk_source: c.chunk_source,
           chunk_text: c.chunk_text,
-          token_count: c.token_count ?? 0
-        }
+          token_count: c.token_count ?? 0,
+        },
       }));
 
     if (vectorData.length > 0) {
       const upsertParams = {
         indexName: this.indexName,
-        vectors: vectorData.map(v => v.vector),
-        ids: vectorData.map(v => v.id),
-        metadata: vectorData.map(v => v.metadata)
+        vectors: vectorData.map((v) => v.vector),
+        ids: vectorData.map((v) => v.id),
+        metadata: vectorData.map((v) => v.metadata),
       };
 
       await this.vectorStore.upsert(upsertParams);
@@ -440,202 +510,280 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async deleteChunks(slug: string): Promise<void> {
-    const pageResult = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1);
+    const pageResult = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, slug))
+      .limit(1);
     if (pageResult.length === 0) return;
     const page_id = pageResult[0].id;
 
     // Delete from FTS5
-    await this.drizzleDb.delete(chunks_fts)
+    await this.drizzleDb
+      .delete(chunks_fts)
       .where(eq(chunks_fts.page_id, page_id));
-      
+
     // Delete from real table
-    await this.drizzleDb.delete(content_chunks)
+    await this.drizzleDb
+      .delete(content_chunks)
       .where(eq(content_chunks.page_id, page_id));
 
     // Delete from LibSQLVector
     try {
-      await this.vectorStore.deleteVectors({ indexName: this.indexName, filter: { slug: { $eq: slug } } });
+      await this.vectorStore.deleteVectors({
+        indexName: this.indexName,
+        filter: { slug: { $eq: slug } },
+      });
     } catch (err) {
       // May fail if filter delete isn't fully supported or index doesn't exist
     }
   }
 
   // --- Links Management ---
-  async addLink(fromSlug: string, toSlug: string, linkType: string = '', context: string = ''): Promise<void> {
-    const fromPage = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, fromSlug)).limit(1);
-    const toPage = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, toSlug)).limit(1);
-    
+  async addLink(
+    fromSlug: string,
+    toSlug: string,
+    linkType: string = "",
+    context: string = ""
+  ): Promise<void> {
+    const fromPage = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, fromSlug))
+      .limit(1);
+    const toPage = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, toSlug))
+      .limit(1);
+
     if (fromPage.length === 0 || toPage.length === 0) return;
 
-    await this.drizzleDb.insert(links)
+    await this.drizzleDb
+      .insert(links)
       .values({
         from_page_id: fromPage[0].id,
         to_page_id: toPage[0].id,
         link_type: linkType,
-        context: context
+        context: context,
       })
       .onConflictDoNothing();
   }
 
   async removeLink(fromSlug: string, toSlug: string): Promise<void> {
-    const fromPage = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, fromSlug)).limit(1);
-    const toPage = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, toSlug)).limit(1);
-    
+    const fromPage = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, fromSlug))
+      .limit(1);
+    const toPage = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, toSlug))
+      .limit(1);
+
     if (fromPage.length === 0 || toPage.length === 0) return;
 
-    await this.drizzleDb.delete(links)
-      .where(and(
-        eq(links.from_page_id, fromPage[0].id),
-        eq(links.to_page_id, toPage[0].id)
-      ));
+    await this.drizzleDb
+      .delete(links)
+      .where(
+        and(
+          eq(links.from_page_id, fromPage[0].id),
+          eq(links.to_page_id, toPage[0].id)
+        )
+      );
   }
 
   async getOutgoingLinks(slug: string): Promise<LinkRecord[]> {
-    const result = await this.drizzleDb.select({
-      id: links.id,
-      from_page_id: links.from_page_id,
-      to_page_id: links.to_page_id,
-      to_slug: pages.slug,
-      link_type: links.link_type,
-      context: links.context,
-      created_at: links.created_at
-    })
-    .from(links)
-    .innerJoin(pages, eq(links.to_page_id, pages.id))
-    .where(eq(links.from_page_id, 
-      this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1)
-    ));
+    const result = await this.drizzleDb
+      .select({
+        id: links.id,
+        from_page_id: links.from_page_id,
+        to_page_id: links.to_page_id,
+        to_slug: pages.slug,
+        link_type: links.link_type,
+        context: links.context,
+        created_at: links.created_at,
+      })
+      .from(links)
+      .innerJoin(pages, eq(links.to_page_id, pages.id))
+      .where(
+        eq(
+          links.from_page_id,
+          this.drizzleDb
+            .select({ id: pages.id })
+            .from(pages)
+            .where(eq(pages.slug, slug))
+            .limit(1)
+        )
+      );
 
-    return result.map(r => ({
+    return result.map((r) => ({
       id: r.id,
       from_slug: slug,
       to_slug: r.to_slug,
       link_type: r.link_type,
       context: r.context,
-      created_at: r.created_at
+      created_at: r.created_at,
     }));
   }
 
   async getBacklinks(slug: string): Promise<LinkRecord[]> {
-    const result = await this.drizzleDb.select({
-      id: links.id,
-      from_page_id: links.from_page_id,
-      to_page_id: links.to_page_id,
-      from_slug: pages.slug,
-      link_type: links.link_type,
-      context: links.context,
-      created_at: links.created_at
-    })
-    .from(links)
-    .innerJoin(pages, eq(links.from_page_id, pages.id))
-    .where(eq(links.to_page_id, 
-      this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1)
-    ));
+    const result = await this.drizzleDb
+      .select({
+        id: links.id,
+        from_page_id: links.from_page_id,
+        to_page_id: links.to_page_id,
+        from_slug: pages.slug,
+        link_type: links.link_type,
+        context: links.context,
+        created_at: links.created_at,
+      })
+      .from(links)
+      .innerJoin(pages, eq(links.from_page_id, pages.id))
+      .where(
+        eq(
+          links.to_page_id,
+          this.drizzleDb
+            .select({ id: pages.id })
+            .from(pages)
+            .where(eq(pages.slug, slug))
+            .limit(1)
+        )
+      );
 
-    return result.map(r => ({
+    return result.map((r) => ({
       id: r.id,
       from_slug: r.from_slug,
       to_slug: slug,
       link_type: r.link_type,
       context: r.context,
-      created_at: r.created_at
+      created_at: r.created_at,
     }));
   }
 
   // --- Timeline Management ---
-  async upsertTimelineEntries(slug: string, entries: Omit<TimelineEntry, 'id' | 'page_id' | 'created_at'>[]): Promise<void> {
-    const pageResult = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1);
+  async upsertTimelineEntries(
+    slug: string,
+    entries: Omit<TimelineEntry, "id" | "page_id" | "created_at">[]
+  ): Promise<void> {
+    const pageResult = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, slug))
+      .limit(1);
     if (pageResult.length === 0) return;
     const page_id = pageResult[0].id;
 
     // Delete existing timeline entries for this page to replace them
-    await this.drizzleDb.delete(timeline_entries)
+    await this.drizzleDb
+      .delete(timeline_entries)
       .where(eq(timeline_entries.page_id, page_id));
 
     if (entries.length > 0) {
       await this.drizzleDb.insert(timeline_entries).values(
-        entries.map(e => ({
+        entries.map((e) => ({
           page_id,
           date: e.date,
           source: e.source,
           summary: e.summary,
-          detail: e.detail
+          detail: e.detail,
         }))
       );
     }
   }
 
   async getTimelineEntries(slug: string): Promise<TimelineEntry[]> {
-    const result = await this.drizzleDb.select({
-      id: timeline_entries.id,
-      page_id: timeline_entries.page_id,
-      slug: pages.slug,
-      date: timeline_entries.date,
-      source: timeline_entries.source,
-      summary: timeline_entries.summary,
-      detail: timeline_entries.detail,
-      created_at: timeline_entries.created_at
-    })
-    .from(timeline_entries)
-    .innerJoin(pages, eq(timeline_entries.page_id, pages.id))
-    .where(eq(pages.slug, slug))
-    .orderBy(timeline_entries.date);
+    const result = await this.drizzleDb
+      .select({
+        id: timeline_entries.id,
+        page_id: timeline_entries.page_id,
+        slug: pages.slug,
+        date: timeline_entries.date,
+        source: timeline_entries.source,
+        summary: timeline_entries.summary,
+        detail: timeline_entries.detail,
+        created_at: timeline_entries.created_at,
+      })
+      .from(timeline_entries)
+      .innerJoin(pages, eq(timeline_entries.page_id, pages.id))
+      .where(eq(pages.slug, slug))
+      .orderBy(timeline_entries.date);
 
     return result;
   }
 
   // --- Raw Data Management ---
   async putRawData(slug: string, source: string, data: any): Promise<void> {
-    const pageResult = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1);
+    const pageResult = await this.drizzleDb
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, slug))
+      .limit(1);
     if (pageResult.length === 0) return;
-    
-    await this.drizzleDb.insert(raw_data)
+
+    await this.drizzleDb
+      .insert(raw_data)
       .values({
         page_id: pageResult[0].id,
         source: source,
-        data: JSON.stringify(data)
+        data: JSON.stringify(data),
       })
       .onConflictDoUpdate({
         target: [raw_data.page_id, raw_data.source],
         set: {
           data: JSON.stringify(data),
-          fetched_at: sql`CURRENT_TIMESTAMP`
-        }
+          fetched_at: sql`CURRENT_TIMESTAMP`,
+        },
       });
   }
 
-  async getRawData(slug: string, source: string): Promise<RawDataRecord | null> {
-    const result = await this.drizzleDb.select({
-      id: raw_data.id,
-      page_id: raw_data.page_id,
-      slug: pages.slug,
-      source: raw_data.source,
-      data: raw_data.data,
-      fetched_at: raw_data.fetched_at
-    })
-    .from(raw_data)
-    .innerJoin(pages, eq(raw_data.page_id, pages.id))
-    .where(and(eq(pages.slug, slug), eq(raw_data.source, source)))
-    .limit(1);
+  async getRawData(
+    slug: string,
+    source: string
+  ): Promise<RawDataRecord | null> {
+    const result = await this.drizzleDb
+      .select({
+        id: raw_data.id,
+        page_id: raw_data.page_id,
+        slug: pages.slug,
+        source: raw_data.source,
+        data: raw_data.data,
+        fetched_at: raw_data.fetched_at,
+      })
+      .from(raw_data)
+      .innerJoin(pages, eq(raw_data.page_id, pages.id))
+      .where(and(eq(pages.slug, slug), eq(raw_data.source, source)))
+      .limit(1);
 
     if (result.length === 0) return null;
     return {
       ...result[0],
-      data: typeof result[0].data === 'string' ? JSON.parse(result[0].data) : result[0].data
+      data:
+        typeof result[0].data === "string"
+          ? JSON.parse(result[0].data)
+          : result[0].data,
     };
   }
 
   // --- Files Management ---
-  async upsertFile(file: Omit<FileRecord, 'id' | 'page_id' | 'created_at'>): Promise<void> {
+  async upsertFile(
+    file: Omit<FileRecord, "id" | "page_id" | "created_at">
+  ): Promise<void> {
     let page_id = null;
     if (file.page_slug) {
-      const pageResult = await this.drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, file.page_slug)).limit(1);
+      const pageResult = await this.drizzleDb
+        .select({ id: pages.id })
+        .from(pages)
+        .where(eq(pages.slug, file.page_slug))
+        .limit(1);
       if (pageResult.length > 0) {
         page_id = pageResult[0].id;
       }
     }
 
-    await this.drizzleDb.insert(files)
+    await this.drizzleDb
+      .insert(files)
       .values({
         page_id,
         filename: file.filename,
@@ -643,7 +791,7 @@ export class LibSQLStore implements StoreProvider {
         mime_type: file.mime_type ?? null,
         size_bytes: file.size_bytes ?? null,
         content_hash: file.content_hash,
-        metadata: JSON.stringify(file.metadata)
+        metadata: JSON.stringify(file.metadata),
       })
       .onConflictDoUpdate({
         target: files.storage_path,
@@ -653,28 +801,29 @@ export class LibSQLStore implements StoreProvider {
           mime_type: file.mime_type ?? null,
           size_bytes: file.size_bytes ?? null,
           content_hash: file.content_hash,
-          metadata: JSON.stringify(file.metadata)
-        }
+          metadata: JSON.stringify(file.metadata),
+        },
       });
   }
 
   async getFile(storagePath: string): Promise<FileRecord | null> {
-    const result = await this.drizzleDb.select({
-      id: files.id,
-      page_id: files.page_id,
-      page_slug: pages.slug,
-      filename: files.filename,
-      storage_path: files.storage_path,
-      mime_type: files.mime_type,
-      size_bytes: files.size_bytes,
-      content_hash: files.content_hash,
-      metadata: files.metadata,
-      created_at: files.created_at
-    })
-    .from(files)
-    .leftJoin(pages, eq(files.page_id, pages.id))
-    .where(eq(files.storage_path, storagePath))
-    .limit(1);
+    const result = await this.drizzleDb
+      .select({
+        id: files.id,
+        page_id: files.page_id,
+        page_slug: pages.slug,
+        filename: files.filename,
+        storage_path: files.storage_path,
+        mime_type: files.mime_type,
+        size_bytes: files.size_bytes,
+        content_hash: files.content_hash,
+        metadata: files.metadata,
+        created_at: files.created_at,
+      })
+      .from(files)
+      .leftJoin(pages, eq(files.page_id, pages.id))
+      .where(eq(files.storage_path, storagePath))
+      .limit(1);
 
     if (result.length === 0) return null;
     return {
@@ -682,52 +831,61 @@ export class LibSQLStore implements StoreProvider {
       page_slug: result[0].page_slug ?? undefined,
       mime_type: result[0].mime_type ?? undefined,
       size_bytes: result[0].size_bytes ?? undefined,
-      metadata: typeof result[0].metadata === 'string' ? JSON.parse(result[0].metadata) : result[0].metadata,
-      page_id: result[0].page_id ?? undefined
+      metadata:
+        typeof result[0].metadata === "string"
+          ? JSON.parse(result[0].metadata)
+          : result[0].metadata,
+      page_id: result[0].page_id ?? undefined,
     };
   }
 
   // --- Config & Logs Management ---
   async getConfig(key: string): Promise<string | null> {
-    const result = await this.drizzleDb.select({ value: config.value })
+    const result = await this.drizzleDb
+      .select({ value: config.value })
       .from(config)
       .where(eq(config.key, key))
       .limit(1);
-    
+
     return result.length > 0 ? result[0].value : null;
   }
 
   async setConfig(key: string, value: string): Promise<void> {
-    await this.drizzleDb.insert(config)
+    await this.drizzleDb
+      .insert(config)
       .values({ key, value })
       .onConflictDoUpdate({
         target: config.key,
-        set: { value }
+        set: { value },
       });
   }
 
-  async addIngestLog(log: Omit<IngestLog, 'id' | 'created_at'>): Promise<void> {
+  async addIngestLog(log: Omit<IngestLog, "id" | "created_at">): Promise<void> {
     await this.drizzleDb.insert(ingest_log).values({
       source_type: log.source_type,
       source_ref: log.source_ref,
       pages_updated: JSON.stringify(log.pages_updated),
-      summary: log.summary
+      summary: log.summary,
     });
   }
 
   async verifyAccessToken(tokenHash: string): Promise<AccessToken | null> {
-    const result = await this.drizzleDb.select()
+    const result = await this.drizzleDb
+      .select()
       .from(access_tokens)
-      .where(and(
-        eq(access_tokens.token_hash, tokenHash),
-        sql`${access_tokens.revoked_at} IS NULL`
-      ))
+      .where(
+        and(
+          eq(access_tokens.token_hash, tokenHash),
+          sql`${access_tokens.revoked_at} IS NULL`
+        )
+      )
       .limit(1);
 
     if (result.length === 0) return null;
-    
+
     // Update last_used_at
-    await this.drizzleDb.update(access_tokens)
+    await this.drizzleDb
+      .update(access_tokens)
       .set({ last_used_at: sql`CURRENT_TIMESTAMP` })
       .where(eq(access_tokens.id, result[0].id));
 
@@ -736,16 +894,21 @@ export class LibSQLStore implements StoreProvider {
       created_at: result[0].created_at ?? undefined,
       last_used_at: result[0].last_used_at ?? undefined,
       revoked_at: result[0].revoked_at ?? undefined,
-      scopes: typeof result[0].scopes === 'string' ? JSON.parse(result[0].scopes) : (result[0].scopes || [])
+      scopes:
+        typeof result[0].scopes === "string"
+          ? JSON.parse(result[0].scopes)
+          : result[0].scopes || [],
     };
   }
 
-  async logMcpRequest(log: Omit<McpRequestLog, 'id' | 'created_at'>): Promise<void> {
+  async logMcpRequest(
+    log: Omit<McpRequestLog, "id" | "created_at">
+  ): Promise<void> {
     await this.drizzleDb.insert(mcp_request_log).values({
       token_name: log.token_name ?? null,
       operation: log.operation,
       latency_ms: log.latency_ms ?? null,
-      status: log.status
+      status: log.status,
     });
   }
 
@@ -771,11 +934,13 @@ export class LibSQLStore implements StoreProvider {
       ftsOk: false,
       tableDetails: {},
       vectorCoverage: { total: 0, embedded: 0 },
-      schemaVersion: { current: 0, latest: LATEST_VERSION, ok: false }
+      schemaVersion: { current: 0, latest: LATEST_VERSION, ok: false },
     };
 
     try {
-      const dbTest = this.db.query('SELECT 1 as result').get() as { result: number } | undefined;
+      const dbTest = this.db.query("SELECT 1 as result").get() as
+        | { result: number }
+        | undefined;
       if (dbTest && dbTest.result === 1) {
         report.connectionOk = true;
       }
@@ -783,10 +948,19 @@ export class LibSQLStore implements StoreProvider {
       report.connectionOk = false;
     }
 
-    const tables = ['pages', 'content_chunks', 'links', 'timeline_entries', 'tags', 'chunks_fts'];
+    const tables = [
+      "pages",
+      "content_chunks",
+      "links",
+      "timeline_entries",
+      "tags",
+      "chunks_fts",
+    ];
     for (const table of tables) {
       try {
-        const res = this.db.query(`SELECT count(*) as count FROM ${table}`).get() as { count: number };
+        const res = this.db
+          .query(`SELECT count(*) as count FROM ${table}`)
+          .get() as { count: number };
         report.tableDetails[table] = { ok: true, rows: res?.count };
       } catch (e: any) {
         report.tableDetails[table] = { ok: false, error: e.message };
@@ -795,23 +969,31 @@ export class LibSQLStore implements StoreProvider {
     }
 
     try {
-      this.db.query(`INSERT INTO chunks_fts(chunks_fts) VALUES('integrity-check')`).run();
+      this.db
+        .query(`INSERT INTO chunks_fts(chunks_fts) VALUES('integrity-check')`)
+        .run();
       report.ftsOk = true;
     } catch (e: any) {
       report.ftsOk = false;
     }
 
     try {
-      const chunkCount = this.db.query(`SELECT count(*) as count FROM content_chunks`).get() as { count: number };
+      const chunkCount = this.db
+        .query(`SELECT count(*) as count FROM content_chunks`)
+        .get() as { count: number };
       report.vectorCoverage.total = chunkCount?.count || 0;
-      
-      const embeddedCount = this.db.query(`SELECT count(*) as count FROM content_chunks WHERE embedded_at IS NOT NULL`).get() as { count: number };
+
+      const embeddedCount = this.db
+        .query(
+          `SELECT count(*) as count FROM content_chunks WHERE embedded_at IS NOT NULL`
+        )
+        .get() as { count: number };
       report.vectorCoverage.embedded = embeddedCount?.count || 0;
     } catch (e) {}
 
     try {
-      const versionStr = await this.getConfig('version');
-      const v = parseInt(versionStr || '0', 10);
+      const versionStr = await this.getConfig("version");
+      const v = parseInt(versionStr || "0", 10);
       report.schemaVersion!.current = v;
       report.schemaVersion!.ok = v >= LATEST_VERSION;
     } catch (e) {
@@ -840,53 +1022,56 @@ export class LibSQLStore implements StoreProvider {
     if (this.inTransaction) {
       return fn(this); // already in transaction
     }
-    
+
     // Start transaction
-    this.db.exec('BEGIN TRANSACTION');
+    this.db.exec("BEGIN TRANSACTION");
     const txStore = new LibSQLStore({
       url: this.url,
       authToken: this.authToken,
       dimension: this.dimension,
       db: this.db,
-      vectorStore: this.vectorStore
+      vectorStore: this.vectorStore,
     });
     try {
       const result = await fn(txStore);
-      this.db.exec('COMMIT');
+      this.db.exec("COMMIT");
       return result;
     } catch (error) {
-      this.db.exec('ROLLBACK');
+      this.db.exec("ROLLBACK");
       throw error;
     }
   }
 
   // Expose vector search and keyword search directly on the store
-  async searchKeyword(query: string, opts?: SearchOpts): Promise<SearchResult[]> {
+  async searchKeyword(
+    query: string,
+    opts?: SearchOpts
+  ): Promise<SearchResult[]> {
     const MAX_SEARCH_LIMIT = 100;
     const limit = Math.min(opts?.limit ?? 10, MAX_SEARCH_LIMIT);
     const offset = opts?.offset ?? 0;
     const dedupe = opts?.dedupe ?? true;
-    
+
     const segmentedQuery = extractWordsForSearch(query);
 
     const ftsQuery = this.drizzleDb
       .select({
         page_id: chunks_fts.page_id,
         chunk_index: chunks_fts.chunk_index,
-        score: sql<number>`bm25(${chunks_fts})`.as('score'),
+        score: sql<number>`bm25(${chunks_fts})`.as("score"),
       })
       .from(chunks_fts)
       .where(sql`${chunks_fts} MATCH ${segmentedQuery}`)
       .orderBy(sql`score ASC`)
       .limit(10000)
-      .as('r');
+      .as("r");
 
     const conditions = [];
     if (opts?.type) {
       conditions.push(eq(pages.type, opts.type));
     }
-    if (opts?.detail === 'low') {
-      conditions.push(eq(content_chunks.chunk_source, 'compiled_truth'));
+    if (opts?.detail === "low") {
+      conditions.push(eq(content_chunks.chunk_source, "compiled_truth"));
     }
     if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
       conditions.push(notInArray(pages.slug, opts.exclude_slugs));
@@ -903,13 +1088,19 @@ export class LibSQLStore implements StoreProvider {
         chunk_source: content_chunks.chunk_source,
         token_count: content_chunks.token_count,
         score: ftsQuery.score,
-        stale: sql<boolean>`(${content_chunks.embedded_at} IS NULL OR ${pages.updated_at} > ${content_chunks.embedded_at})`.as('stale'),
+        stale:
+          sql<boolean>`(${content_chunks.embedded_at} IS NULL OR ${pages.updated_at} > ${content_chunks.embedded_at})`.as(
+            "stale"
+          ),
       })
       .from(ftsQuery)
-      .innerJoin(content_chunks, and(
-        eq(content_chunks.page_id, ftsQuery.page_id),
-        eq(content_chunks.chunk_index, ftsQuery.chunk_index)
-      ))
+      .innerJoin(
+        content_chunks,
+        and(
+          eq(content_chunks.page_id, ftsQuery.page_id),
+          eq(content_chunks.chunk_index, ftsQuery.chunk_index)
+        )
+      )
       .innerJoin(pages, eq(pages.id, content_chunks.page_id))
       .orderBy(sql`${ftsQuery.score} ASC`);
 
@@ -925,8 +1116,8 @@ export class LibSQLStore implements StoreProvider {
     }
 
     const rows = await mainQuery.execute();
-    
-    const searchResults = rows.map(r => ({
+
+    const searchResults = rows.map((r) => ({
       page_id: r.page_id as number,
       title: r.title as string,
       type: r.type as string,
@@ -936,19 +1127,22 @@ export class LibSQLStore implements StoreProvider {
       chunk_source: r.chunk_source as any,
       token_count: r.token_count as number,
       score: r.score as number,
-      stale: !!r.stale
+      stale: !!r.stale,
     }));
 
     return searchResults;
   }
 
-  async searchVector(queryVector: number[], opts?: SearchOpts): Promise<SearchResult[]> {
+  async searchVector(
+    queryVector: number[],
+    opts?: SearchOpts
+  ): Promise<SearchResult[]> {
     const limit = Math.min(opts?.limit ?? 10, 100);
 
     const vectorResults = await this.vectorStore.query({
       indexName: this.indexName,
       queryVector,
-      topK: limit
+      topK: limit,
     });
 
     const results = [];
@@ -961,19 +1155,21 @@ export class LibSQLStore implements StoreProvider {
           chunk_source: match.metadata.chunk_source as ChunkSource,
           token_count: match.metadata.token_count as number,
           score: match.score,
-          stale: false // vector results always have an embedding
+          stale: false, // vector results always have an embedding
         });
       }
     }
     return results;
   }
 
-  async upsertVectors(vectors: { id: string, vector: number[], metadata: any }[]): Promise<void> {
+  async upsertVectors(
+    vectors: { id: string; vector: number[]; metadata: any }[]
+  ): Promise<void> {
     await this.vectorStore.upsert({
       indexName: this.indexName,
-      vectors: vectors.map(v => v.vector),
-      ids: vectors.map(v => v.id),
-      metadata: vectors.map(v => v.metadata)
+      vectors: vectors.map((v) => v.vector),
+      ids: vectors.map((v) => v.id),
+      metadata: vectors.map((v) => v.metadata),
     });
   }
 }

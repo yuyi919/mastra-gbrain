@@ -1,7 +1,7 @@
-import type { EmbeddingProvider } from './interface.ts';
-import { getLlama } from 'node-llama-cpp';
+import { getLlama } from "node-llama-cpp";
+import type { EmbeddingProvider } from "./interface.js";
 
-type Lang = 'en' | 'zh';
+type Lang = "en" | "zh";
 
 export interface LlamaEmbeddingProviderOptions {
   modelPathEn?: string;
@@ -18,36 +18,37 @@ export class LlamaEmbeddingProvider implements EmbeddingProvider {
   private defaultLang: Lang;
   private onModelUsed?: (lang: Lang, text: string) => void;
 
-  private llamaPromise: Promise<Awaited<ReturnType<typeof getLlama>>> | null = null;
+  private llamaPromise: Promise<Awaited<ReturnType<typeof getLlama>>> | null =
+    null;
   private embeddingContexts = new Map<Lang, Promise<any>>();
 
   constructor(options: LlamaEmbeddingProviderOptions) {
     this.modelPathEn = options.modelPathEn;
     this.modelPathZh = options.modelPathZh;
-    this.defaultLang = options.defaultLang ?? 'en';
+    this.defaultLang = options.defaultLang ?? "en";
     this.onModelUsed = options.onModelUsed;
     this.dimension = 768;
   }
 
   private detectLang(text: string): Lang {
-    if (this.modelPathEn && !this.modelPathZh) return 'en';
-    if (this.modelPathZh && !this.modelPathEn) return 'zh';
-    if (/[\p{Script=Han}]/u.test(text)) return 'zh';
-    return 'en';
+    if (this.modelPathEn && !this.modelPathZh) return "en";
+    if (this.modelPathZh && !this.modelPathEn) return "zh";
+    if (/[\p{Script=Han}]/u.test(text)) return "zh";
+    return "en";
   }
 
   private getModelPath(lang: Lang): string {
-    if (lang === 'zh') {
+    if (lang === "zh") {
       if (!this.modelPathZh) {
         if (this.modelPathEn) return this.modelPathEn;
-        throw new Error('Missing modelPathZh');
+        throw new Error("Missing modelPathZh");
       }
       return this.modelPathZh;
     }
 
     if (!this.modelPathEn) {
       if (this.modelPathZh) return this.modelPathZh;
-      throw new Error('Missing modelPathEn');
+      throw new Error("Missing modelPathEn");
     }
     return this.modelPathEn;
   }
@@ -61,7 +62,9 @@ export class LlamaEmbeddingProvider implements EmbeddingProvider {
         this.llamaPromise = getLlama();
       }
       const llama = await this.llamaPromise;
-      const model = await llama.loadModel({ modelPath: this.getModelPath(lang) });
+      const model = await llama.loadModel({
+        modelPath: this.getModelPath(lang),
+      });
       return model.createEmbeddingContext();
     })();
 
@@ -102,4 +105,3 @@ export class LlamaEmbeddingProvider implements EmbeddingProvider {
     return out;
   }
 }
-

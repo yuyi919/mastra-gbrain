@@ -1,14 +1,14 @@
-import { createStep, createWorkflow } from '@mastra/core/workflows';
-import { z } from 'zod';
-import { createHash } from 'crypto';
-import { parseMarkdown } from '../markdown.ts';
-import { chunkText } from '../chunkers/recursive.ts';
-import { slugifyPath } from '../slug.ts';
-import type { ChunkInput, ParsedMarkdown } from '../types.ts';
-import type { StoreProvider, EmbeddingProvider } from '../store/interface.ts';
+import { createHash } from "node:crypto";
+import { createStep, createWorkflow } from "@mastra/core/workflows";
+import { z } from "zod";
+import { chunkText } from "../chunkers/recursive.js";
+import { parseMarkdown } from "../markdown.js";
+import { slugifyPath } from "../slug.js";
+import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
+import type { ChunkInput, ParsedMarkdown } from "../types.js";
 
 export interface IngestResult {
-  status: 'imported' | 'skipped' | 'failed';
+  status: "imported" | "skipped" | "failed";
   slug: string;
   chunks?: number;
   error?: string;
@@ -24,7 +24,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
   const { store, embedder, maxBytes = 5000000 } = deps;
 
   const parseStep = createStep({
-    id: 'parse',
+    id: "parse",
     inputSchema: z.object({
       slug: z.string().optional(),
       relativePath: z.string().optional(),
@@ -32,7 +32,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
     }),
     outputSchema: z.object({
       slug: z.string(),
-      status: z.enum(['ready', 'skipped', 'error']),
+      status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
       content_hash: z.string().optional(),
@@ -40,11 +40,11 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
     }),
     execute: async ({ inputData }) => {
       const content = inputData.content;
-      const byteLength = Buffer.byteLength(content, 'utf-8');
+      const byteLength = Buffer.byteLength(content, "utf-8");
       if (byteLength > maxBytes) {
         return {
-          slug: inputData.slug ?? inputData.relativePath ?? 'unknown',
-          status: 'skipped' as const,
+          slug: inputData.slug ?? inputData.relativePath ?? "unknown",
+          status: "skipped" as const,
           error: `Content too large (${byteLength} bytes, max ${maxBytes})`,
         };
       }
@@ -57,29 +57,33 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
         if (parsed.slug !== expected) {
           return {
             slug: expected,
-            status: 'skipped' as const,
+            status: "skipped" as const,
             error: `Frontmatter slug "${parsed.slug}" does not match path-derived slug "${expected}" (from ${relativePath})`,
           };
         }
       }
 
-      const slug = relativePath ? slugifyPath(relativePath) : (inputData.slug ?? parsed.slug);
+      const slug = relativePath
+        ? slugifyPath(relativePath)
+        : (inputData.slug ?? parsed.slug);
 
-      const content_hash = createHash('sha256')
-        .update(JSON.stringify({
-          title: parsed.title,
-          type: parsed.type,
-          compiled_truth: parsed.compiled_truth,
-          timeline: parsed.timeline,
-          frontmatter: parsed.frontmatter,
-          tags: parsed.tags.slice().sort(),
-        }))
-        .digest('hex');
+      const content_hash = createHash("sha256")
+        .update(
+          JSON.stringify({
+            title: parsed.title,
+            type: parsed.type,
+            compiled_truth: parsed.compiled_truth,
+            timeline: parsed.timeline,
+            frontmatter: parsed.frontmatter,
+            tags: parsed.tags.slice().sort(),
+          })
+        )
+        .digest("hex");
 
       const existing = await deps.store.getPage(slug);
       return {
         slug,
-        status: 'ready' as const,
+        status: "ready" as const,
         parsed,
         content_hash,
         existing_hash: existing?.content_hash ?? null,
@@ -88,10 +92,10 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
   });
 
   const chunkStep = createStep({
-    id: 'chunk',
+    id: "chunk",
     inputSchema: z.object({
       slug: z.string(),
-      status: z.enum(['ready', 'skipped', 'error']),
+      status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
       content_hash: z.string().optional(),
@@ -99,7 +103,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
     }),
     outputSchema: z.object({
       slug: z.string(),
-      status: z.enum(['ready', 'skipped', 'error']),
+      status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
       content_hash: z.string().optional(),
@@ -107,7 +111,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
       chunks: z.custom<ChunkInput[]>(),
     }),
     execute: async ({ inputData }) => {
-      if (inputData.status !== 'ready') {
+      if (inputData.status !== "ready") {
         return { ...inputData, chunks: [] };
       }
       const parsed = inputData.parsed as ParsedMarkdown;
@@ -117,7 +121,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
           chunks.push({
             chunk_index: chunks.length,
             chunk_text: c.text,
-            chunk_source: 'compiled_truth',
+            chunk_source: "compiled_truth",
           });
         }
       }
@@ -126,7 +130,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
           chunks.push({
             chunk_index: chunks.length,
             chunk_text: c.text,
-            chunk_source: 'timeline',
+            chunk_source: "timeline",
           });
         }
       }
@@ -135,10 +139,10 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
   });
 
   const embedStep = createStep({
-    id: 'embed',
+    id: "embed",
     inputSchema: z.object({
       slug: z.string(),
-      status: z.enum(['ready', 'skipped', 'error']),
+      status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
       content_hash: z.string().optional(),
@@ -148,7 +152,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
     }),
     outputSchema: z.object({
       slug: z.string(),
-      status: z.enum(['ready', 'skipped', 'error']),
+      status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
       content_hash: z.string().optional(),
@@ -157,11 +161,13 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
     }),
     execute: async ({ inputData }) => {
       const chunks = inputData.chunks as ChunkInput[];
-      if (inputData.status !== 'ready') return inputData;
+      if (inputData.status !== "ready") return inputData;
       if (inputData.noEmbed) return inputData;
       if (!deps.embedder) return inputData;
       if (chunks.length === 0) return inputData;
-      const embeddings = await deps.embedder.embedBatch(chunks.map(c => c.chunk_text));
+      const embeddings = await deps.embedder.embedBatch(
+        chunks.map((c) => c.chunk_text)
+      );
       for (let i = 0; i < chunks.length; i++) {
         chunks[i].embedding = embeddings[i];
         chunks[i].token_count = Math.ceil(chunks[i].chunk_text.length / 4);
@@ -171,10 +177,10 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
   });
 
   const persistStep = createStep({
-    id: 'persist',
+    id: "persist",
     inputSchema: z.object({
       slug: z.string(),
-      status: z.enum(['ready', 'skipped', 'error']),
+      status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
       content_hash: z.string().optional(),
@@ -183,29 +189,32 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
     }),
     outputSchema: z.object({
       slug: z.string(),
-      status: z.enum(['imported', 'skipped', 'error']),
+      status: z.enum(["imported", "skipped", "error"]),
       chunks: z.number(),
       error: z.string().optional(),
     }),
     execute: async ({ inputData }) => {
       const slug = inputData.slug;
-      if (inputData.status !== 'ready') {
+      if (inputData.status !== "ready") {
         return {
           slug,
-          status: inputData.status === 'error' ? ('error' as const) : ('skipped' as const),
+          status:
+            inputData.status === "error"
+              ? ("error" as const)
+              : ("skipped" as const),
           chunks: 0,
           error: inputData.error,
         };
       }
       const parsed = inputData.parsed as ParsedMarkdown;
       if (inputData.existing_hash === inputData.content_hash) {
-        return { slug, status: 'skipped' as const, chunks: 0 };
+        return { slug, status: "skipped" as const, chunks: 0 };
       }
       const content_hash = inputData.content_hash!;
 
       const write = async (tx: StoreProvider) => {
         if (inputData.existing_hash) await tx.createVersion(slug);
-        
+
         // Ensure frontmatter is saved even if it's an object
         await tx.putPage(slug, {
           type: parsed.type,
@@ -233,14 +242,28 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
         }
 
         if (parsed.timeline) {
-          const lines = parsed.timeline.split('\n').filter(l => l.trim().startsWith('- '));
-          const entries = lines.map(line => {
-            const match = line.match(/-\s+(\d{4}(?:-\d{2}-\d{2})?):\s+(.*)/);
-            if (match) {
-              return { date: match[1], summary: match[2], source: slug, detail: '' };
-            }
-            return { date: '', summary: line.substring(2).trim(), source: slug, detail: '' };
-          }).filter(e => e.date !== '');
+          const lines = parsed.timeline
+            .split("\n")
+            .filter((l) => l.trim().startsWith("- "));
+          const entries = lines
+            .map((line) => {
+              const match = line.match(/-\s+(\d{4}(?:-\d{2}-\d{2})?):\s+(.*)/);
+              if (match) {
+                return {
+                  date: match[1],
+                  summary: match[2],
+                  source: slug,
+                  detail: "",
+                };
+              }
+              return {
+                date: "",
+                summary: line.substring(2).trim(),
+                source: slug,
+                detail: "",
+              };
+            })
+            .filter((e) => e.date !== "");
           await tx.upsertTimelineEntries(slug, entries);
         }
       };
@@ -251,12 +274,12 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
         await write(deps.store);
       }
       const chunksCount = (inputData.chunks as ChunkInput[]).length;
-      return { slug, status: 'imported' as const, chunks: chunksCount };
+      return { slug, status: "imported" as const, chunks: chunksCount };
     },
   });
 
   return createWorkflow({
-    id: 'gbrain-ingest',
+    id: "gbrain-ingest",
     inputSchema: z.object({
       slug: z.string().optional(),
       relativePath: z.string().optional(),
@@ -265,7 +288,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
     }),
     outputSchema: z.object({
       slug: z.string(),
-      status: z.enum(['imported', 'skipped', 'error']),
+      status: z.enum(["imported", "skipped", "error"]),
       chunks: z.number(),
       error: z.string().optional(),
     }),

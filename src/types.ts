@@ -1,15 +1,15 @@
 export type PageType =
-  | 'person'
-  | 'company'
-  | 'deal'
-  | 'project'
-  | 'source'
-  | 'media'
-  | 'yc'
-  | 'civic'
-  | 'concept';
+  | "person"
+  | "company"
+  | "deal"
+  | "project"
+  | "source"
+  | "media"
+  | "yc"
+  | "civic"
+  | "concept";
 
-export type ChunkSource = 'compiled_truth' | 'timeline';
+export type ChunkSource = "compiled_truth" | "timeline";
 
 export interface ParsedMarkdown {
   frontmatter: Record<string, unknown>;
@@ -151,4 +151,3 @@ export interface McpRequestLog {
   status: string;
   created_at?: string | Date;
 }
-

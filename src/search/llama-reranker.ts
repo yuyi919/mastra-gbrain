@@ -1,4 +1,4 @@
-import { getLlama } from 'node-llama-cpp';
+import { getLlama } from "node-llama-cpp";
 
 export interface LlamaRerankerOptions {
   modelPath: string;
@@ -6,7 +6,8 @@ export interface LlamaRerankerOptions {
 
 export class LlamaReranker {
   private modelPath: string;
-  private llamaPromise: Promise<Awaited<ReturnType<typeof getLlama>>> | null = null;
+  private llamaPromise: Promise<Awaited<ReturnType<typeof getLlama>>> | null =
+    null;
   private rankingContextPromise: Promise<any> | null = null;
 
   constructor(options: LlamaRerankerOptions) {
@@ -33,4 +34,3 @@ export class LlamaReranker {
     return ranked.map((r: any) => r.document as string);
   }
 }
-

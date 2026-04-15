@@ -1,0 +1,75 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.11/schema.json",
+  "root": true,
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+  "vcs": {
+    "useIgnoreFile": true
+  },
+  "linter": {
+    "enabled": true,
+    "includes": ["**/*.ts"],
+    "rules": {
+      "suspicious": { "noExplicitAny": "off" },
+      "style": {
+        "useTemplate": "off",
+        "noNonNullAssertion": "off",
+        "useNodejsImportProtocol": {
+          "level": "warn",
+          "fix": "safe"
+        }
+      },
+      "correctness": {
+        "useYield": "off",
+        "noUnusedImports": {
+          "level": "info",
+          "fix": "safe"
+        },
+        "noUnusedFunctionParameters": "off",
+        "noUnusedVariables": "off",
+        "useImportExtensions": {
+          "level": "warn",
+          "fix": "safe",
+          "options": {
+            "forceJsExtensions": true
+          }
+        }
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "jsxQuoteStyle": "double",
+      "trailingCommas": "es5",
+      "semicolons": "always",
+      "arrowParentheses": "always",
+      "quoteStyle": "double",
+      "bracketSpacing": true
+    }
+  },
+  "json": {
+    "formatter": {
+      "enabled": true,
+      "indentStyle": "space"
+    }
+  },
+  "files": {
+    "includes": [
+      "biome.json",
+      "package.json",
+      "**/src/**/*",
+      "**/scripts/**/*.ts",
+      "**/test/**/*.ts",
+      "**/tests/**/*.ts",
+      "!**/dist/**/*",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!**/*.js"
+    ]
+  }
+}

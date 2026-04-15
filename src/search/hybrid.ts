@@ -1,6 +1,6 @@
-import type { SearchResult } from '../types.ts';
-import { rrfFusion } from './rrf.ts';
-import type { StoreProvider } from '../store/interface.ts';
+import type { StoreProvider } from "../store/interface.js";
+import type { SearchResult } from "../types.js";
+import { rrfFusion } from "./rrf.js";
 
 export interface SearchOpts {
   limit?: number;
@@ -8,7 +8,7 @@ export interface SearchOpts {
   dedupe?: boolean;
   type?: string;
   exclude_slugs?: string[];
-  detail?: 'low' | 'high';
+  detail?: "low" | "high";
 }
 
 export interface HybridSearchOpts extends SearchOpts {
@@ -34,34 +34,49 @@ export async function hybridSearch(
   const limit = opts?.limit ?? 20;
   const offset = opts?.offset ?? 0;
   const innerLimit = Math.min(limit * 2, 200);
-  
+
   // Keyword search retrieves more chunks to allow deduplication (if dedupe=true)
-  const keywordResults = await backend.searchKeyword(query, { ...opts, limit: innerLimit });
-  
+  const keywordResults = await backend.searchKeyword(query, {
+    ...opts,
+    limit: innerLimit,
+  });
+
   if (!opts?.embed && !queryVector) {
     return dedupResults(keywordResults, opts).slice(offset, offset + limit);
   }
-  
-  const queries = (opts?.queryVariants && opts.queryVariants.length > 0) ? opts.queryVariants : [query];
+
+  const queries =
+    opts?.queryVariants && opts.queryVariants.length > 0
+      ? opts.queryVariants
+      : [query];
   let vectorLists: SearchResult[][] = [];
   try {
     if (queryVector) {
-      vectorLists = [await backend.searchVector(queryVector, { ...opts, limit: innerLimit })];
+      vectorLists = [
+        await backend.searchVector(queryVector, { ...opts, limit: innerLimit }),
+      ];
     } else if (opts?.embed) {
-      const embeddings = await Promise.all(queries.map(q => opts!.embed!(q)));
-      vectorLists = await Promise.all(embeddings.map(e => backend.searchVector(e, { ...opts, limit: innerLimit })));
+      const embeddings = await Promise.all(queries.map((q) => opts!.embed!(q)));
+      vectorLists = await Promise.all(
+        embeddings.map((e) =>
+          backend.searchVector(e, { ...opts, limit: innerLimit })
+        )
+      );
     }
   } catch {
     vectorLists = [];
   }
-  
+
   if (vectorLists.length === 0) {
     return dedupResults(keywordResults, opts).slice(offset, offset + limit);
   }
-  
+
   // rrfFusion expects array of lists and scores them based on their rank in each list
-  const fused = rrfFusion([...vectorLists, keywordResults], { k: opts?.rrfK, keyFn: opts?.keyFn });
-  
+  const fused = rrfFusion([...vectorLists, keywordResults], {
+    k: opts?.rrfK,
+    keyFn: opts?.keyFn,
+  });
+
   // The fused list is sorted best-to-worst (descending score). We pass it through deduplication.
   return dedupResults(fused, opts).slice(offset, offset + limit);
 }
@@ -152,10 +167,14 @@ export function dedupResults(
   const output = [...deduped];
 
   for (const [slug, pageChunks] of finalByPage) {
-    const hasCompiledTruth = pageChunks.some(c => c.chunk_source === 'compiled_truth');
+    const hasCompiledTruth = pageChunks.some(
+      (c) => c.chunk_source === "compiled_truth"
+    );
     if (hasCompiledTruth) continue;
 
-    const candidate = preDedup.find(r => r.slug === slug && r.chunk_source === 'compiled_truth');
+    const candidate = preDedup.find(
+      (r) => r.slug === slug && r.chunk_source === "compiled_truth"
+    );
     if (!candidate) continue;
 
     // Find the worst chunk in the current output for this slug
