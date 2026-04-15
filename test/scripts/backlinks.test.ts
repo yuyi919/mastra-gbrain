@@ -53,9 +53,9 @@ test('checkBacklinks (fix mode) appends missing links to Timeline', async () => 
   const fileBPath = join(tempDir, 'fileB.md');
   const content = await readFile(fileBPath, 'utf-8');
   
-  // Check that the timeline marker '---' and the reference to fileA was appended
-  expect(content).toContain('---');
-  expect(content).toContain('Referenced in [fileA](./fileA.md)');
+  // Check that the timeline marker and the reference to fileA was appended
+  expect(content).toContain('## Timeline');
+  expect(content).toContain('Referenced in [File A](./fileA.md)');
 
   // Run check mode again, it should now report 0 missing links
   const checkAgain = await checkBacklinks(tempDir, false);

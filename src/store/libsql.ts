@@ -1,154 +1,14 @@
 import { Database } from 'bun:sqlite';
 import { LibSQLVector } from '@mastra/libsql';
 import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, notInArray } from 'drizzle-orm';
 import type { ChunkInput, PageRecord, DatabaseHealth, StaleChunk } from '../types.ts';
 import { extractWordsForSearch } from '../segmenter.ts';
 import { pages, tags, chunks_fts, content_chunks, page_versions, links, timeline_entries, raw_data, files, config, ingest_log, access_tokens, mcp_request_log, LATEST_VERSION } from './schema.ts';
 import type { LinkRecord, TimelineEntry, RawDataRecord, FileRecord, ConfigRecord, IngestLog, AccessToken, McpRequestLog, SearchResult, ChunkSource } from '../types.ts';
 import type { StoreProvider, IngestionStore, SearchOpts } from './interface.ts';
 
-// --- Deduplication Logic (Ported from gbrain core) ---
-const COSINE_DEDUP_THRESHOLD = 0.85;
-const MAX_TYPE_RATIO = 0.6;
-const MAX_PER_PAGE = 3; // Keep 2-3 chunks per page
-
-function dedupBySource(results: SearchResult[]): SearchResult[] {
-  const byPage = new Map<string, SearchResult[]>();
-
-  for (const r of results) {
-    const existing = byPage.get(r.slug) || [];
-    existing.push(r);
-    byPage.set(r.slug, existing);
-  }
-
-  const kept: SearchResult[] = [];
-  for (const chunks of byPage.values()) {
-    // For bm25 in fts5, smaller (more negative) score is better
-    chunks.sort((a, b) => a.score - b.score);
-    kept.push(...chunks.slice(0, 3));
-  }
-
-  return kept.sort((a, b) => a.score - b.score);
-}
-
-function dedupByTextSimilarity(results: SearchResult[], threshold: number): SearchResult[] {
-  const kept: SearchResult[] = [];
-
-  for (const r of results) {
-    const rWords = new Set(r.chunk_text.toLowerCase().split(/\s+/));
-    let tooSimilar = false;
-
-    for (const k of kept) {
-      const kWords = new Set(k.chunk_text.toLowerCase().split(/\s+/));
-      const intersection = new Set([...rWords].filter(w => kWords.has(w)));
-      const union = new Set([...rWords, ...kWords]);
-      const jaccard = intersection.size / union.size;
-
-      if (jaccard > threshold) {
-        tooSimilar = true;
-        break;
-      }
-    }
-
-    if (!tooSimilar) {
-      kept.push(r);
-    }
-  }
-
-  return kept;
-}
-
-function enforceTypeDiversity(results: SearchResult[], maxRatio: number): SearchResult[] {
-  const maxPerType = Math.max(1, Math.ceil(results.length * maxRatio));
-  const typeCounts = new Map<string, number>();
-  const kept: SearchResult[] = [];
-
-  for (const r of results) {
-    const count = typeCounts.get(r.type) || 0;
-    if (count < maxPerType) {
-      kept.push(r);
-      typeCounts.set(r.type, count + 1);
-    }
-  }
-
-  return kept;
-}
-
-function capPerPage(results: SearchResult[], maxPerPage: number): SearchResult[] {
-  const pageCounts = new Map<string, number>();
-  const kept: SearchResult[] = [];
-
-  for (const r of results) {
-    const count = pageCounts.get(r.slug) || 0;
-    if (count < maxPerPage) {
-      kept.push(r);
-      pageCounts.set(r.slug, count + 1);
-    }
-  }
-
-  return kept;
-}
-
-function guaranteeCompiledTruth(results: SearchResult[], preDedup: SearchResult[]): SearchResult[] {
-  const byPage = new Map<string, SearchResult[]>();
-  for (const r of results) {
-    const existing = byPage.get(r.slug) || [];
-    existing.push(r);
-    byPage.set(r.slug, existing);
-  }
-
-  const output = [...results];
-
-  for (const [slug, pageChunks] of byPage) {
-    const hasCompiledTruth = pageChunks.some(c => c.chunk_source === 'compiled_truth');
-    if (hasCompiledTruth) continue;
-
-    const candidate = preDedup
-      .filter(r => r.slug === slug && r.chunk_source === 'compiled_truth')
-      .sort((a, b) => a.score - b.score)[0]; // smaller score is better
-
-    if (!candidate) continue;
-
-    const lowestIdx = output.reduce((minIdx, r, idx) => {
-      if (r.slug !== slug) return minIdx;
-      if (minIdx === -1) return idx;
-      // replace the chunk with the largest score (worst match)
-      return r.score > output[minIdx].score ? idx : minIdx;
-    }, -1);
-
-    if (lowestIdx !== -1) {
-      output[lowestIdx] = candidate;
-    }
-  }
-
-  return output;
-}
-
-function dedupResults(
-  results: SearchResult[],
-  opts?: {
-    cosineThreshold?: number;
-    maxTypeRatio?: number;
-    maxPerPage?: number;
-  },
-): SearchResult[] {
-  const threshold = opts?.cosineThreshold ?? COSINE_DEDUP_THRESHOLD;
-  const maxRatio = opts?.maxTypeRatio ?? MAX_TYPE_RATIO;
-  const maxPerPage = opts?.maxPerPage ?? MAX_PER_PAGE;
-
-  const preDedup = results;
-  let deduped = results;
-
-  deduped = dedupBySource(deduped);
-  deduped = dedupByTextSimilarity(deduped, threshold);
-  deduped = enforceTypeDiversity(deduped, maxRatio);
-  deduped = capPerPage(deduped, maxPerPage);
-  deduped = guaranteeCompiledTruth(deduped, preDedup);
-
-  return deduped;
-}
-// -----------------------------------------------------------
+// --- Deduplication Logic moved to src/search/hybrid.ts ---
 
 export interface LibSQLStoreOptions {
   url: string;
@@ -1009,70 +869,64 @@ export class LibSQLStore implements StoreProvider {
     
     const segmentedQuery = extractWordsForSearch(query);
 
-    let whereClause = '';
-    
+    const ftsQuery = this.drizzleDb
+      .select({
+        page_id: chunks_fts.page_id,
+        chunk_index: chunks_fts.chunk_index,
+        score: sql<number>`bm25(${chunks_fts})`.as('score'),
+      })
+      .from(chunks_fts)
+      .where(sql`${chunks_fts} MATCH ${segmentedQuery}`)
+      .orderBy(sql`score ASC`)
+      .limit(10000)
+      .as('r');
+
+    const conditions = [];
     if (opts?.type) {
-      whereClause += ` AND p.type = '${opts.type.replace(/'/g, "''")}'`;
+      conditions.push(eq(pages.type, opts.type));
     }
     if (opts?.detail === 'low') {
-      // Restrict search to compiled_truth for low detail
-      whereClause += ` AND c.chunk_source = 'compiled_truth'`;
+      conditions.push(eq(content_chunks.chunk_source, 'compiled_truth'));
     }
     if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
-      const slugs = opts.exclude_slugs.map(s => `'${s.replace(/'/g, "''")}'`).join(',');
-      whereClause += ` AND p.slug NOT IN (${slugs})`;
+      conditions.push(notInArray(pages.slug, opts.exclude_slugs));
     }
 
-    // Set timeout to prevent DoS on complex queries (not fully supported natively in all sqlite wrappers, but we can simulate or rely on fast FTS)
-    
-    let sqlQuery = '';
+    const mainQuery = this.drizzleDb
+      .select({
+        page_id: pages.id,
+        title: pages.title,
+        type: pages.type,
+        slug: pages.slug,
+        chunk_index: content_chunks.chunk_index,
+        chunk_text: content_chunks.chunk_text,
+        chunk_source: content_chunks.chunk_source,
+        token_count: content_chunks.token_count,
+        score: ftsQuery.score,
+        stale: sql<boolean>`(${content_chunks.embedded_at} IS NULL OR ${pages.updated_at} > ${content_chunks.embedded_at})`.as('stale'),
+      })
+      .from(ftsQuery)
+      .innerJoin(content_chunks, and(
+        eq(content_chunks.page_id, ftsQuery.page_id),
+        eq(content_chunks.chunk_index, ftsQuery.chunk_index)
+      ))
+      .innerJoin(pages, eq(pages.id, content_chunks.page_id))
+      .orderBy(sql`${ftsQuery.score} ASC`);
+
+    if (conditions.length > 0) {
+      mainQuery.where(and(...conditions));
+    }
+
     if (dedupe) {
-      // We fetch more results to allow for deduplication in code
-      const fetchLimit = (offset + limit) * 5;
-      sqlQuery = `
-        SELECT 
-          p.id as page_id, p.title, p.type, p.slug as slug, 
-          c.chunk_index, c.chunk_text, c.chunk_source, c.token_count, 
-          r.score,
-          (c.embedded_at IS NULL OR p.updated_at > c.embedded_at) as stale
-        FROM (
-          SELECT page_id, chunk_index, bm25(chunks_fts) as score
-          FROM chunks_fts
-          WHERE chunks_fts MATCH '${segmentedQuery.replace(/'/g, "''")}'
-          ORDER BY score ASC
-          LIMIT 10000
-        ) r
-        JOIN content_chunks c ON c.page_id = r.page_id AND c.chunk_index = r.chunk_index
-        JOIN pages p ON p.id = c.page_id
-        WHERE 1=1 ${whereClause}
-        ORDER BY r.score ASC
-        LIMIT ${fetchLimit}
-      `;
+      // We fetch more results to allow for deduplication in code (handled by caller like hybridSearch)
+      mainQuery.limit((offset + limit) * 5);
     } else {
-      sqlQuery = `
-        SELECT 
-          p.id as page_id, p.title, p.type, p.slug as slug, 
-          c.chunk_index, c.chunk_text, c.chunk_source, c.token_count, 
-          r.score,
-          (c.embedded_at IS NULL OR p.updated_at > c.embedded_at) as stale
-        FROM (
-          SELECT page_id, chunk_index, bm25(chunks_fts) as score
-          FROM chunks_fts
-          WHERE chunks_fts MATCH '${segmentedQuery.replace(/'/g, "''")}'
-          ORDER BY score ASC
-          LIMIT 10000
-        ) r
-        JOIN content_chunks c ON c.page_id = r.page_id AND c.chunk_index = r.chunk_index
-        JOIN pages p ON p.id = c.page_id
-        WHERE 1=1 ${whereClause}
-        ORDER BY r.score ASC
-        LIMIT ${limit} OFFSET ${offset}
-      `;
+      mainQuery.limit(limit).offset(offset);
     }
 
-    const rows = await this.db.query(sqlQuery).all() as any[];
+    const rows = await mainQuery.execute();
     
-    let searchResults = rows.map(r => ({
+    const searchResults = rows.map(r => ({
       page_id: r.page_id as number,
       title: r.title as string,
       type: r.type as string,
@@ -1084,11 +938,6 @@ export class LibSQLStore implements StoreProvider {
       score: r.score as number,
       stale: !!r.stale
     }));
-
-    if (dedupe) {
-      searchResults = dedupResults(searchResults);
-      searchResults = searchResults.slice(offset, offset + limit);
-    }
 
     return searchResults;
   }

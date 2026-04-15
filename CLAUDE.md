@@ -61,6 +61,10 @@
 - **Import 工作流安全性与并发提升**: 针对批量导入增加了对符号链接 (`isSymbolicLink`) 的拦截以防止路径穿越提权漏洞，过滤了隐藏目录和 `node_modules`。同时引入了基于检查点 (Checkpoint) 的断点续传机制和基于系统资源自适应的多 Worker 并发处理队列，大幅提升了海量文档的入库稳定性和速度。
 - **严格的工作流纪律**: 巩固并执行了每次 Spec 完成后自动进行阶段总结与 Git 提交的硬性规定。
 
+### Phase 10: 检索架构优化与 ORM 深度重构
+- **混合检索去重融合**: 移除了底层 `LibSQLStore` 的硬编码去重算法（`dedupResults`），将其上移并融合到 `src/search/hybrid.ts` 的 `hybridSearch` 函数中。这使得去重逻辑不仅能过滤关键词检索结果，还能对 RRF (Reciprocal Rank Fusion) 融合后的最终排序结果进行完美的跨模态全局去重。
+- **Drizzle ORM 重写**: 废弃了 `searchKeyword` 中脆弱且难以维护的原生 SQL 字符串拼接，采用了 `drizzle-orm` 的 `QueryBuilder` 进行彻底重写。使用安全的 `eq`, `notInArray`, `and` 等表达式动态构建子查询 (CTE)，杜绝了潜在的 SQL 注入风险，并且使代码更加优雅和类型安全。
+
 ## 反思与迭代 (Reflections & Iterations)
 
 - **工作流纪律 (Workflow Discipline)**：**每次 Spec（规范）执行完成、代码修改与验证结束时，AI 助手必须自动进行阶段总结，并自动执行 Git 提交 (`git add .` 与语义化 `git commit`)。绝对无需等待用户反复提醒或指令！**

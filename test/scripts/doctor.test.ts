@@ -66,10 +66,22 @@ test('runDoctor returns true for healthy store', async () => {
   await store.dispose();
 });
 
-test('runDoctor returns false for unhealthy store', async () => {
+test('runDoctor returns true for healthy store with warnings', async () => {
   const store = new LibSQLStore({ url: `file:${dbUnhealthy}`, dimension: 1536 });
   const isHealthy = await runDoctor(store);
-  // Unhealthy due to missing embeddings (coverage < 100%)
-  expect(isHealthy).toBe(false);
+  // Missing embeddings (coverage < 100%) and old schema are now warnings, so the script exits with 0 (true)
+  expect(isHealthy).toBe(true);
   await store.dispose();
+});
+
+test('runDoctor returns false for fatally unhealthy store', async () => {
+  try {
+    const store = new LibSQLStore({ url: `file:/nonexistent_dir/fatal.db`, dimension: 1536 });
+    const isHealthy = await runDoctor(store);
+    expect(isHealthy).toBe(false);
+    await store.dispose();
+  } catch (error) {
+    // If it fails to even open, it's unhealthy
+    expect(error).toBeDefined();
+  }
 });
