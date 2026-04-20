@@ -32,7 +32,6 @@ import type {
   IngestLogInput,
   Link,
   McpRequestLog,
-  Page,
   PageFilters,
   PageInput,
   PageVersion,
@@ -44,7 +43,7 @@ import type {
   TimelineInput,
   TimelineOpts,
 } from "../types.js";
-import { toPage } from "./effect-schema.js";
+import { Page } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
 import {
   access_tokens,
@@ -146,7 +145,7 @@ export class LibSQLStore implements StoreProvider {
 
     if (result.length === 0) return null;
 
-    return toPage(result[0]);
+    return Page.decodeUnsafe(result[0]);
   }
 
   async listPages(filters?: PageFilters): Promise<Page[]> {
@@ -197,7 +196,8 @@ export class LibSQLStore implements StoreProvider {
       .limit(limit)
       .offset(offset);
     const result = await query;
-    return result.map((record) => toPage(record));
+    // console.log(query.toSQL().sql, result)
+    return result.map(Page.decodeUnsafe);
   }
 
   async deletePage(slug: string): Promise<void> {
@@ -372,7 +372,7 @@ export class LibSQLStore implements StoreProvider {
 
     const result = await this.getPage(slug);
     if (!result) throw new Error(`Failed to return putPage result for ${slug}`);
-    return toPage(record[0]);
+    return Page.decodeUnsafe(record[0]);
   }
 
   async addTag(slug: string, tag: string): Promise<void> {

@@ -10,8 +10,7 @@ import type { PageType } from "../types.js";
 
 export const LATEST_VERSION = 1;
 
-const timestamp = () =>
-  text().notNull().default(sql`CURRENT_TIMESTAMP`);
+const timestamp = () => text().notNull().default(sql`CURRENT_TIMESTAMP`);
 
 export const pages = sqliteTable("pages", {
   id: integer().primaryKey({ autoIncrement: true }),

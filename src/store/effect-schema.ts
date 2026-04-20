@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { type Effect, Schema } from "effect";
 import { Model } from "effect/unstable/schema";
 
 export class Page extends Model.Class<Page>("Pages")({
@@ -14,6 +14,22 @@ export class Page extends Model.Class<Page>("Pages")({
   content_hash: Schema.NonEmptyString,
   created_at: Model.DateTimeInsert,
   updated_at: Model.DateTimeUpdate,
-}) {}
-
-export const toPage = Schema.decodeSync(Page.select);
+}) {
+  /**
+   * Decode a page from its raw data. (unsafe)
+   * @throws {Error} if the raw data is not valid.
+   * @param page - The raw data of the page.
+   * @returns The decoded page.
+   */
+  static decodeUnsafe(page: (typeof Page)["Encoded"]): Page {
+    return Schema.decodeSync(Page)(page);
+  }
+  /**
+   * Decode a page from its raw data.
+   */
+  static decode(
+    page: (typeof Page)["Encoded"]
+  ): Effect.Effect<Page, Schema.SchemaError, never> {
+    return Schema.decodeEffect(Page)(page);
+  }
+}
