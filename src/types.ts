@@ -36,6 +36,17 @@ export interface PageFilters {
   updated_after?: string;
 }
 
+export type VectorMetadata = {
+  page_id?: number;
+  slug: string;
+  title: string;
+  type: PageType;
+  chunk_index: number;
+  chunk_source: string;
+  chunk_text: string;
+  token_count: number;
+};
+
 // Chunks
 export interface Chunk {
   id: number;

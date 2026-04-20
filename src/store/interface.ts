@@ -23,6 +23,7 @@ import type {
   TimelineEntry,
   TimelineInput,
   TimelineOpts,
+  VectorMetadata,
 } from "../types.js";
 
 export interface LinkBatchInput {
@@ -139,7 +140,7 @@ export interface StoreProvider extends IngestionStore, HybridSearchBackend {
   getHealth(): Promise<BrainHealth>;
   getStaleChunks(): Promise<StaleChunk[]>;
   upsertVectors(
-    vectors: { id: string; vector: number[]; metadata: any }[]
+    vectors: { id: string; vector: number[]; metadata: VectorMetadata }[]
   ): Promise<void>;
   markChunksEmbedded(chunkIds: number[]): Promise<void>;
   getIngestLog(opts?: { limit?: number }): Promise<IngestLogEntry[]>;

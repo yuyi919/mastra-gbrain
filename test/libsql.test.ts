@@ -4,7 +4,10 @@ import { LibSQLStore } from "../src/store/libsql.js";
 let store: LibSQLStore;
 
 beforeAll(async () => {
-  store = new LibSQLStore({ url: "file:./tmp/test.db", dimension: 1536 });
+  store = new LibSQLStore({
+    url: "file:./tmp/libsql.test.db",
+    dimension: 1536,
+  });
   await store.init();
 });
 
@@ -210,11 +213,18 @@ test("LibSQLStore upsert and delete chunks", async () => {
   expect(ruResults[0].chunk_text).toBe("Это русский текст.");
 
   // Skip vector test if vector index wasn't created properly in sqlite memory
-  const vectorResults = await store.searchVector(new Array(1536).fill(0.1));
+  const vectorResults = await store.searchVector(new Array(1536).fill(0.1), {
+    slug: "chunk-slug",
+  });
   expect(vectorResults.length).toBeGreaterThan(0);
   expect(vectorResults[0].slug).toBe("chunk-slug");
 
   await store.deleteChunks("chunk-slug");
   const emptyResults = await store.searchKeyword("Hello", { limit: 10 });
+  const emptyVectorResults = await store._queryVectors(
+    new Array(1536).fill(0.1),
+    { slug: "chunk-slug" }
+  );
+  expect(emptyVectorResults.length).toBe(0);
   expect(emptyResults.length).toBe(0);
 });

@@ -11,6 +11,7 @@ import type { PageType } from "../types.js";
 export const LATEST_VERSION = 1;
 
 const timestamp = () => text().notNull().default(sql`CURRENT_TIMESTAMP`);
+const timestampAllowNull = () => text();
 
 export const pages = sqliteTable("pages", {
   id: integer().primaryKey({ autoIncrement: true }),
@@ -41,7 +42,7 @@ export const content_chunks = sqliteTable(
     chunk_source: text().notNull().default("compiled_truth"),
     model: text().notNull().default("text-embedding-3-large"),
     token_count: integer(),
-    embedded_at: text(),
+    embedded_at: timestampAllowNull(),
     created_at: timestamp(),
   },
   (t) => [

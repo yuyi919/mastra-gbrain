@@ -42,6 +42,7 @@ import type {
   TimelineEntry,
   TimelineInput,
   TimelineOpts,
+  VectorMetadata,
 } from "../types.js";
 import { Page } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
@@ -215,7 +216,10 @@ export class LibSQLStore implements StoreProvider {
 
     // Delete from pages. Due to ON DELETE CASCADE in schema, this should also clean up:
     // tags, content_chunks, links, timeline_entries, raw_data, page_versions
-    await this.drizzleDb.delete(pages).where(eq(pages.slug, slug));
+    await Promise.all([
+      this.drizzleDb.delete(pages).where(eq(pages.slug, slug)),
+      this._deleteVectorsBySlug(slug),
+    ]);
   }
 
   async getTags(slug: string): Promise<string[]> {
@@ -458,10 +462,10 @@ export class LibSQLStore implements StoreProvider {
               chunk_text: chunk.chunk_text,
               chunk_source: chunk.chunk_source,
               token_count: chunk.token_count ?? 0,
-              embedded_at: sql`CASE 
-              WHEN EXCLUDED.chunk_text != ${content_chunks.chunk_text} THEN EXCLUDED.embedded_at 
-              ELSE COALESCE(EXCLUDED.embedded_at, ${content_chunks.embedded_at}) 
-            END`,
+              embedded_at: sql`CASE
+                WHEN EXCLUDED.chunk_text != ${content_chunks.chunk_text} THEN EXCLUDED.embedded_at 
+                ELSE COALESCE(EXCLUDED.embedded_at, ${content_chunks.embedded_at}) 
+              END`,
             },
           });
       }
@@ -498,7 +502,7 @@ export class LibSQLStore implements StoreProvider {
           chunk_source: c.chunk_source,
           chunk_text: c.chunk_text,
           token_count: c.token_count ?? 0,
-        },
+        } satisfies VectorMetadata,
       }));
 
     if (vectorData.length > 0) {
@@ -507,6 +511,7 @@ export class LibSQLStore implements StoreProvider {
         vectors: vectorData.map((v) => v.vector),
         ids: vectorData.map((v) => v.id),
         metadata: vectorData.map((v) => v.metadata),
+        deleteFilter: { slug: { $eq: slug } },
       });
     }
   }
@@ -520,12 +525,6 @@ export class LibSQLStore implements StoreProvider {
     if (pageResult.length === 0) return;
     const page_id = pageResult[0].id;
 
-    // Get all chunks before deleting to clean up vectorStore
-    const existingChunks = await this.drizzleDb
-      .select({ chunk_index: content_chunks.chunk_index })
-      .from(content_chunks)
-      .where(eq(content_chunks.page_id, page_id));
-
     // Delete from FTS5
     await this.drizzleDb
       .delete(chunks_fts)
@@ -537,26 +536,11 @@ export class LibSQLStore implements StoreProvider {
       .where(eq(content_chunks.page_id, page_id));
 
     // Delete from LibSQLVector (since vector IDs are `slug::chunk_index`)
-    if (existingChunks.length > 0) {
-      const vectorIds = existingChunks.map((c) => `${slug}::${c.chunk_index}`);
-      // As LibSQLVector may lack a formal delete interface by filter, we can pass null vectors or rely on
-      // an implicit delete method if available. If `deleteVectors` throws, it's not implemented yet.
-      try {
-        if (typeof (this.vectorStore as any).deleteVectors === "function") {
-          await (this.vectorStore as any).deleteVectors({
-            indexName: this.indexName,
-            filter: { slug: { $eq: slug } },
-          });
-        } else if (typeof (this.vectorStore as any).delete === "function") {
-          await (this.vectorStore as any).delete({
-            indexName: this.indexName,
-            ids: vectorIds,
-          });
-        }
-      } catch (err) {
-        // Fallback: we cannot reliably delete if the driver lacks it
-        console.warn(`Could not delete vectors for ${slug}:`, err);
-      }
+    try {
+      await this._deleteVectorsBySlug(slug);
+    } catch (err) {
+      // Fallback: we cannot reliably delete if the driver lacks it
+      console.warn(`Could not delete vectors for ${slug}:`, err);
     }
   }
 
@@ -1361,7 +1345,7 @@ export class LibSQLStore implements StoreProvider {
         chunk_source: content_chunks.chunk_source,
       })
       .from(content_chunks)
-      .innerJoin(pages, sql`${content_chunks.page_id} = ${pages.id}`)
+      .innerJoin(pages, eq(content_chunks.page_id, pages.id))
       .where(sql`${content_chunks.embedded_at} IS NULL`);
     return rows as StaleChunk[];
   }
@@ -1503,10 +1487,16 @@ export class LibSQLStore implements StoreProvider {
     return searchResults;
   }
 
-  async searchVector(
+  async _deleteVectorsBySlug(slug: string) {
+    return await this.vectorStore.deleteVectors({
+      indexName: this.indexName,
+      filter: { slug: { $eq: slug } },
+    });
+  }
+  async _queryVectors(
     queryVector: number[],
-    opts?: SearchOpts
-  ): Promise<SearchResult[]> {
+    opts?: SearchOpts & { slug?: string }
+  ) {
     const limit = opts?.limit ?? 10;
 
     // Apply metadata filters if supported by vectorStore, but we'll also filter in the SQL layer
@@ -1514,7 +1504,9 @@ export class LibSQLStore implements StoreProvider {
     const filter: Record<string, any> = {};
     if (opts?.type) filter.type = { $eq: opts.type };
     if (opts?.detail === "low") filter.chunk_source = { $eq: "compiled_truth" };
-    if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
+    if (opts?.slug) {
+      filter.slug = { $eq: opts.slug };
+    } else if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
       filter.slug = { $nin: opts.exclude_slugs };
     }
 
@@ -1524,6 +1516,15 @@ export class LibSQLStore implements StoreProvider {
       topK: limit * 2, // Fetch more to account for post-filtering if vectorStore doesn't support all filters
       filter: Object.keys(filter).length > 0 ? filter : undefined,
     });
+    return vectorResults;
+  }
+
+  async searchVector(
+    queryVector: number[],
+    opts?: SearchOpts & { slug?: string }
+  ): Promise<SearchResult[]> {
+    const limit = opts?.limit ?? 10;
+    const vectorResults = await this._queryVectors(queryVector, opts);
 
     const hits = vectorResults
       .map((match) => ({
@@ -1647,6 +1648,7 @@ export class LibSQLStore implements StoreProvider {
         chunk_index: content_chunks.chunk_index,
         chunk_text: content_chunks.chunk_text,
         chunk_source: content_chunks.chunk_source,
+        model: content_chunks.model,
         token_count: content_chunks.token_count,
         embedded_at: content_chunks.embedded_at,
         created_at: content_chunks.created_at,
@@ -1660,7 +1662,7 @@ export class LibSQLStore implements StoreProvider {
       ...r,
       chunk_source: r.chunk_source as "compiled_truth" | "timeline",
       embedding: null,
-      model: "",
+      model: r.model,
       embedded_at: r.embedded_at ? new Date(r.embedded_at) : null,
     }));
   }
@@ -1713,16 +1715,15 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async upsertVectors(
-    vectors: { id: string; vector: number[]; metadata: any }[]
+    vectors: { id: string; vector: number[]; metadata: VectorMetadata }[]
   ): Promise<void> {
     if (vectors.length === 0) return;
-
     // LibSQLVector internally expects number[] array of arrays (in this specific mastra version)
     await this.vectorStore.upsert({
       indexName: this.indexName,
-      vectors: vectors.map((v) => Array.from(v.vector)) as any,
-      ids: vectors.map((v) => v.id),
-      metadata: vectors.map((v) => v.metadata),
+      vectors: vectors.map((_) => _.vector),
+      ids: vectors.map((_) => _.id),
+      metadata: vectors.map((_) => _.metadata),
     });
   }
 }
