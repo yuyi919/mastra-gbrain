@@ -1,7 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
   index,
-  int,
   integer,
   sqliteTable,
   text,
@@ -12,7 +11,7 @@ import type { PageType } from "../types.js";
 export const LATEST_VERSION = 1;
 
 const timestamp = () =>
-  int({ mode: "timestamp_ms" }).notNull().default(sql`CURRENT_TIMESTAMP`);
+  text().notNull().default(sql`CURRENT_TIMESTAMP`);
 
 export const pages = sqliteTable("pages", {
   id: integer().primaryKey({ autoIncrement: true }),

@@ -12,8 +12,8 @@ export class Page extends Model.Class<Page>("Pages")({
     Model.JsonFromString
   ),
   content_hash: Schema.NonEmptyString,
-  created_at: Model.DateTimeInsertFromDate,
-  updated_at: Model.DateTimeUpdateFromDate,
+  created_at: Model.DateTimeInsert,
+  updated_at: Model.DateTimeUpdate,
 }) {}
 
 export const toPage = Schema.decodeSync(Page.select);
