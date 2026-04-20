@@ -10,7 +10,7 @@ export function createLinksTools(store: StoreProvider) {
       slug: z.string().describe("The unique slug of the page."),
     }),
     execute: async (inputData) => {
-      const outgoing = await store.getOutgoingLinks(inputData.slug);
+      const outgoing = await store.getLinks(inputData.slug);
       const backlinks = await store.getBacklinks(inputData.slug);
       return {
         slug: inputData.slug,

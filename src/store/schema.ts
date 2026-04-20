@@ -1,25 +1,30 @@
 import { relations, sql } from "drizzle-orm";
 import {
   index,
+  int,
   integer,
   sqliteTable,
   text,
   unique,
 } from "drizzle-orm/sqlite-core";
+import type { PageType } from "../types.js";
 
 export const LATEST_VERSION = 1;
+
+const timestamp = () =>
+  int({ mode: "timestamp_ms" }).notNull().default(sql`CURRENT_TIMESTAMP`);
 
 export const pages = sqliteTable("pages", {
   id: integer().primaryKey({ autoIncrement: true }),
   slug: text().notNull().unique(),
-  type: text().notNull(),
+  type: text().$type<PageType>().notNull(),
   title: text().notNull(),
   compiled_truth: text().notNull().default(""),
   timeline: text().notNull().default(""),
-  frontmatter: text({ mode: "json" }).notNull().default("{}"),
-  content_hash: text(),
-  created_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
-  updated_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+  frontmatter: text({ mode: "json" }).notNull().default("{}").$type<any>(),
+  content_hash: text().notNull(),
+  created_at: timestamp(),
+  updated_at: timestamp(),
 });
 
 export const pagesRelations = relations(pages, ({ many }) => ({
@@ -39,7 +44,7 @@ export const content_chunks = sqliteTable(
     model: text().notNull().default("text-embedding-3-large"),
     token_count: integer(),
     embedded_at: text(),
-    created_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+    created_at: timestamp(),
   },
   (t) => [
     unique().on(t.page_id, t.chunk_index),
@@ -68,7 +73,7 @@ export const links = sqliteTable(
       .references(() => pages.id, { onDelete: "cascade" }),
     link_type: text().notNull().default(""),
     context: text().notNull().default(""),
-    created_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+    created_at: timestamp(),
   },
   (t) => [
     unique().on(t.from_page_id, t.to_page_id),
@@ -106,7 +111,7 @@ export const raw_data = sqliteTable(
       .references(() => pages.id, { onDelete: "cascade" }),
     source: text().notNull(),
     data: text({ mode: "json" }).notNull(),
-    fetched_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+    fetched_at: timestamp(),
   },
   (t) => [
     unique().on(t.page_id, t.source),
@@ -125,7 +130,7 @@ export const timeline_entries = sqliteTable(
     source: text().notNull().default(""),
     summary: text().notNull(),
     detail: text().notNull().default(""),
-    created_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+    created_at: timestamp(),
   },
   (t) => [
     index("idx_timeline_page").on(t.page_id),
@@ -139,10 +144,10 @@ export const page_versions = sqliteTable(
     id: integer().primaryKey({ autoIncrement: true }),
     page_id: integer()
       .notNull()
-      .references(() => pages.id, { onDelete: "cascade" }),
+      .references(() => pages.id, { onDelete: "restrict" }),
     compiled_truth: text().notNull(),
     frontmatter: text({ mode: "json" }).notNull().default("{}"),
-    snapshot_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+    snapshot_at: timestamp(),
   },
   (t) => [index("idx_versions_page").on(t.page_id)]
 );
@@ -153,7 +158,7 @@ export const ingest_log = sqliteTable("ingest_log", {
   source_ref: text().notNull(),
   pages_updated: text({ mode: "json" }).notNull().default("[]"),
   summary: text().notNull().default(""),
-  created_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+  created_at: timestamp(),
 });
 
 export const config = sqliteTable("config", {
@@ -166,7 +171,7 @@ export const access_tokens = sqliteTable("access_tokens", {
   name: text().notNull(),
   token_hash: text().notNull().unique(),
   scopes: text({ mode: "json" }), // Array of strings
-  created_at: text().default(sql`CURRENT_TIMESTAMP`),
+  created_at: timestamp(),
   last_used_at: text(),
   revoked_at: text(),
 });
@@ -177,7 +182,7 @@ export const mcp_request_log = sqliteTable("mcp_request_log", {
   operation: text().notNull(),
   latency_ms: integer(),
   status: text().notNull().default("success"),
-  created_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+  created_at: timestamp(),
 });
 
 export const files = sqliteTable(
@@ -193,7 +198,7 @@ export const files = sqliteTable(
     size_bytes: integer(),
     content_hash: text().notNull(),
     metadata: text({ mode: "json" }).notNull().default("{}"),
-    created_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),
+    created_at: timestamp(),
   },
   (t) => [
     index("idx_files_page").on(t.page_id),

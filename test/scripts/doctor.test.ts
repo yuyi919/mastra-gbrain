@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
-import { unlinkSync } from "node:fs";
+import { beforeAll, expect, test } from "bun:test";
 import { runDoctor } from "../../src/scripts/doctor.js";
 import { LibSQLStore } from "../../src/store/libsql.js";
 
@@ -29,7 +28,7 @@ beforeAll(async () => {
       chunk_text: "Healthy chunk",
       chunk_source: "compiled_truth",
       token_count: 2,
-      embedding: new Array(1536).fill(0.1), // 100% coverage
+      embedding: new Float32Array(1536).fill(0.1), // 100% coverage
     },
   ]);
 
@@ -61,23 +60,14 @@ beforeAll(async () => {
     },
   ]);
 
-  await unhealthyStore.dispose();
-});
-
-afterAll(() => {
-  try {
-    unlinkSync(dbHealthy);
-  } catch (e) {}
-  try {
-    unlinkSync(dbUnhealthy);
-  } catch (e) {}
+  await unhealthyStore.cleanDBFile();
 });
 
 test("runDoctor returns true for healthy store", async () => {
   const store = new LibSQLStore({ url: `file:${dbHealthy}`, dimension: 1536 });
   const isHealthy = await runDoctor(store);
   expect(isHealthy).toBe(true);
-  await store.dispose();
+  await store.cleanDBFile();
 });
 
 test("runDoctor returns true for healthy store with warnings", async () => {
@@ -88,7 +78,7 @@ test("runDoctor returns true for healthy store with warnings", async () => {
   const isHealthy = await runDoctor(store);
   // Missing embeddings (coverage < 100%) and old schema are now warnings, so the script exits with 0 (true)
   expect(isHealthy).toBe(true);
-  await store.dispose();
+  await store.cleanDBFile();
 });
 
 test("runDoctor returns false for fatally unhealthy store", async () => {
@@ -99,7 +89,7 @@ test("runDoctor returns false for fatally unhealthy store", async () => {
     });
     const isHealthy = await runDoctor(store);
     expect(isHealthy).toBe(false);
-    await store.dispose();
+    await store.cleanDBFile();
   } catch (error) {
     // If it fails to even open, it's unhealthy
     expect(error).toBeDefined();

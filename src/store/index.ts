@@ -1,74 +1,108 @@
-import { DummyEmbeddingProvider } from "./dummy-embedder.js";
-import type { EmbeddingProvider } from "./interface.js";
-import { LibSQLStore } from "./libsql.js";
-import { LlamaEmbeddingProvider } from "./llama-embedder.js";
+import { Context, Effect, flow, Layer, Option, pipe } from "effect";
+import { EmbeddingModel } from "effect/unstable/ai";
+import { resolveModelFile } from "node-llama-cpp";
+import type { EmbeddingProvider, StoreProvider } from "./interface.js";
+import { LibSQLStore, type LibSQLStoreOptions } from "./libsql.js";
+import {
+  LlamaEmbeddingProvider,
+  type LlamaEmbeddingProviderOptions,
+} from "./llama-embedder.js";
 
-export type DefaultEmbedderKind = "dummy" | "llama";
+export function createDefaultStore(
+  options: LibSQLStoreOptions = { url: "file::memory:" }
+) {
+  return new LibSQLStore({
+    ...options,
+    url: options.url || "file::memory:",
+    dimension: options.dimension || 768,
+  });
+}
 
-export interface DefaultEmbedderOptions {
-  kind?: DefaultEmbedderKind;
-  dummy?: {
-    dimension?: number;
+export async function createDefaultEmbedder(
+  options: LlamaEmbeddingProviderOptions = {}
+) {
+  const modelsDir = "./tmp/models";
+  const enModelUrl = "hf:CompendiumLabs/bge-base-en-v1.5-gguf:Q4_K_M"; // "hf:nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0";
+  const zhModelUrl = "hf:CompendiumLabs/bge-base-zh-v1.5-gguf:Q4_K_M";
+  const enModelPath =
+    options.modelPathEn ?? (await resolveModelFile(enModelUrl, modelsDir));
+  const zhModelPath =
+    options.modelPathZh ?? (await resolveModelFile(zhModelUrl, modelsDir));
+  return new LlamaEmbeddingProvider({
+    ...options,
+    modelPathEn: enModelPath,
+    modelPathZh: zhModelPath,
+    dimension: options.dimension ?? 768,
+  });
+}
+
+const Dimension = pipe(
+  Effect.serviceOption(EmbeddingModel.Dimensions),
+  Effect.map(
+    Option.getOrElse(
+      () =>
+        1536 /** for (openai) text-embedding-3-small, 1024 for voyage, etc. */
+    )
+  )
+);
+
+const Embdder = Effect.gen(function* () {
+  const dimension = yield* Dimension;
+  const embddingService = yield* EmbeddingModel.EmbeddingModel;
+  const context = yield* Effect.context();
+  const embedder: EmbeddingProvider = {
+    async embedBatch(texts) {
+      const r = await embddingService
+        .embedMany(texts)
+        .pipe(Effect.runPromiseWith(context));
+      return r.embeddings.map((e) => e.vector as number[]);
+    },
+    embedQuery: async (text: string): Promise<number[]> => {
+      const r = await embddingService
+        .embedMany([text])
+        .pipe(Effect.runPromiseWith(context));
+      return r.embeddings[0].vector as number[];
+    },
+    dimension,
   };
-  llama?: {
-    modelPathEn?: string;
-    modelPathZh?: string;
-    defaultLang?: "en" | "zh";
-  };
-}
+  return embedder;
+});
 
-// Default global factory functions
-export function createDefaultStore() {
-  return new LibSQLStore({ url: "file::memory:", dimension: 1536 });
-}
+const make = Effect.fnUntraced(function* (
+  path: `file:${string}`,
+  vectorUrl: string = path
+) {
+  const embedder = yield* Embdder;
+  const dimension = embedder.dimension;
+  const store = new LibSQLStore({ url: path, vectorUrl, dimension });
+  yield* Effect.promise(() => store.init());
+  return { store: store as StoreProvider, embedder };
+});
 
-function readEnv(key: string): string | undefined {
-  return process.env[key] || undefined;
-}
-
-function readEmbedderKindFromEnv(): DefaultEmbedderKind | undefined {
-  const raw = readEnv("GBRAIN_EMBEDDER")?.toLowerCase();
-  if (raw === "dummy") return "dummy";
-  if (raw === "llama") return "llama";
-  if (raw === "node-llama-cpp") return "llama";
-  if (raw === "local") return "llama";
-  return undefined;
-}
-
-function readDummyDimensionFromEnv(): number | undefined {
-  const raw = readEnv("GBRAIN_DUMMY_EMBEDDING_DIMENSION");
-  if (!raw) return undefined;
-  const parsed = Number.parseInt(raw, 10);
-  if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  return undefined;
-}
-
-export function createDefaultEmbedder(
-  options: DefaultEmbedderOptions = {}
-): EmbeddingProvider {
-  const envKind = readEmbedderKindFromEnv();
-  const envModelPathEn = readEnv("GBRAIN_LLAMA_EMBED_MODEL_EN");
-  const envModelPathZh = readEnv("GBRAIN_LLAMA_EMBED_MODEL_ZH");
-
-  const kind: DefaultEmbedderKind =
-    options.kind ??
-    envKind ??
-    (options.llama?.modelPathEn ||
-    options.llama?.modelPathZh ||
-    envModelPathEn ||
-    envModelPathZh
-      ? "llama"
-      : "dummy");
-
-  if (kind === "llama") {
-    return new LlamaEmbeddingProvider({
-      modelPathEn: options.llama?.modelPathEn ?? envModelPathEn,
-      modelPathZh: options.llama?.modelPathZh ?? envModelPathZh,
-      defaultLang: options.llama?.defaultLang,
-    });
+export class BrainStoreProvider extends Context.Service<BrainStoreProvider>()(
+  "@yui-agent/brain-mastra/BrainStoreProvider",
+  {
+    make,
   }
+) {
+  static Dimension: Effect.Effect<number> = Dimension;
+  static liveWith: (
+    store: StoreProvider
+  ) => Layer.Layer<BrainStoreProvider, never, EmbeddingModel.EmbeddingModel> = (
+    store
+  ) =>
+    Layer.unwrap(
+      Effect.gen(function* () {
+        return Layer.succeed(
+          BrainStoreProvider,
+          BrainStoreProvider.of({ store, embedder: yield* Embdder })
+        );
+      })
+    );
 
-  const dimension =
-    options.dummy?.dimension ?? readDummyDimensionFromEnv() ?? 1536;
-  return new DummyEmbeddingProvider(dimension);
+  static Default: (
+    path: `file:${string}`,
+    vectorUrl?: string | undefined
+  ) => Layer.Layer<BrainStoreProvider, never, EmbeddingModel.EmbeddingModel> =
+    flow(make, Layer.effect(BrainStoreProvider));
 }

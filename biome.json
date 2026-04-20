@@ -13,15 +13,37 @@
   "linter": {
     "enabled": true,
     "includes": ["**/*.ts"],
+    "domains": {
+      "drizzle": "all"
+    },
     "rules": {
-      "suspicious": { "noExplicitAny": "off" },
+      "suspicious": {
+        "useIterableCallbackReturn": "off",
+        "noExplicitAny": "off"
+      },
       "style": {
         "useTemplate": "off",
         "noNonNullAssertion": "off",
         "useNodejsImportProtocol": {
           "level": "warn",
           "fix": "safe"
+        },
+        "useExportType": "warn",
+        "useImportType": "warn",
+        "noRestrictedImports": {
+          "level": "warn",
+          "options": {
+            "paths": {
+              "lodash": "Using lodash is not encouraged."
+            }
+          }
         }
+      },
+      "performance": {},
+      "nursery": {
+        "useImportsFirst": "info",
+        "noDrizzleUpdateWithoutWhere": "error",
+        "noDrizzleDeleteWithoutWhere": "error"
       },
       "correctness": {
         "useYield": "off",
@@ -35,7 +57,10 @@
           "level": "warn",
           "fix": "safe",
           "options": {
-            "forceJsExtensions": true
+            "extensionMappings": {
+              "ts": "js",
+              "js": "js"
+            }
           }
         }
       }
@@ -62,6 +87,7 @@
       "biome.json",
       "package.json",
       "**/src/**/*",
+      "*.ts",
       "**/scripts/**/*.ts",
       "**/test/**/*.ts",
       "**/tests/**/*.ts",

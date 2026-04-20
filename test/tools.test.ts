@@ -20,12 +20,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testStore.dispose();
-  import("node:fs").then((fs) => {
-    try {
-      fs.unlinkSync("./tmp/test-tools.db");
-    } catch (e) {}
-  });
+  await testStore.cleanDBFile();
 });
 
 test("Ingest Tool imports content", async () => {

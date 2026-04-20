@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { embedStale } from "../../src/scripts/embed.js";
 import { LibSQLStore } from "../../src/store/libsql.js";
@@ -7,10 +6,6 @@ import { LibSQLStore } from "../../src/store/libsql.js";
 const dbPath = resolve(__dirname, "../../tmp/embed-stale.db");
 
 beforeAll(async () => {
-  try {
-    unlinkSync(dbPath);
-  } catch (e) {}
-
   const store = new LibSQLStore({ url: `file:${dbPath}`, dimension: 1536 });
   await store.init();
 
@@ -44,9 +39,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  try {
-    unlinkSync(dbPath);
-  } catch (e) {}
+  new LibSQLStore({ url: `file:${dbPath}`, dimension: 1536 }).cleanDBFile();
 });
 
 test("embedStale processes un-embedded chunks", async () => {
@@ -72,5 +65,5 @@ test("embedStale processes un-embedded chunks", async () => {
   const processedAgain = await embedStale(10, store);
   expect(processedAgain).toBe(0);
 
-  await store.dispose();
+  await store.cleanDBFile();
 });

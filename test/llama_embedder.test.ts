@@ -1,71 +1,50 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, unlinkSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { resolveModelFile } from "node-llama-cpp";
 import { createIngestionWorkflow } from "../src/ingest/workflow.js";
 import { hybridSearch } from "../src/search/hybrid.js";
+import type { EmbeddingProvider } from "../src/store/interface.js";
 import { LibSQLStore } from "../src/store/libsql.js";
 import { LlamaEmbeddingProvider } from "../src/store/llama-embedder.js";
 
 const modelsDir = "./tmp/models";
-const enModelPath = join(modelsDir, "bge-base-en-v1.5.Q4_K_M.gguf");
-const zhModelPath = join(modelsDir, "bge-base-zh-v1.5-q4_k_m.gguf");
-
-const enModelUrl =
-  "https://huggingface.co/ChristianAzinn/bge-base-en-v1.5-gguf/resolve/main/bge-base-en-v1.5.Q4_K_M.gguf";
-const zhModelUrl =
-  "https://huggingface.co/CompendiumLabs/bge-base-zh-v1.5-gguf/resolve/main/bge-base-zh-v1.5-q4_k_m.gguf";
+const enModelUrl = "hf:CompendiumLabs/bge-base-en-v1.5-gguf:Q4_K_M"; // "hf:nomic-ai/nomic-embed-text-v1.5-GGUF:Q8_0";
+const zhModelUrl = "hf:CompendiumLabs/bge-base-zh-v1.5-gguf:Q4_K_M";
 const dbPath = "./tmp/llama-embedder.db";
 
-async function ensureModel(url: string, path: string) {
-  if (existsSync(path)) return;
-  await mkdir(modelsDir, { recursive: true });
-  const proc = Bun.spawn(
-    ["bunx", "-y", "node-llama-cpp", "pull", "--dir", modelsDir, url],
-    { stdout: "inherit", stderr: "inherit" }
-  );
-  const code = await proc.exited;
-  if (code !== 0) {
-    throw new Error(`Failed to download model via node-llama-cpp pull: ${url}`);
-  }
-}
+const used: ("en" | "zh")[] = [];
+let embedder: EmbeddingProvider;
 
 beforeAll(async () => {
-  await ensureModel(enModelUrl, enModelPath);
-  await ensureModel(zhModelUrl, zhModelPath);
-}, 300000);
-
-afterAll(() => {
-  try {
-    unlinkSync(dbPath);
-  } catch {}
-});
-
-test("LlamaEmbeddingProvider selects model based on language", async () => {
-  const used: ("en" | "zh")[] = [];
-  const embedder = new LlamaEmbeddingProvider({
+  const enModelPath = await resolveModelFile(enModelUrl, modelsDir);
+  const zhModelPath = await resolveModelFile(zhModelUrl, modelsDir);
+  embedder = new LlamaEmbeddingProvider({
     modelPathEn: enModelPath,
     modelPathZh: zhModelPath,
     onModelUsed: (lang) => used.push(lang),
   });
+}, 300000);
 
-  const en = await embedder.embedQuery("hello world");
-  const zh = await embedder.embedQuery("你好，世界");
+afterAll(async () => {
+  await new LibSQLStore({
+    url: `file:${dbPath}`,
+    dimension: embedder.dimension,
+  }).cleanDBFile();
+});
 
-  expect(en.length).toBe(768);
-  expect(zh.length).toBe(768);
-  expect(used.includes("en")).toBe(true);
-  expect(used.includes("zh")).toBe(true);
+test("LlamaEmbeddingProvider selects model based on language", async () => {
+  const [en, zh] = await embedder.embedBatch(["hello world", "你好，世界"]);
+
+  expect(en.length).toBe(embedder.dimension);
+  expect(zh.length).toBe(embedder.dimension);
+  expect(used).toEqual(["en", "zh"]);
 }, 120000);
 
 test("Ingestion + hybridSearch works with node-llama-cpp embeddings (en/zh models)", async () => {
-  const store = new LibSQLStore({ url: `file:${dbPath}`, dimension: 768 });
-  await store.init();
-
-  const embedder = new LlamaEmbeddingProvider({
-    modelPathEn: enModelPath,
-    modelPathZh: zhModelPath,
+  using store = new LibSQLStore({
+    url: `file:${dbPath}`,
+    dimension: embedder.dimension,
   });
+  await store.init();
 
   const workflow = createIngestionWorkflow({ store, embedder });
 
@@ -90,6 +69,9 @@ test("Ingestion + hybridSearch works with node-llama-cpp embeddings (en/zh model
   expect(resEn.status).toBe("success");
   expect(resZh.status).toBe("success");
 
+  const pages = await store.listPages();
+  expect(pages.length).toBe(2);
+
   const queryVector = await embedder.embedQuery("tallest mountain");
   const results = await hybridSearch(
     store,
@@ -99,6 +81,4 @@ test("Ingestion + hybridSearch works with node-llama-cpp embeddings (en/zh model
   );
   expect(results.length).toBeGreaterThan(0);
   expect(results.some((r) => r.slug.includes("embedding-en"))).toBe(true);
-
-  await store.dispose();
 }, 240000);

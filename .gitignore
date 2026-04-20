@@ -7,3 +7,7 @@ tmp/
 .env
 dist/
 build/
+tsconfig.tsbuildinfo
+.codex
+.trae/get-shit-done
+tsup.config.bundled_*.mjs

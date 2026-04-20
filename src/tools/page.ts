@@ -11,7 +11,7 @@ export function createPageTools(store: StoreProvider) {
       slug: z.string().describe("The unique slug of the page."),
     }),
     execute: async (inputData) => {
-      const page = await store.getPageContent(inputData.slug);
+      const page = await store.getPage(inputData.slug);
       if (!page) {
         return { error: "Page not found" };
       }
@@ -19,7 +19,7 @@ export function createPageTools(store: StoreProvider) {
         slug: page.slug,
         type: page.type,
         title: page.title,
-        tags: page.tags,
+        tags: await store.getTags(inputData.slug),
         frontmatter: page.frontmatter,
         compiled_truth: page.compiled_truth,
         updated_at: page.updated_at,
@@ -34,10 +34,7 @@ export function createPageTools(store: StoreProvider) {
       slug: z.string().describe("The unique slug of the page to delete."),
     }),
     execute: async (inputData) => {
-      const success = await store.deletePage(inputData.slug);
-      if (!success) {
-        return { error: "Page not found" };
-      }
+      await store.deletePage(inputData.slug);
       return { success: true, message: `Page '${inputData.slug}' deleted.` };
     },
   });

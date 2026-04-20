@@ -33,7 +33,7 @@ function mockStore(
 
 function mockEmbedder(): EmbeddingProvider {
   return {
-    dimension: 1536,
+    dimension: 768,
     embedQuery: async (text: string) => [0.1, 0.2, 0.3],
     embedBatch: async (texts: string[]) => texts.map(() => [0.1, 0.2, 0.3]),
   };
@@ -189,6 +189,8 @@ ${"word ".repeat(400).trim()}
       (c: any) => c.method === "upsertChunks"
     );
     const chunks = upsert.args[1];
-    expect(chunks.some((c: any) => Array.isArray(c.embedding))).toBe(true);
+    expect(chunks.some((c: any) => c.embedding instanceof Float32Array)).toBe(
+      true
+    );
   });
 });

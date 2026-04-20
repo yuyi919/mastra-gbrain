@@ -106,7 +106,7 @@ export async function bulkImport(
 
   if (!activeEmbedder) {
     const { createDefaultEmbedder } = await import("../store/index.js");
-    activeEmbedder = createDefaultEmbedder();
+    activeEmbedder = await createDefaultEmbedder();
   }
 
   const workflow = createIngestionWorkflow({

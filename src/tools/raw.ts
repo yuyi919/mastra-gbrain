@@ -22,9 +22,18 @@ export function createRawDataTools(store: StoreProvider) {
       }
       return {
         slug: inputData.slug,
-        source: rawData.source,
-        data: rawData.data,
-        fetched_at: rawData.fetched_at,
+        source:
+          Array.isArray(rawData) && rawData.length > 0
+            ? rawData[0].source
+            : undefined,
+        data:
+          Array.isArray(rawData) && rawData.length > 0
+            ? rawData[0].data
+            : undefined,
+        fetched_at:
+          Array.isArray(rawData) && rawData.length > 0
+            ? rawData[0].fetched_at
+            : undefined,
       };
     },
   });

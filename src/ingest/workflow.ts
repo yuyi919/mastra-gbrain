@@ -35,7 +35,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
       status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
-      content_hash: z.string().optional(),
+      content_hash: z.string(),
       existing_hash: z.string().nullable().optional(),
     }),
     execute: async ({ inputData }) => {
@@ -46,6 +46,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
           slug: inputData.slug ?? inputData.relativePath ?? "unknown",
           status: "skipped" as const,
           error: `Content too large (${byteLength} bytes, max ${maxBytes})`,
+          content_hash: "",
         };
       }
 
@@ -59,6 +60,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
             slug: expected,
             status: "skipped" as const,
             error: `Frontmatter slug "${parsed.slug}" does not match path-derived slug "${expected}" (from ${relativePath})`,
+            content_hash: "",
           };
         }
       }
@@ -98,7 +100,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
       status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
-      content_hash: z.string().optional(),
+      content_hash: z.string(),
       existing_hash: z.string().nullable().optional(),
     }),
     outputSchema: z.object({
@@ -106,7 +108,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
       status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
-      content_hash: z.string().optional(),
+      content_hash: z.string(),
       existing_hash: z.string().nullable().optional(),
       chunks: z.custom<ChunkInput[]>(),
     }),
@@ -145,7 +147,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
       status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
-      content_hash: z.string().optional(),
+      content_hash: z.string(),
       existing_hash: z.string().nullable().optional(),
       chunks: z.custom<ChunkInput[]>(),
       noEmbed: z.boolean().optional(),
@@ -155,7 +157,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
       status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
-      content_hash: z.string().optional(),
+      content_hash: z.string(),
       existing_hash: z.string().nullable().optional(),
       chunks: z.custom<ChunkInput[]>(),
     }),
@@ -169,7 +171,9 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
         chunks.map((c) => c.chunk_text)
       );
       for (let i = 0; i < chunks.length; i++) {
-        chunks[i].embedding = embeddings[i];
+        if (embeddings[i]) {
+          chunks[i].embedding = new Float32Array(embeddings[i]);
+        }
         chunks[i].token_count = Math.ceil(chunks[i].chunk_text.length / 4);
       }
       return { ...inputData, chunks };
@@ -183,7 +187,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
       status: z.enum(["ready", "skipped", "error"]),
       error: z.string().optional(),
       parsed: z.custom<ParsedMarkdown>().optional(),
-      content_hash: z.string().optional(),
+      content_hash: z.string(),
       existing_hash: z.string().nullable().optional(),
       chunks: z.custom<ChunkInput[]>(),
     }),
@@ -250,6 +254,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
               const match = line.match(/-\s+(\d{4}(?:-\d{2}-\d{2})?):\s+(.*)/);
               if (match) {
                 return {
+                  slug,
                   date: match[1],
                   summary: match[2],
                   source: slug,
@@ -257,6 +262,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
                 };
               }
               return {
+                slug,
                 date: "",
                 summary: line.substring(2).trim(),
                 source: slug,
@@ -264,7 +270,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
               };
             })
             .filter((e) => e.date !== "");
-          await tx.upsertTimelineEntries(slug, entries);
+          await tx.addTimelineEntriesBatch(entries);
         }
       };
 

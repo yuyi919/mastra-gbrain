@@ -4,7 +4,7 @@ import { LibSQLStore } from "../src/store/libsql.js";
 let store: LibSQLStore;
 
 beforeAll(async () => {
-  store = new LibSQLStore({ url: "file:./tmp/test-ext.db", dimension: 1536 });
+  store = new LibSQLStore({ url: "file:./tmp/test-ext-2.db", dimension: 1536 });
   await store.init();
 
   // Create base pages for testing
@@ -27,12 +27,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await store.dispose();
-  import("node:fs").then((fs) => {
-    try {
-      fs.unlinkSync("./tmp/test-ext.db");
-    } catch (e) {}
-  });
+  await store.cleanDBFile();
 });
 
 test("Links management", async () => {
@@ -53,8 +48,9 @@ test("Links management", async () => {
 });
 
 test("Timeline entries management", async () => {
-  await store.upsertTimelineEntries("page-a", [
+  await store.addTimelineEntriesBatch([
     {
+      slug: "page-a",
       date: "2025-01-01",
       source: "test",
       summary: "New year",
@@ -62,7 +58,7 @@ test("Timeline entries management", async () => {
     },
   ]);
 
-  const entries = await store.getTimelineEntries("page-a");
+  const entries = await store.getTimeline("page-a");
   expect(entries.length).toBe(1);
   expect(entries[0].date).toBe("2025-01-01");
   expect(entries[0].summary).toBe("New year");
@@ -72,9 +68,9 @@ test("Raw data management", async () => {
   await store.putRawData("page-a", "github", { repo: "gbrain" });
   const data = await store.getRawData("page-a", "github");
 
-  expect(data).not.toBeNull();
-  expect(data?.source).toBe("github");
-  expect(data?.data.repo).toBe("gbrain");
+  expect(Array.isArray(data)).toBe(true);
+  expect(data[0].source).toBe("github");
+  expect(data[0].data).toEqual({ repo: "gbrain" });
 });
 
 test("Files management", async () => {
@@ -97,7 +93,7 @@ test("Config and Logs", async () => {
   const val = await store.getConfig("test-key");
   expect(val).toBe("test-value");
 
-  await store.addIngestLog({
+  await store.logIngest({
     source_type: "markdown",
     source_ref: "file.md",
     pages_updated: ["page-a"],

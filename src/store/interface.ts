@@ -1,30 +1,58 @@
 import type {
   AccessToken,
+  BrainHealth,
+  BrainStats,
+  Chunk,
   ChunkInput,
   DatabaseHealth,
   FileRecord,
-  IngestLog,
-  LinkRecord,
+  GraphNode,
+  GraphPath,
+  IngestLogEntry,
+  IngestLogInput,
+  Link,
   McpRequestLog,
-  PageRecord,
-  RawDataRecord,
+  Page,
+  PageFilters,
+  PageInput,
+  PageVersion,
+  RawData,
+  SearchOpts,
   SearchResult,
   StaleChunk,
   TimelineEntry,
+  TimelineInput,
+  TimelineOpts,
 } from "../types.js";
+
+export interface LinkBatchInput {
+  from_slug: string;
+  to_slug: string;
+  link_type?: string;
+  context?: string;
+}
+
+export interface TimelineBatchInput {
+  slug: string;
+  date: string;
+  source?: string;
+  summary: string;
+  detail?: string;
+}
 
 export interface IngestionStore {
   // Core content
-  getPage(slug: string): Promise<{ content_hash: string } | null>;
-  getPageContent(slug: string): Promise<PageRecord | null>;
-  listPages(options?: {
-    type?: string;
-    tag?: string;
-  }): Promise<{ slug: string; title: string; type: string }[]>;
+  getPage(slug: string): Promise<Page | null>;
+  listPages(filters?: PageFilters): Promise<Page[]>;
+  resolveSlugs(partial: string): Promise<string[]>;
   getTags(slug: string): Promise<string[]>;
-  createVersion(slug: string): Promise<void>;
-  putPage(slug: string, page: Omit<PageRecord, "slug" | "tags">): Promise<void>;
-  deletePage(slug: string): Promise<boolean>;
+  // Versions
+  createVersion(slug: string): Promise<PageVersion>;
+  getVersions(slug: string): Promise<PageVersion[]>;
+  revertToVersion(slug: string, versionId: number): Promise<void>;
+
+  putPage(slug: string, page: PageInput): Promise<Page>;
+  deletePage(slug: string): Promise<void>;
 
   // Tags
   addTag(slug: string, tag: string): Promise<void>;
@@ -33,18 +61,12 @@ export interface IngestionStore {
   // Chunks
   upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void>;
   deleteChunks(slug: string): Promise<void>;
+  getChunks(slug: string): Promise<Chunk[]>;
+  getChunksWithEmbeddings(slug: string): Promise<Chunk[]>;
+  getEmbeddingsByChunkIds(ids: number[]): Promise<Map<number, Float32Array>>;
 
   // Transaction
   transaction?<T>(fn: (tx: StoreProvider) => Promise<T>): Promise<T>;
-}
-
-export interface SearchOpts {
-  limit?: number;
-  offset?: number;
-  type?: string;
-  exclude_slugs?: string[];
-  detail?: "low" | "high";
-  dedupe?: boolean; // Return best chunk per page
 }
 
 export interface HybridSearchBackend {
@@ -66,20 +88,33 @@ export interface StoreProvider extends IngestionStore, HybridSearchBackend {
     linkType?: string,
     context?: string
   ): Promise<void>;
+  addLinksBatch?(links: LinkBatchInput[]): Promise<number>;
   removeLink(fromSlug: string, toSlug: string): Promise<void>;
-  getOutgoingLinks(slug: string): Promise<LinkRecord[]>;
-  getBacklinks(slug: string): Promise<LinkRecord[]>;
+  getLinks(slug: string): Promise<Link[]>;
+  getBacklinks(slug: string): Promise<Link[]>;
+  traverseGraph(slug: string, depth?: number): Promise<GraphNode[]>;
+  traversePaths?(
+    slug: string,
+    opts?: {
+      depth?: number;
+      linkType?: string;
+      direction?: "in" | "out" | "both";
+    }
+  ): Promise<GraphPath[]>;
+  getBacklinkCounts?(slugs: string[]): Promise<Map<string, number>>;
 
   // Timeline
-  upsertTimelineEntries(
+  addTimelineEntry(
     slug: string,
-    entries: Omit<TimelineEntry, "id" | "page_id" | "created_at">[]
+    entry: TimelineInput,
+    opts?: { skipExistenceCheck?: boolean }
   ): Promise<void>;
-  getTimelineEntries(slug: string): Promise<TimelineEntry[]>;
+  addTimelineEntriesBatch(entries: TimelineBatchInput[]): Promise<number>;
+  getTimeline(slug: string, opts?: TimelineOpts): Promise<TimelineEntry[]>;
 
   // Raw Data
   putRawData(slug: string, source: string, data: any): Promise<void>;
-  getRawData(slug: string, source: string): Promise<RawDataRecord | null>;
+  getRawData(slug: string, source?: string): Promise<RawData[]>;
 
   // Files
   upsertFile(
@@ -90,7 +125,7 @@ export interface StoreProvider extends IngestionStore, HybridSearchBackend {
   // Config & Logs
   getConfig(key: string): Promise<string | null>;
   setConfig(key: string, value: string): Promise<void>;
-  addIngestLog(log: Omit<IngestLog, "id" | "created_at">): Promise<void>;
+  logIngest(log: IngestLogInput): Promise<void>;
   verifyAccessToken(tokenHash: string): Promise<AccessToken | null>;
   logMcpRequest(log: Omit<McpRequestLog, "id" | "created_at">): Promise<void>;
 
@@ -100,9 +135,14 @@ export interface StoreProvider extends IngestionStore, HybridSearchBackend {
 
   // Health and Maintenance Methods
   getHealthReport(): Promise<DatabaseHealth>;
+  getStats(): Promise<BrainStats>;
+  getHealth(): Promise<BrainHealth>;
   getStaleChunks(): Promise<StaleChunk[]>;
   upsertVectors(
     vectors: { id: string; vector: number[]; metadata: any }[]
   ): Promise<void>;
   markChunksEmbedded(chunkIds: number[]): Promise<void>;
+  getIngestLog(opts?: { limit?: number }): Promise<IngestLogEntry[]>;
+  updateSlug(oldSlug: string, newSlug: string): Promise<void>;
+  rewriteLinks(oldSlug: string, newSlug: string): Promise<void>;
 }

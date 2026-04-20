@@ -1,15 +1,6 @@
 import type { StoreProvider } from "../store/interface.js";
-import type { SearchResult } from "../types.js";
+import type { SearchOpts, SearchResult } from "../types.js";
 import { rrfFusion } from "./rrf.js";
-
-export interface SearchOpts {
-  limit?: number;
-  offset?: number;
-  dedupe?: boolean;
-  type?: string;
-  exclude_slugs?: string[];
-  detail?: "low" | "high";
-}
 
 export interface HybridSearchOpts extends SearchOpts {
   embed?: (text: string) => Promise<number[]>;

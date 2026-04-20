@@ -9,15 +9,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await store.dispose();
-  import("node:fs").then((fs) => {
-    try {
-      fs.unlinkSync("./tmp/test.db");
-    } catch (e) {}
-  });
+  await store.cleanDBFile();
 });
 
-test("LibSQLStore getPageContent and listPages", async () => {
+test("LibSQLStore getPage and listPages", async () => {
   await store.putPage("test-list-1", {
     type: "concept",
     title: "List Page 1",
@@ -36,11 +31,12 @@ test("LibSQLStore getPageContent and listPages", async () => {
   });
   await store.addTag("test-list-1", "ai");
 
-  const content = await store.getPageContent("test-list-1");
+  const content = await store.getPage("test-list-1");
   expect(content).not.toBeNull();
   expect(content?.title).toBe("List Page 1");
   expect(content?.compiled_truth).toBe("Truth 1");
-  expect(content?.tags).toContain("ai");
+  const tags = await store.getTags("test-list-1");
+  expect(tags).toContain("ai");
 
   const allPages = await store.listPages();
   expect(allPages.length).toBeGreaterThanOrEqual(2);
@@ -72,14 +68,15 @@ test("LibSQLStore deletePage", async () => {
     },
   ]);
 
-  const beforeContent = await store.getPageContent("test-delete");
+  const beforeContent = await store.getPage("test-delete");
   expect(beforeContent).not.toBeNull();
 
-  const success = await store.deletePage("test-delete");
-  expect(success).toBe(true);
+  await store.deletePage("test-delete");
 
-  const afterContent = await store.getPageContent("test-delete");
+  const afterContent = await store.getPage("test-delete");
   expect(afterContent).toBeNull();
+  const chunks = await store.getChunks("test-delete");
+  expect(chunks).toBeArrayOfSize(0);
 });
 
 test("LibSQLStore can put and get page", async () => {
@@ -156,28 +153,28 @@ test("LibSQLStore upsert and delete chunks", async () => {
       chunk_text: "Hello world",
       chunk_source: "compiled_truth" as const,
       token_count: 2,
-      embedding: new Array(1536).fill(0.1), // Dummy vector
+      embedding: new Float32Array(1536).fill(0.1), // Dummy vector
     },
     {
       chunk_index: 1,
       chunk_text: "这是一个中文测试",
       chunk_source: "compiled_truth" as const,
       token_count: 5,
-      embedding: new Array(1536).fill(0.2),
+      embedding: new Float32Array(1536).fill(0.2),
     },
     {
       chunk_index: 2,
       chunk_text: "これは日本語のテストです。",
       chunk_source: "compiled_truth" as const,
       token_count: 6,
-      embedding: new Array(1536).fill(0.3),
+      embedding: new Float32Array(1536).fill(0.3),
     },
     {
       chunk_index: 3,
       chunk_text: "Это русский текст.",
       chunk_source: "compiled_truth" as const,
       token_count: 4,
-      embedding: new Array(1536).fill(0.4),
+      embedding: new Float32Array(1536).fill(0.4),
     },
   ];
 

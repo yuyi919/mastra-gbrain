@@ -1,5 +1,5 @@
-import { defineConfig } from "tsup";
 import UnpluginTypia from "@typia/unplugin/esbuild";
+import { defineConfig } from "tsup";
 export default defineConfig({
   entry: ["./src/**/*", "!**/*.test.ts"],
   outDir: "dist",
@@ -12,9 +12,7 @@ export default defineConfig({
     options.minify = false;
     options.target = "esnext";
   },
-  esbuildPlugins: [
-    UnpluginTypia({ cache: true, enforce: "post", log: true }),
-  ],
+  esbuildPlugins: [UnpluginTypia({ cache: true, enforce: "post", log: true })],
   onSuccess: "pnpm build:dts",
   bundle: false,
   skipNodeModulesBundle: true,

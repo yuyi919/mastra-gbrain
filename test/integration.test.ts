@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { bulkImport } from "../src/scripts/import.js";
-import { DummyEmbeddingProvider } from "../src/store/dummy-embedder.js";
+import { createDefaultEmbedder } from "../src/store/index.js";
 import { LibSQLStore } from "../src/store/libsql.js";
 import { createLinksTools } from "../src/tools/links.js";
 import { createListPagesTool } from "../src/tools/list.js";
@@ -10,29 +10,30 @@ import { createSearchTool } from "../src/tools/search.js";
 import { createTimelineTool } from "../src/tools/timeline.js";
 
 let testStore: LibSQLStore;
-
+const embedder = await createDefaultEmbedder();
 beforeAll(async () => {
+  await testStore?.dispose();
   // Use a specific test database for integration
   testStore = new LibSQLStore({
     url: "file:./tmp/test-integration.db",
-    dimension: 1536,
+    dimension: embedder.dimension,
   });
   await testStore.init();
+  console.log("beforeAll");
 });
 
-afterAll(async () => {
-  await testStore.dispose();
-  import("node:fs").then((fs) => {
-    try {
-      fs.unlinkSync("./tmp/test-integration.db");
-    } catch (e) {}
-  });
-});
+afterAll(
+  async () => {
+    console.log("afterAll");
+    await testStore.cleanVector();
+    await testStore.cleanDBFile();
+  },
+  { timeout: 10000 }
+);
 
 test("Bulk import and Extended Tools Integration", async () => {
   const docsDir = resolve(__dirname, "fixtures/docs");
 
-  const embedder = new DummyEmbeddingProvider(1536);
   const searchTool = createSearchTool(testStore, embedder);
   const { pageInfoTool, readPageTool } = createPageTools(testStore);
   const timelineTool = createTimelineTool(testStore);
@@ -45,8 +46,8 @@ test("Bulk import and Extended Tools Integration", async () => {
   );
 
   // We expect 3 files: mastra.md, gbrain.md, garry.md
-  expect(imported).toBeGreaterThanOrEqual(3);
   expect(failed).toBe(0);
+  expect(imported).toBeGreaterThanOrEqual(3);
 
   // 2. Test searchTool (Hybrid Search)
   const searchResult: any = await searchTool.execute!(
@@ -85,7 +86,7 @@ test("Bulk import and Extended Tools Integration", async () => {
 
   // 4. Test timelineTool
   const timeline: any = await timelineTool.execute!(
-    { slug: "people/garry" },
+    { slug: "people/garry", opts: { asc: true } },
     {} as any
   );
   expect(timeline.slug).toBe("people/garry");
