@@ -81,9 +81,7 @@ const make = Effect.fnUntraced(function* (
 
 export class BrainStoreProvider extends Context.Service<BrainStoreProvider>()(
   "@yui-agent/brain-mastra/BrainStoreProvider",
-  {
-    make,
-  }
+  { make }
 ) {
   static Dimension: Effect.Effect<number> = Dimension;
   static liveWith: (

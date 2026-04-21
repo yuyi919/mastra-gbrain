@@ -9,7 +9,7 @@ import * as SqliteDrizzle from "./sqlite.js";
 const SqlLive = SqliteClient.layer({
   filename: "tmp/test.db",
 });
-const DrizzleLive = SqliteDrizzle.layer.pipe(Layer.provide(SqlLive));
+const DrizzleLive = SqliteDrizzle.makeLayer().pipe(Layer.provide(SqlLive));
 const DatabaseLive = Layer.mergeAll(SqlLive, DrizzleLive);
 
 // usage
@@ -21,7 +21,7 @@ const users = D.sqliteTable("users", {
 
 Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  const db = yield* SqliteDrizzle.SqliteDrizzle;
+  const db = yield* SqliteDrizzle.DB;
   yield* sql`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)`;
   yield* db.delete(users);
   yield* db.insert(users).values({ id: 1, name: "Alice" });

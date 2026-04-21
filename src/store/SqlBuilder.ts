@@ -5,6 +5,7 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   like,
   lte,
   notInArray,
@@ -24,34 +25,25 @@ import type {
   TimelineInput,
   TimelineOpts,
 } from "../types.js";
-import {
-  access_tokens,
-  chunks_fts,
-  config,
-  content_chunks,
-  files,
-  ingest_log,
-  links,
-  mcp_request_log,
-  page_versions,
-  pages,
-  raw_data,
-  tags,
-  timeline_entries,
-} from "./schema.js";
+import * as table from "./schema.js";
 
 function castArray<A>(a: A | A[]) {
   return Array.isArray(a) ? a : [a];
 }
 
-type DrizzleDb = BaseSQLiteDatabase<any, any, any, any>;
+type DrizzleDb<TResultKind extends "sync" | "async" = any> = BaseSQLiteDatabase<
+  TResultKind,
+  any,
+  table.Schemas,
+  any
+>;
 
 /**
  * @internal
  * @returns
  */
 export function listPages(drizzleDb: DrizzleDb, filters: PageFilters) {
-  const queryFields = pick(pages, [
+  const queryFields = pick(table.pages, [
     "id",
     "slug",
     "type",
@@ -63,30 +55,33 @@ export function listPages(drizzleDb: DrizzleDb, filters: PageFilters) {
     "created_at",
     "updated_at",
   ]);
-  let query = drizzleDb.select(queryFields).from(pages).$dynamic();
+  let query = drizzleDb.select(queryFields).from(table.pages).$dynamic();
 
   const conditions = [
-    filters.type ? eq(pages.type, filters.type as any) : undefined,
+    filters.type ? eq(table.pages.type, filters.type as any) : undefined,
     filters.updated_after
-      ? gte(pages.updated_at, filters.updated_after)
+      ? gte(table.pages.updated_at, filters.updated_after)
       : undefined,
   ];
 
   if (filters.tag || filters.tags) {
     query = drizzleDb
       .select(queryFields)
-      .from(pages)
-      .innerJoin(tags, eq(pages.id, tags.page_id))
+      .from(table.pages)
+      .innerJoin(table.tags, eq(table.pages.id, table.tags.page_id))
       .$dynamic();
 
     conditions.push(
-      inArray(tags.tag, castArray(filters.tags ? filters.tags : filters.tag!))
+      inArray(
+        table.tags.tag,
+        castArray(filters.tags ? filters.tags : filters.tag!)
+      )
     );
   }
 
   query = query
     .where(and(...conditions))
-    .orderBy(desc(pages.updated_at))
+    .orderBy(desc(table.pages.updated_at))
     .limit(filters.limit ?? 100)
     .offset(filters.offset ?? 0);
   return query;
@@ -97,9 +92,9 @@ export function listPages(drizzleDb: DrizzleDb, filters: PageFilters) {
  */
 export function resolveSlugExact(drizzleDb: DrizzleDb, partial: string) {
   return drizzleDb
-    .select({ slug: pages.slug })
-    .from(pages)
-    .where(eq(pages.slug, partial))
+    .select({ slug: table.pages.slug })
+    .from(table.pages)
+    .where(eq(table.pages.slug, partial))
     .limit(1);
 }
 
@@ -108,10 +103,13 @@ export function resolveSlugExact(drizzleDb: DrizzleDb, partial: string) {
  */
 export function resolveSlugFuzzy(drizzleDb: DrizzleDb, partial: string) {
   return drizzleDb
-    .select({ slug: pages.slug })
-    .from(pages)
+    .select({ slug: table.pages.slug })
+    .from(table.pages)
     .where(
-      or(like(pages.title, `%${partial}%`), like(pages.slug, `%${partial}%`))
+      or(
+        like(table.pages.title, `%${partial}%`),
+        like(table.pages.slug, `%${partial}%`)
+      )
     )
     .limit(5);
 }
@@ -127,31 +125,33 @@ export function getTimeline(
   const limit = opts?.limit ?? 100;
   let query = drizzleDb
     .select({
-      id: timeline_entries.id,
-      page_id: timeline_entries.page_id,
-      slug: pages.slug,
-      date: timeline_entries.date,
-      source: timeline_entries.source,
-      summary: timeline_entries.summary,
-      detail: timeline_entries.detail,
-      created_at: timeline_entries.created_at,
+      id: table.timeline_entries.id,
+      page_id: table.timeline_entries.page_id,
+      slug: table.pages.slug,
+      date: table.timeline_entries.date,
+      source: table.timeline_entries.source,
+      summary: table.timeline_entries.summary,
+      detail: table.timeline_entries.detail,
+      created_at: table.timeline_entries.created_at,
     })
-    .from(timeline_entries)
-    .innerJoin(pages, eq(timeline_entries.page_id, pages.id))
+    .from(table.timeline_entries)
+    .innerJoin(table.pages, eq(table.timeline_entries.page_id, table.pages.id))
     .$dynamic();
 
-  const conditions = [eq(pages.slug, slug)];
+  const conditions = [eq(table.pages.slug, slug)];
   if (opts?.after) {
-    conditions.push(gte(timeline_entries.date, opts.after));
+    conditions.push(gte(table.timeline_entries.date, opts.after));
   }
   if (opts?.before) {
-    conditions.push(lte(timeline_entries.date, opts.before));
+    conditions.push(lte(table.timeline_entries.date, opts.before));
   }
 
   query = query
     .where(and(...conditions))
     .orderBy(
-      opts?.asc ? asc(timeline_entries.date) : desc(timeline_entries.date)
+      opts?.asc
+        ? asc(table.timeline_entries.date)
+        : desc(table.timeline_entries.date)
     )
     .limit(limit);
 
@@ -168,20 +168,20 @@ export function getRawData(
 ) {
   let query = drizzleDb
     .select({
-      id: raw_data.id,
-      page_id: raw_data.page_id,
-      slug: pages.slug,
-      source: raw_data.source,
-      data: raw_data.data,
-      fetched_at: raw_data.fetched_at,
+      id: table.raw_data.id,
+      page_id: table.raw_data.page_id,
+      slug: table.pages.slug,
+      source: table.raw_data.source,
+      data: table.raw_data.data,
+      fetched_at: table.raw_data.fetched_at,
     })
-    .from(raw_data)
-    .innerJoin(pages, eq(raw_data.page_id, pages.id))
+    .from(table.raw_data)
+    .innerJoin(table.pages, eq(table.raw_data.page_id, table.pages.id))
     .$dynamic();
 
-  const conditions = [eq(pages.slug, slug)];
+  const conditions = [eq(table.pages.slug, slug)];
   if (source) {
-    conditions.push(eq(raw_data.source, source));
+    conditions.push(eq(table.raw_data.source, source));
   }
 
   query = query.where(and(...conditions));
@@ -202,53 +202,53 @@ export function searchKeyword(
 
   const ftsQuery = drizzleDb
     .select({
-      page_id: chunks_fts.page_id,
-      chunk_index: chunks_fts.chunk_index,
-      score: sql<number>`bm25(${chunks_fts})`.as("score"),
+      page_id: table.chunks_fts.page_id,
+      chunk_index: table.chunks_fts.chunk_index,
+      score: sql<number>`bm25(${table.chunks_fts})`.as("score"),
     })
-    .from(chunks_fts)
-    .where(sql`${chunks_fts} MATCH ${segmentedQuery}`)
+    .from(table.chunks_fts)
+    .where(sql`${table.chunks_fts} MATCH ${segmentedQuery}`)
     .orderBy(sql`score ASC`)
     .limit(10000)
     .as("r");
 
   const conditions = [];
   if (opts?.type) {
-    conditions.push(eq(pages.type, opts.type));
+    conditions.push(eq(table.pages.type, opts.type));
   }
   if (opts?.detail === "low") {
-    conditions.push(eq(content_chunks.chunk_source, "compiled_truth"));
+    conditions.push(eq(table.content_chunks.chunk_source, "compiled_truth"));
   }
   if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
-    conditions.push(notInArray(pages.slug, opts.exclude_slugs));
+    conditions.push(notInArray(table.pages.slug, opts.exclude_slugs));
   }
 
   const mainQuery = drizzleDb
     .select({
-      page_id: pages.id,
-      title: pages.title,
-      type: pages.type,
-      slug: pages.slug,
-      chunk_id: content_chunks.id,
-      chunk_index: content_chunks.chunk_index,
-      chunk_text: content_chunks.chunk_text,
-      chunk_source: content_chunks.chunk_source,
-      token_count: content_chunks.token_count,
+      page_id: table.pages.id,
+      title: table.pages.title,
+      type: table.pages.type,
+      slug: table.pages.slug,
+      chunk_id: table.content_chunks.id,
+      chunk_index: table.content_chunks.chunk_index,
+      chunk_text: table.content_chunks.chunk_text,
+      chunk_source: table.content_chunks.chunk_source,
+      token_count: table.content_chunks.token_count,
       score: ftsQuery.score,
       stale:
-        sql<boolean>`(${content_chunks.embedded_at} IS NULL OR ${pages.updated_at} > ${content_chunks.embedded_at})`.as(
+        sql<boolean>`(${table.content_chunks.embedded_at} IS NULL OR ${table.pages.updated_at} > ${table.content_chunks.embedded_at})`.as(
           "stale"
         ),
     })
     .from(ftsQuery)
     .innerJoin(
-      content_chunks,
+      table.content_chunks,
       and(
-        eq(content_chunks.page_id, ftsQuery.page_id),
-        eq(content_chunks.chunk_index, ftsQuery.chunk_index)
+        eq(table.content_chunks.page_id, ftsQuery.page_id),
+        eq(table.content_chunks.chunk_index, ftsQuery.chunk_index)
       )
     )
-    .innerJoin(pages, eq(pages.id, content_chunks.page_id))
+    .innerJoin(table.pages, eq(table.pages.id, table.content_chunks.page_id))
     .orderBy(sql`${ftsQuery.score} ASC`);
 
   if (conditions.length > 0) {
@@ -274,38 +274,38 @@ export function searchVectorRows(
   opts?: SearchOpts
 ) {
   const conditions = [
-    inArray(pages.slug, slugs),
-    inArray(content_chunks.chunk_index, chunkIndexes),
+    inArray(table.pages.slug, slugs),
+    inArray(table.content_chunks.chunk_index, chunkIndexes),
   ];
 
   if (opts?.type) {
-    conditions.push(eq(pages.type, opts.type));
+    conditions.push(eq(table.pages.type, opts.type));
   }
   if (opts?.detail === "low") {
-    conditions.push(eq(content_chunks.chunk_source, "compiled_truth"));
+    conditions.push(eq(table.content_chunks.chunk_source, "compiled_truth"));
   }
   if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
-    conditions.push(notInArray(pages.slug, opts.exclude_slugs));
+    conditions.push(notInArray(table.pages.slug, opts.exclude_slugs));
   }
 
   return drizzleDb
     .select({
-      page_id: pages.id,
-      title: pages.title,
-      type: pages.type,
-      slug: pages.slug,
-      chunk_id: content_chunks.id,
-      chunk_index: content_chunks.chunk_index,
-      chunk_text: content_chunks.chunk_text,
-      chunk_source: content_chunks.chunk_source,
-      token_count: content_chunks.token_count,
+      page_id: table.pages.id,
+      title: table.pages.title,
+      type: table.pages.type,
+      slug: table.pages.slug,
+      chunk_id: table.content_chunks.id,
+      chunk_index: table.content_chunks.chunk_index,
+      chunk_text: table.content_chunks.chunk_text,
+      chunk_source: table.content_chunks.chunk_source,
+      token_count: table.content_chunks.token_count,
       stale:
-        sql<boolean>`(${content_chunks.embedded_at} IS NULL OR ${pages.updated_at} > ${content_chunks.embedded_at})`.as(
+        sql<boolean>`(${table.content_chunks.embedded_at} IS NULL OR ${table.pages.updated_at} > ${table.content_chunks.embedded_at})`.as(
           "stale"
         ),
     })
-    .from(content_chunks)
-    .innerJoin(pages, eq(pages.id, content_chunks.page_id))
+    .from(table.content_chunks)
+    .innerJoin(table.pages, eq(table.pages.id, table.content_chunks.page_id))
     .where(and(...conditions));
 }
 
@@ -313,14 +313,18 @@ export function searchVectorRows(
  * 构建按 slug 查询页面详情。
  */
 export function getPageBySlug(drizzleDb: DrizzleDb, slug: string) {
-  return drizzleDb.select().from(pages).where(eq(pages.slug, slug)).limit(1);
+  return drizzleDb
+    .select()
+    .from(table.pages)
+    .where(eq(table.pages.slug, slug))
+    .limit(1);
 }
 
 /**
  * 构建按 slug 删除页面。
  */
 export function deletePageBySlug(drizzleDb: DrizzleDb, slug: string) {
-  return drizzleDb.delete(pages).where(eq(pages.slug, slug));
+  return drizzleDb.delete(table.pages).where(eq(table.pages.slug, slug));
 }
 
 /**
@@ -328,9 +332,9 @@ export function deletePageBySlug(drizzleDb: DrizzleDb, slug: string) {
  */
 export function getPageIdBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
-    .select({ id: pages.id })
-    .from(pages)
-    .where(eq(pages.slug, slug))
+    .select({ id: table.pages.id })
+    .from(table.pages)
+    .where(eq(table.pages.slug, slug))
     .limit(1);
 }
 
@@ -339,10 +343,10 @@ export function getPageIdBySlug(drizzleDb: DrizzleDb, slug: string) {
  */
 export function getTagsBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
-    .select({ tag: tags.tag })
-    .from(tags)
-    .innerJoin(pages, eq(tags.page_id, pages.id))
-    .where(eq(pages.slug, slug));
+    .select({ tag: table.tags.tag })
+    .from(table.tags)
+    .innerJoin(table.pages, eq(table.tags.page_id, table.pages.id))
+    .where(eq(table.pages.slug, slug));
 }
 
 /**
@@ -351,12 +355,12 @@ export function getTagsBySlug(drizzleDb: DrizzleDb, slug: string) {
 export function getPageForVersionBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
     .select({
-      id: pages.id,
-      compiled_truth: pages.compiled_truth,
-      frontmatter: pages.frontmatter,
+      id: table.pages.id,
+      compiled_truth: table.pages.compiled_truth,
+      frontmatter: table.pages.frontmatter,
     })
-    .from(pages)
-    .where(eq(pages.slug, slug))
+    .from(table.pages)
+    .where(eq(table.pages.slug, slug))
     .limit(1);
 }
 
@@ -371,7 +375,7 @@ export function insertPageVersion(
     frontmatter: string;
   }
 ) {
-  return drizzleDb.insert(page_versions).values(values).returning();
+  return drizzleDb.insert(table.page_versions).values(values).returning();
 }
 
 /**
@@ -380,19 +384,19 @@ export function insertPageVersion(
 export function getVersionsBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
     .select({
-      ...pick(page_versions, [
+      ...pick(table.page_versions, [
         "id",
         "page_id",
         "compiled_truth",
         "frontmatter",
         "snapshot_at",
       ]),
-      slug: pages.slug,
+      slug: table.pages.slug,
     })
-    .from(page_versions)
-    .innerJoin(pages, eq(page_versions.page_id, pages.id))
-    .where(eq(pages.slug, slug))
-    .orderBy(sql`${page_versions.snapshot_at} DESC`);
+    .from(table.page_versions)
+    .innerJoin(table.pages, eq(table.page_versions.page_id, table.pages.id))
+    .where(eq(table.pages.slug, slug))
+    .orderBy(sql`${table.page_versions.snapshot_at} DESC`);
 }
 
 /**
@@ -403,16 +407,20 @@ export function revertToVersionBySlug(
   slug: string,
   versionId: number
 ) {
-  const pv = alias(page_versions, "pv");
+  const pv = alias(table.page_versions, "pv");
   return drizzleDb
-    .update(pages)
+    .update(table.pages)
     .set({
       ...pick(pv, ["compiled_truth", "frontmatter"]),
       updated_at: sql`CURRENT_TIMESTAMP`,
     })
     .from(pv)
     .where(
-      and(eq(pages.slug, slug), eq(pv.id, versionId), eq(pv.page_id, pages.id))
+      and(
+        eq(table.pages.slug, slug),
+        eq(pv.id, versionId),
+        eq(pv.page_id, table.pages.id)
+      )
     )
     .limit(1);
 }
@@ -426,7 +434,7 @@ export function upsertPage(
   page: PageInput
 ) {
   return drizzleDb
-    .insert(pages)
+    .insert(table.pages)
     .values({
       slug,
       type: page.type ?? "concept",
@@ -437,7 +445,7 @@ export function upsertPage(
       content_hash: page.content_hash,
     })
     .onConflictDoUpdate({
-      target: pages.slug,
+      target: table.pages.slug,
       set: {
         type: page.type ?? "concept",
         title: page.title ?? slug,
@@ -456,7 +464,7 @@ export function upsertPage(
  */
 export function insertTag(drizzleDb: DrizzleDb, pageId: number, tag: string) {
   return drizzleDb
-    .insert(tags)
+    .insert(table.tags)
     .values({ page_id: pageId, tag })
     .onConflictDoNothing();
 }
@@ -466,8 +474,8 @@ export function insertTag(drizzleDb: DrizzleDb, pageId: number, tag: string) {
  */
 export function deleteTag(drizzleDb: DrizzleDb, pageId: number, tag: string) {
   return drizzleDb
-    .delete(tags)
-    .where(and(eq(tags.page_id, pageId), eq(tags.tag, tag)));
+    .delete(table.tags)
+    .where(and(eq(table.tags.page_id, pageId), eq(table.tags.tag, tag)));
 }
 
 /**
@@ -475,9 +483,9 @@ export function deleteTag(drizzleDb: DrizzleDb, pageId: number, tag: string) {
  */
 export function getPageBasicBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
-    .select(pick(pages, ["id", "title", "type"]))
-    .from(pages)
-    .where(eq(pages.slug, slug))
+    .select(pick(table.pages, ["id", "title", "type"]))
+    .from(table.pages)
+    .where(eq(table.pages.slug, slug))
     .limit(1);
 }
 
@@ -490,11 +498,11 @@ export function deleteContentChunksNotIn(
   indices: number[]
 ) {
   return drizzleDb
-    .delete(content_chunks)
+    .delete(table.content_chunks)
     .where(
       and(
-        eq(content_chunks.page_id, pageId),
-        notInArray(content_chunks.chunk_index, indices)
+        eq(table.content_chunks.page_id, pageId),
+        notInArray(table.content_chunks.chunk_index, indices)
       )
     );
 }
@@ -508,11 +516,11 @@ export function deleteFtsChunksNotIn(
   indices: number[]
 ) {
   return drizzleDb
-    .delete(chunks_fts)
+    .delete(table.chunks_fts)
     .where(
       and(
-        eq(chunks_fts.page_id, pageId),
-        notInArray(chunks_fts.chunk_index, indices)
+        eq(table.chunks_fts.page_id, pageId),
+        notInArray(table.chunks_fts.chunk_index, indices)
       )
     );
 }
@@ -526,7 +534,7 @@ export function upsertContentChunk(
   chunk: ChunkInput
 ) {
   return drizzleDb
-    .insert(content_chunks)
+    .insert(table.content_chunks)
     .values({
       page_id: pageId,
       chunk_index: chunk.chunk_index,
@@ -536,14 +544,14 @@ export function upsertContentChunk(
       embedded_at: chunk.embedding ? sql`CURRENT_TIMESTAMP` : null,
     })
     .onConflictDoUpdate({
-      target: [content_chunks.page_id, content_chunks.chunk_index],
+      target: [table.content_chunks.page_id, table.content_chunks.chunk_index],
       set: {
         chunk_text: chunk.chunk_text,
         chunk_source: chunk.chunk_source,
         token_count: chunk.token_count ?? 0,
         embedded_at: sql`CASE
-          WHEN EXCLUDED.chunk_text != ${content_chunks.chunk_text} THEN EXCLUDED.embedded_at
-          ELSE COALESCE(EXCLUDED.embedded_at, ${content_chunks.embedded_at})
+          WHEN EXCLUDED.chunk_text != ${table.content_chunks.chunk_text} THEN EXCLUDED.embedded_at
+          ELSE COALESCE(EXCLUDED.embedded_at, ${table.content_chunks.embedded_at})
         END`,
       },
     });
@@ -553,7 +561,9 @@ export function upsertContentChunk(
  * 构建按 page_id 删除 FTS 数据。
  */
 export function deleteFtsByPageId(drizzleDb: DrizzleDb, pageId: number) {
-  return drizzleDb.delete(chunks_fts).where(eq(chunks_fts.page_id, pageId));
+  return drizzleDb
+    .delete(table.chunks_fts)
+    .where(eq(table.chunks_fts.page_id, pageId));
 }
 
 /**
@@ -570,7 +580,7 @@ export function insertFtsChunks(
     chunk_text_segmented: string;
   }>
 ) {
-  return drizzleDb.insert(chunks_fts).values(values);
+  return drizzleDb.insert(table.chunks_fts).values(values);
 }
 
 /**
@@ -581,8 +591,8 @@ export function deleteContentChunksByPageId(
   pageId: number
 ) {
   return drizzleDb
-    .delete(content_chunks)
-    .where(eq(content_chunks.page_id, pageId));
+    .delete(table.content_chunks)
+    .where(eq(table.content_chunks.page_id, pageId));
 }
 
 /**
@@ -597,7 +607,7 @@ export function insertLink(
     context: string;
   }
 ) {
-  return drizzleDb.insert(links).values(values).onConflictDoNothing();
+  return drizzleDb.insert(table.links).values(values).onConflictDoNothing();
 }
 
 /**
@@ -609,9 +619,12 @@ export function deleteLink(
   toPageId: number
 ) {
   return drizzleDb
-    .delete(links)
+    .delete(table.links)
     .where(
-      and(eq(links.from_page_id, fromPageId), eq(links.to_page_id, toPageId))
+      and(
+        eq(table.links.from_page_id, fromPageId),
+        eq(table.links.to_page_id, toPageId)
+      )
     );
 }
 
@@ -621,23 +634,23 @@ export function deleteLink(
 export function getOutgoingLinksBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
     .select({
-      id: links.id,
-      from_page_id: links.from_page_id,
-      to_page_id: links.to_page_id,
-      to_slug: pages.slug,
-      link_type: links.link_type,
-      context: links.context,
-      created_at: links.created_at,
+      id: table.links.id,
+      from_page_id: table.links.from_page_id,
+      to_page_id: table.links.to_page_id,
+      to_slug: table.pages.slug,
+      link_type: table.links.link_type,
+      context: table.links.context,
+      created_at: table.links.created_at,
     })
-    .from(links)
-    .innerJoin(pages, eq(links.to_page_id, pages.id))
+    .from(table.links)
+    .innerJoin(table.pages, eq(table.links.to_page_id, table.pages.id))
     .where(
       eq(
-        links.from_page_id,
+        table.links.from_page_id,
         drizzleDb
-          .select({ id: pages.id })
-          .from(pages)
-          .where(eq(pages.slug, slug))
+          .select({ id: table.pages.id })
+          .from(table.pages)
+          .where(eq(table.pages.slug, slug))
           .limit(1)
       )
     );
@@ -649,16 +662,16 @@ export function getOutgoingLinksBySlug(drizzleDb: DrizzleDb, slug: string) {
 export function getBacklinksBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
     .select({
-      from_slug: pages.slug,
+      from_slug: table.pages.slug,
       to_slug: sql<string>`${slug}`,
-      link_type: links.link_type,
-      context: links.context,
+      link_type: table.links.link_type,
+      context: table.links.context,
     })
-    .from(links)
-    .innerJoin(pages, eq(pages.id, links.from_page_id))
+    .from(table.links)
+    .innerJoin(table.pages, eq(table.pages.id, table.links.from_page_id))
     .where(
       eq(
-        links.to_page_id,
+        table.links.to_page_id,
         sql`(SELECT id FROM pages WHERE slug = ${slug} LIMIT 1)`
       )
     );
@@ -671,15 +684,15 @@ export function getLinksOutgoingBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
     .select({
       from_slug: sql<string>`${slug}`,
-      to_slug: pages.slug,
-      link_type: links.link_type,
-      context: links.context,
+      to_slug: table.pages.slug,
+      link_type: table.links.link_type,
+      context: table.links.context,
     })
-    .from(links)
-    .innerJoin(pages, eq(pages.id, links.to_page_id))
+    .from(table.links)
+    .innerJoin(table.pages, eq(table.pages.id, table.links.to_page_id))
     .where(
       eq(
-        links.from_page_id,
+        table.links.from_page_id,
         sql`(SELECT id FROM pages WHERE slug = ${slug} LIMIT 1)`
       )
     );
@@ -694,7 +707,7 @@ export function insertTimelineEntry(
   entry: TimelineInput
 ) {
   return drizzleDb
-    .insert(timeline_entries)
+    .insert(table.timeline_entries)
     .values({
       page_id: pageId,
       date: entry.date,
@@ -714,7 +727,7 @@ export function insertTimelineEntryReturningId(
   entry: TimelineInput
 ) {
   return drizzleDb
-    .insert(timeline_entries)
+    .insert(table.timeline_entries)
     .values({
       page_id: pageId,
       date: entry.date,
@@ -723,7 +736,7 @@ export function insertTimelineEntryReturningId(
       detail: entry.detail ?? "",
     })
     .onConflictDoNothing()
-    .returning({ id: timeline_entries.id });
+    .returning({ id: table.timeline_entries.id });
 }
 
 /**
@@ -736,14 +749,14 @@ export function upsertRawData(
   dataJson: string
 ) {
   return drizzleDb
-    .insert(raw_data)
+    .insert(table.raw_data)
     .values({
       page_id: pageId,
       source,
       data: dataJson,
     })
     .onConflictDoUpdate({
-      target: [raw_data.page_id, raw_data.source],
+      target: [table.raw_data.page_id, table.raw_data.source],
       set: {
         data: dataJson,
         fetched_at: sql`CURRENT_TIMESTAMP`,
@@ -767,10 +780,10 @@ export function upsertFile(
   }
 ) {
   return drizzleDb
-    .insert(files)
+    .insert(table.files)
     .values(values)
     .onConflictDoUpdate({
-      target: files.storage_path,
+      target: table.files.storage_path,
       set: {
         page_id: values.page_id,
         filename: values.filename,
@@ -791,20 +804,20 @@ export function getFileByStoragePath(
 ) {
   return drizzleDb
     .select({
-      id: files.id,
-      page_id: files.page_id,
-      page_slug: pages.slug,
-      filename: files.filename,
-      storage_path: files.storage_path,
-      mime_type: files.mime_type,
-      size_bytes: files.size_bytes,
-      content_hash: files.content_hash,
-      metadata: files.metadata,
-      created_at: files.created_at,
+      id: table.files.id,
+      page_id: table.files.page_id,
+      page_slug: table.pages.slug,
+      filename: table.files.filename,
+      storage_path: table.files.storage_path,
+      mime_type: table.files.mime_type,
+      size_bytes: table.files.size_bytes,
+      content_hash: table.files.content_hash,
+      metadata: table.files.metadata,
+      created_at: table.files.created_at,
     })
-    .from(files)
-    .leftJoin(pages, eq(files.page_id, pages.id))
-    .where(eq(files.storage_path, storagePath))
+    .from(table.files)
+    .leftJoin(table.pages, eq(table.files.page_id, table.pages.id))
+    .where(eq(table.files.storage_path, storagePath))
     .limit(1);
 }
 
@@ -813,9 +826,9 @@ export function getFileByStoragePath(
  */
 export function getConfigByKey(drizzleDb: DrizzleDb, key: string) {
   return drizzleDb
-    .select({ value: config.value })
-    .from(config)
-    .where(eq(config.key, key))
+    .select({ value: table.config.value })
+    .from(table.config)
+    .where(eq(table.config.key, key))
     .limit(1);
 }
 
@@ -823,17 +836,20 @@ export function getConfigByKey(drizzleDb: DrizzleDb, key: string) {
  * 构建写入配置。
  */
 export function upsertConfig(drizzleDb: DrizzleDb, key: string, value: string) {
-  return drizzleDb.insert(config).values({ key, value }).onConflictDoUpdate({
-    target: config.key,
-    set: { value },
-  });
+  return drizzleDb
+    .insert(table.config)
+    .values({ key, value })
+    .onConflictDoUpdate({
+      target: table.config.key,
+      set: { value },
+    });
 }
 
 /**
  * 构建写入导入日志。
  */
 export function insertIngestLog(drizzleDb: DrizzleDb, log: IngestLogInput) {
-  return drizzleDb.insert(ingest_log).values({
+  return drizzleDb.insert(table.ingest_log).values({
     source_type: log.source_type,
     source_ref: log.source_ref,
     pages_updated: JSON.stringify(log.pages_updated),
@@ -847,8 +863,8 @@ export function insertIngestLog(drizzleDb: DrizzleDb, log: IngestLogInput) {
 export function getIngestLog(drizzleDb: DrizzleDb, limit: number) {
   return drizzleDb
     .select()
-    .from(ingest_log)
-    .orderBy(sql`${ingest_log.created_at} DESC`)
+    .from(table.ingest_log)
+    .orderBy(sql`${table.ingest_log.created_at} DESC`)
     .limit(limit);
 }
 
@@ -861,9 +877,9 @@ export function updateSlug(
   newSlug: string
 ) {
   return drizzleDb
-    .update(pages)
+    .update(table.pages)
     .set({ slug: newSlug, updated_at: sql`CURRENT_TIMESTAMP` })
-    .where(eq(pages.slug, oldSlug));
+    .where(eq(table.pages.slug, oldSlug));
 }
 
 /**
@@ -875,11 +891,11 @@ export function getValidAccessTokenByHash(
 ) {
   return drizzleDb
     .select()
-    .from(access_tokens)
+    .from(table.access_tokens)
     .where(
       and(
-        eq(access_tokens.token_hash, tokenHash),
-        sql`${access_tokens.revoked_at} IS NULL`
+        eq(table.access_tokens.token_hash, tokenHash),
+        sql`${table.access_tokens.revoked_at} IS NULL`
       )
     )
     .limit(1);
@@ -890,9 +906,9 @@ export function getValidAccessTokenByHash(
  */
 export function updateAccessTokenLastUsedAt(drizzleDb: DrizzleDb, id: string) {
   return drizzleDb
-    .update(access_tokens)
+    .update(table.access_tokens)
     .set({ last_used_at: sql`CURRENT_TIMESTAMP` })
-    .where(eq(access_tokens.id, id));
+    .where(eq(table.access_tokens.id, id));
 }
 
 /**
@@ -902,7 +918,7 @@ export function insertMcpRequestLog(
   drizzleDb: DrizzleDb,
   log: Omit<McpRequestLog, "id" | "created_at">
 ) {
-  return drizzleDb.insert(mcp_request_log).values({
+  return drizzleDb.insert(table.mcp_request_log).values({
     token_name: log.token_name ?? null,
     operation: log.operation,
     latency_ms: log.latency_ms ?? null,
@@ -918,9 +934,9 @@ export function markChunksEmbeddedByIds(
   chunkIds: number[]
 ) {
   return drizzleDb
-    .update(content_chunks)
+    .update(table.content_chunks)
     .set({ embedded_at: sql`CURRENT_TIMESTAMP` })
-    .where(sql`${content_chunks.id} IN (${sql.join(chunkIds, sql`, `)})`);
+    .where(sql`${table.content_chunks.id} IN (${sql.join(chunkIds, sql`, `)})`);
 }
 
 /**
@@ -929,15 +945,15 @@ export function markChunksEmbeddedByIds(
 export function getStaleChunks(drizzleDb: DrizzleDb) {
   return drizzleDb
     .select({
-      id: content_chunks.id,
-      slug: pages.slug,
-      chunk_index: content_chunks.chunk_index,
-      chunk_text: content_chunks.chunk_text,
-      chunk_source: content_chunks.chunk_source,
+      id: table.content_chunks.id,
+      slug: table.pages.slug,
+      chunk_index: table.content_chunks.chunk_index,
+      chunk_text: table.content_chunks.chunk_text,
+      chunk_source: table.content_chunks.chunk_source,
     })
-    .from(content_chunks)
-    .innerJoin(pages, eq(content_chunks.page_id, pages.id))
-    .where(sql`${content_chunks.embedded_at} IS NULL`);
+    .from(table.content_chunks)
+    .innerJoin(table.pages, eq(table.content_chunks.page_id, table.pages.id))
+    .where(sql`${table.content_chunks.embedded_at} IS NULL`);
 }
 
 /**
@@ -946,28 +962,28 @@ export function getStaleChunks(drizzleDb: DrizzleDb) {
 export function getChunksBySlug(drizzleDb: DrizzleDb, slug: string) {
   return drizzleDb
     .select({
-      id: content_chunks.id,
-      page_id: content_chunks.page_id,
-      chunk_index: content_chunks.chunk_index,
-      chunk_text: content_chunks.chunk_text,
-      chunk_source: content_chunks.chunk_source,
-      model: content_chunks.model,
-      token_count: content_chunks.token_count,
-      embedded_at: content_chunks.embedded_at,
-      created_at: content_chunks.created_at,
+      id: table.content_chunks.id,
+      page_id: table.content_chunks.page_id,
+      chunk_index: table.content_chunks.chunk_index,
+      chunk_text: table.content_chunks.chunk_text,
+      chunk_source: table.content_chunks.chunk_source,
+      model: table.content_chunks.model,
+      token_count: table.content_chunks.token_count,
+      embedded_at: table.content_chunks.embedded_at,
+      created_at: table.content_chunks.created_at,
     })
-    .from(content_chunks)
-    .innerJoin(pages, eq(pages.id, content_chunks.page_id))
-    .where(eq(pages.slug, slug))
-    .orderBy(content_chunks.chunk_index);
+    .from(table.content_chunks)
+    .innerJoin(table.pages, eq(table.pages.id, table.content_chunks.page_id))
+    .where(eq(table.pages.slug, slug))
+    .orderBy(table.content_chunks.chunk_index);
 }
 
 /**
  * 面向实例的安全 SQL 构建器。
  * 通过构造函数注入 DrizzleDb，避免每次方法调用重复传参。
  */
-export class SqlBuilder {
-  constructor(private readonly drizzleDb: DrizzleDb) {}
+export class SqlBuilder<TResultKind extends "sync" | "async" = "async"> {
+  constructor(private readonly drizzleDb: DrizzleDb<TResultKind>) {}
 
   listPages(filters: PageFilters) {
     return listPages(this.drizzleDb, filters);
@@ -1132,5 +1148,12 @@ export class SqlBuilder {
   }
   getChunksBySlug(slug: string) {
     return getChunksBySlug(this.drizzleDb, slug);
+  }
+
+  countContentChunks<Embedded extends boolean>(embedded?: Embedded) {
+    return this.drizzleDb.$count(
+      table.content_chunks,
+      embedded ? isNotNull(table.content_chunks.embedded_at) : undefined
+    );
   }
 }

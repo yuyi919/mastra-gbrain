@@ -204,3 +204,22 @@ export const files = sqliteTable(
     index("idx_files_hash").on(t.content_hash),
   ]
 );
+
+export const Schemas = {
+  pages,
+  content_chunks,
+  chunks_fts,
+  links,
+  tags,
+  tagsRelations,
+  raw_data,
+  timeline_entries,
+  page_versions,
+  ingest_log,
+  config,
+  access_tokens,
+  mcp_request_log,
+  files,
+  pagesRelations,
+};
+export type Schemas = typeof Schemas;

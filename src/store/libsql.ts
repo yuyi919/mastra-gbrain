@@ -33,7 +33,7 @@ import type {
 import { Page } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
 import { SqlBuilder } from "./SqlBuilder.js";
-import { LATEST_VERSION, pages } from "./schema.js";
+import { LATEST_VERSION, Schemas } from "./schema.js";
 import { UnsafeSql } from "./UnsafeSql.js";
 
 export interface LibSQLStoreOptions {
@@ -47,8 +47,8 @@ export interface LibSQLStoreOptions {
 
 export class LibSQLStore implements StoreProvider {
   private db: Database;
-  private drizzleDb: BunSQLiteDatabase<{ pages: typeof pages }>;
-  private sqlBuilder: SqlBuilder;
+  private drizzleDb: BunSQLiteDatabase<Schemas>;
+  private mappers: SqlBuilder<"sync">;
   private unsafeSql: UnsafeSql;
   public vectorStore: LibSQLVector;
   public indexName = "gbrain_chunks";
@@ -84,9 +84,10 @@ export class LibSQLStore implements StoreProvider {
 
     // Initialize Drizzle ORM instance wrapping the Bun SQLite Database
     this.drizzleDb = drizzle(this.db, {
-      schema: { pages },
+      // logger: true,
+      schema: Schemas,
     });
-    this.sqlBuilder = new SqlBuilder(this.drizzleDb);
+    this.mappers = new SqlBuilder(this.drizzleDb as never);
     this.unsafeSql = new UnsafeSql(this.db);
   }
 
@@ -111,7 +112,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getPage(slug: string): Promise<Page | null> {
-    const result = await this.sqlBuilder.getPageBySlug(slug);
+    const result = await this.mappers.getPageBySlug(slug);
 
     if (result.length === 0) return null;
 
@@ -119,7 +120,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async listPages(filters: PageFilters = {}): Promise<Page[]> {
-    const result = await this.sqlBuilder.listPages(filters).all();
+    const result = await this.mappers.listPages(filters).all();
     return result.map(Page.decodeUnsafe);
   }
 
@@ -127,22 +128,22 @@ export class LibSQLStore implements StoreProvider {
     // Delete from pages. Due to ON DELETE CASCADE in schema, this should also clean up:
     // tags, content_chunks, links, timeline_entries, raw_data, page_versions
     await Promise.all([
-      this.sqlBuilder.deletePageBySlug(slug),
+      this.mappers.deletePageBySlug(slug),
       this._deleteVectorsBySlug(slug),
     ]);
   }
 
   async getTags(slug: string): Promise<string[]> {
-    const result = await this.sqlBuilder.getTagsBySlug(slug);
+    const result = await this.mappers.getTagsBySlug(slug);
 
     return result.map((r) => r.tag);
   }
 
   async createVersion(slug: string): Promise<PageVersion> {
-    const pageResult = await this.sqlBuilder.getPageForVersionBySlug(slug);
+    const pageResult = await this.mappers.getPageForVersionBySlug(slug);
 
     if (pageResult.length > 0) {
-      const res = await this.sqlBuilder.insertPageVersion({
+      const res = await this.mappers.insertPageVersion({
         page_id: pageResult[0].id,
         compiled_truth: pageResult[0].compiled_truth || "",
         frontmatter: pageResult[0].frontmatter || "{}",
@@ -163,7 +164,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getVersions(slug: string): Promise<PageVersion[]> {
-    const result = await this.sqlBuilder.getVersionsBySlug(slug);
+    const result = await this.mappers.getVersionsBySlug(slug);
 
     return result.map((r) => ({
       id: r.id,
@@ -178,11 +179,11 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async revertToVersion(slug: string, versionId: number): Promise<void> {
-    await this.sqlBuilder.revertToVersionBySlug(slug, versionId);
+    await this.mappers.revertToVersionBySlug(slug, versionId);
   }
 
   async putPage(slug: string, page: PageInput): Promise<Page> {
-    const record = await this.sqlBuilder.upsertPage(slug, page);
+    const record = await this.mappers.upsertPage(slug, page);
 
     await this.createVersion(slug);
 
@@ -192,21 +193,21 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async addTag(slug: string, tag: string): Promise<void> {
-    const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
+    const pageResult = await this.mappers.getPageIdBySlug(slug);
     if (pageResult.length === 0) return;
 
-    await this.sqlBuilder.insertTag(pageResult[0].id, tag);
+    await this.mappers.insertTag(pageResult[0].id, tag);
   }
 
   async removeTag(slug: string, tag: string): Promise<void> {
-    const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
+    const pageResult = await this.mappers.getPageIdBySlug(slug);
     if (pageResult.length === 0) return;
 
-    await this.sqlBuilder.deleteTag(pageResult[0].id, tag);
+    await this.mappers.deleteTag(pageResult[0].id, tag);
   }
 
   async upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void> {
-    const pageResult = await this.sqlBuilder.getPageBasicBySlug(slug);
+    const pageResult = await this.mappers.getPageBasicBySlug(slug);
     if (pageResult.length === 0) return;
     const page_id = pageResult[0].id;
     const page_title = pageResult[0].title;
@@ -216,8 +217,8 @@ export class LibSQLStore implements StoreProvider {
 
     // Delete chunks that no longer exist
     if (newIndices.length > 0) {
-      await this.sqlBuilder.deleteContentChunksNotIn(page_id, newIndices);
-      await this.sqlBuilder.deleteFtsChunksNotIn(page_id, newIndices);
+      await this.mappers.deleteContentChunksNotIn(page_id, newIndices);
+      await this.mappers.deleteFtsChunksNotIn(page_id, newIndices);
     } else {
       await this.deleteChunks(slug);
       return;
@@ -226,12 +227,12 @@ export class LibSQLStore implements StoreProvider {
     if (chunks.length > 0) {
       // Upsert into content_chunks (real data)
       for (const chunk of chunks) {
-        await this.sqlBuilder.upsertContentChunk(page_id, chunk);
+        await this.mappers.upsertContentChunk(page_id, chunk);
       }
 
       // FTS5 doesn't support UPSERT, so delete and insert
-      await this.sqlBuilder.deleteFtsByPageId(page_id);
-      await this.sqlBuilder.insertFtsChunks(
+      await this.mappers.deleteFtsByPageId(page_id);
+      await this.mappers.insertFtsChunks(
         chunks.map((chunk) => ({
           page_id,
           chunk_index: chunk.chunk_index,
@@ -274,15 +275,15 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async deleteChunks(slug: string): Promise<void> {
-    const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
+    const pageResult = await this.mappers.getPageIdBySlug(slug);
     if (pageResult.length === 0) return;
     const page_id = pageResult[0].id;
 
     // Delete from FTS5
-    await this.sqlBuilder.deleteFtsByPageId(page_id);
+    await this.mappers.deleteFtsByPageId(page_id);
 
     // Delete from real table
-    await this.sqlBuilder.deleteContentChunksByPageId(page_id);
+    await this.mappers.deleteContentChunksByPageId(page_id);
 
     // Delete from LibSQLVector (since vector IDs are `slug::chunk_index`)
     try {
@@ -300,12 +301,12 @@ export class LibSQLStore implements StoreProvider {
     linkType: string = "references",
     context: string = ""
   ): Promise<void> {
-    const fromPage = await this.sqlBuilder.getPageIdBySlug(fromSlug);
-    const toPage = await this.sqlBuilder.getPageIdBySlug(toSlug);
+    const fromPage = await this.mappers.getPageIdBySlug(fromSlug);
+    const toPage = await this.mappers.getPageIdBySlug(toSlug);
 
     if (fromPage.length === 0 || toPage.length === 0) return;
 
-    await this.sqlBuilder.insertLink({
+    await this.mappers.insertLink({
       from_page_id: fromPage[0].id,
       to_page_id: toPage[0].id,
       link_type: linkType,
@@ -314,16 +315,16 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async removeLink(fromSlug: string, toSlug: string): Promise<void> {
-    const fromPage = await this.sqlBuilder.getPageIdBySlug(fromSlug);
-    const toPage = await this.sqlBuilder.getPageIdBySlug(toSlug);
+    const fromPage = await this.mappers.getPageIdBySlug(fromSlug);
+    const toPage = await this.mappers.getPageIdBySlug(toSlug);
 
     if (fromPage.length === 0 || toPage.length === 0) return;
 
-    await this.sqlBuilder.deleteLink(fromPage[0].id, toPage[0].id);
+    await this.mappers.deleteLink(fromPage[0].id, toPage[0].id);
   }
 
   async getOutgoingLinks(slug: string): Promise<Link[]> {
-    const result = await this.sqlBuilder.getOutgoingLinksBySlug(slug);
+    const result = await this.mappers.getOutgoingLinksBySlug(slug);
 
     return result.map((r) => ({
       from_slug: slug,
@@ -334,7 +335,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getBacklinks(slug: string): Promise<Link[]> {
-    const rows = await this.sqlBuilder.getBacklinksBySlug(slug);
+    const rows = await this.mappers.getBacklinksBySlug(slug);
 
     return rows.map((r) => ({
       from_slug: r.from_slug,
@@ -345,7 +346,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getLinks(slug: string): Promise<Link[]> {
-    const outgoing = await this.sqlBuilder.getLinksOutgoingBySlug(slug);
+    const outgoing = await this.mappers.getLinksOutgoingBySlug(slug);
 
     const incoming = await this.getBacklinks(slug);
 
@@ -370,17 +371,17 @@ export class LibSQLStore implements StoreProvider {
     if (opts?.skipExistenceCheck) {
       // In a real implementation we might just do a sub-select directly on insert.
       // But Drizzle doesn't easily support INSERT ... SELECT returning id for sqlite in a clean way without raw SQL sometimes.
-      const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
+      const pageResult = await this.mappers.getPageIdBySlug(slug);
       if (pageResult.length === 0) return; // skip
       page_id = pageResult[0].id;
     } else {
-      const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
+      const pageResult = await this.mappers.getPageIdBySlug(slug);
       if (pageResult.length === 0)
         throw new Error(`addTimelineEntry failed: page "${slug}" not found`);
       page_id = pageResult[0].id;
     }
 
-    await this.sqlBuilder.insertTimelineEntry(page_id, entry);
+    await this.mappers.insertTimelineEntry(page_id, entry);
   }
 
   async addTimelineEntriesBatch(
@@ -389,10 +390,10 @@ export class LibSQLStore implements StoreProvider {
     if (entries.length === 0) return 0;
     let count = 0;
     for (const entry of entries) {
-      const pageResult = await this.sqlBuilder.getPageIdBySlug(entry.slug);
+      const pageResult = await this.mappers.getPageIdBySlug(entry.slug);
       if (pageResult.length === 0) continue;
 
-      const res = await this.sqlBuilder.insertTimelineEntryReturningId(
+      const res = await this.mappers.insertTimelineEntryReturningId(
         pageResult[0].id,
         entry
       );
@@ -406,7 +407,7 @@ export class LibSQLStore implements StoreProvider {
     slug: string,
     opts?: TimelineOpts
   ): Promise<TimelineEntry[]> {
-    const result = await this.sqlBuilder.getTimeline(slug, opts).execute();
+    const result = await this.mappers.getTimeline(slug, opts).execute();
     return result.map((r) => ({
       ...r,
       created_at: new Date(r.created_at),
@@ -415,10 +416,10 @@ export class LibSQLStore implements StoreProvider {
 
   // --- Raw Data Management ---
   async putRawData(slug: string, source: string, data: any): Promise<void> {
-    const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
+    const pageResult = await this.mappers.getPageIdBySlug(slug);
     if (pageResult.length === 0) return;
 
-    await this.sqlBuilder.upsertRawData(
+    await this.mappers.upsertRawData(
       pageResult[0].id,
       source,
       JSON.stringify(data)
@@ -426,7 +427,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getRawData(slug: string, source?: string): Promise<RawData[]> {
-    const result = await this.sqlBuilder.getRawData(slug, source).execute();
+    const result = await this.mappers.getRawData(slug, source).execute();
 
     return result.map((r) => ({
       source: r.source,
@@ -444,13 +445,13 @@ export class LibSQLStore implements StoreProvider {
   ): Promise<void> {
     let page_id = null;
     if (file.page_slug) {
-      const pageResult = await this.sqlBuilder.getPageIdBySlug(file.page_slug);
+      const pageResult = await this.mappers.getPageIdBySlug(file.page_slug);
       if (pageResult.length > 0) {
         page_id = pageResult[0].id;
       }
     }
 
-    await this.sqlBuilder.upsertFile({
+    await this.mappers.upsertFile({
       page_id,
       filename: file.filename,
       storage_path: file.storage_path,
@@ -462,7 +463,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getFile(storagePath: string): Promise<FileRecord | null> {
-    const result = await this.sqlBuilder.getFileByStoragePath(storagePath);
+    const result = await this.mappers.getFileByStoragePath(storagePath);
 
     if (result.length === 0) return null;
     return {
@@ -480,22 +481,22 @@ export class LibSQLStore implements StoreProvider {
 
   // --- Config & Logs Management ---
   async getConfig(key: string): Promise<string | null> {
-    const result = await this.sqlBuilder.getConfigByKey(key);
+    const result = await this.mappers.getConfigByKey(key);
 
     return result.length > 0 ? result[0].value : null;
   }
 
   async setConfig(key: string, value: string): Promise<void> {
-    await this.sqlBuilder.upsertConfig(key, value);
+    await this.mappers.upsertConfig(key, value);
   }
 
   async logIngest(log: IngestLogInput): Promise<void> {
-    await this.sqlBuilder.insertIngestLog(log);
+    await this.mappers.insertIngestLog(log);
   }
 
   async getIngestLog(opts?: { limit?: number }): Promise<IngestLogEntry[]> {
     const limit = opts?.limit ?? 50;
-    const result = await this.sqlBuilder.getIngestLog(limit);
+    const result = await this.mappers.getIngestLog(limit);
 
     return result.map((r) => ({
       ...r,
@@ -508,7 +509,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async updateSlug(oldSlug: string, newSlug: string): Promise<void> {
-    await this.sqlBuilder.updateSlug(oldSlug, newSlug);
+    await this.mappers.updateSlug(oldSlug, newSlug);
   }
 
   async rewriteLinks(oldSlug: string, newSlug: string): Promise<void> {
@@ -519,12 +520,12 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async verifyAccessToken(tokenHash: string): Promise<AccessToken | null> {
-    const result = await this.sqlBuilder.getValidAccessTokenByHash(tokenHash);
+    const result = await this.mappers.getValidAccessTokenByHash(tokenHash);
 
     if (result.length === 0) return null;
 
     // Update last_used_at
-    await this.sqlBuilder.updateAccessTokenLastUsedAt(result[0].id);
+    await this.mappers.updateAccessTokenLastUsedAt(result[0].id);
 
     return {
       ...result[0],
@@ -541,7 +542,7 @@ export class LibSQLStore implements StoreProvider {
   async logMcpRequest(
     log: Omit<McpRequestLog, "id" | "created_at">
   ): Promise<void> {
-    await this.sqlBuilder.insertMcpRequestLog(log);
+    await this.mappers.insertMcpRequestLog(log);
   }
 
   // --- Lifecycle Management ---
@@ -591,7 +592,7 @@ export class LibSQLStore implements StoreProvider {
 
   async markChunksEmbedded(chunkIds: number[]): Promise<void> {
     if (chunkIds.length === 0) return;
-    await this.sqlBuilder.markChunksEmbeddedByIds(chunkIds);
+    await this.mappers.markChunksEmbeddedByIds(chunkIds);
   }
 
   async getStats(): Promise<BrainStats> {
@@ -644,6 +645,9 @@ export class LibSQLStore implements StoreProvider {
     }
 
     try {
+      const countEmbedded = await this.mappers.countContentChunks(true);
+      const countTotal = await this.mappers.countContentChunks();
+      console.log({ countEmbedded, countTotal });
       report.vectorCoverage = this.unsafeSql.getVectorCoverage();
     } catch (e) {}
 
@@ -660,7 +664,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getStaleChunks(): Promise<StaleChunk[]> {
-    const rows = await this.sqlBuilder.getStaleChunks();
+    const rows = await this.mappers.getStaleChunks();
     return rows as StaleChunk[];
   }
 
@@ -690,12 +694,12 @@ export class LibSQLStore implements StoreProvider {
   // Expose vector search and keyword search directly on the store
   async resolveSlugs(partial: string): Promise<string[]> {
     // Try exact match first
-    const exact = await this.sqlBuilder.resolveSlugExact(partial);
+    const exact = await this.mappers.resolveSlugExact(partial);
 
     if (exact.length > 0) return [exact[0].slug];
 
     // Fuzzy match using LIKE
-    const fuzzy = await this.sqlBuilder.resolveSlugFuzzy(partial);
+    const fuzzy = await this.mappers.resolveSlugFuzzy(partial);
 
     return fuzzy.map((r) => r.slug);
   }
@@ -705,7 +709,7 @@ export class LibSQLStore implements StoreProvider {
     opts?: SearchOpts
   ): Promise<SearchResult[]> {
     const segmentedQuery = extractWordsForSearch(query);
-    const rows = await this.sqlBuilder
+    const rows = await this.mappers
       .searchKeyword(segmentedQuery, opts)
       .execute();
 
@@ -785,7 +789,7 @@ export class LibSQLStore implements StoreProvider {
     const slugs = Array.from(new Set(hits.map((h) => h.slug)));
     const chunkIndexes = Array.from(new Set(hits.map((h) => h.chunk_index)));
     if (slugs.length === 0 || chunkIndexes.length === 0) return [];
-    const rows = await this.sqlBuilder
+    const rows = await this.mappers
       .searchVectorRows(slugs, chunkIndexes, opts)
       .execute();
 
@@ -844,7 +848,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getChunks(slug: string): Promise<Chunk[]> {
-    const rows = await this.sqlBuilder.getChunksBySlug(slug);
+    const rows = await this.mappers.getChunksBySlug(slug);
 
     return rows.map((r) => ({
       ...r,

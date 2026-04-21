@@ -43,17 +43,20 @@ export const makeWithConfig: (
  * @since 1.0.0
  * @category tags
  */
-export class SqliteDrizzle extends Context.Service<
-  SqliteDrizzle,
-  SqliteRemoteDatabase
->()("@effect/sql-drizzle/Sqlite") {}
+export class DB extends Context.Service<DB, SqliteRemoteDatabase<any>>()(
+  "@effect/sql-drizzle/Sqlite"
+) {}
 
 /**
  * @since 1.0.0
  * @category layers
  */
-export const layer: Layer.Layer<SqliteDrizzle, never, Client.SqlClient> =
-  make().pipe(Layer.effect(SqliteDrizzle));
+export const makeLayer: <
+  TSchema extends Record<string, unknown> = Record<string, never>,
+>(
+  config?: Omit<DrizzleConfig<TSchema>, "logger">
+) => Layer.Layer<DB, never, Client.SqlClient> = (config) =>
+  Layer.effect(DB, make(config));
 
 /**
  * @since 1.0.0
@@ -61,17 +64,25 @@ export const layer: Layer.Layer<SqliteDrizzle, never, Client.SqlClient> =
  */
 export const layerWithConfig: (
   config: DrizzleConfig
-) => Layer.Layer<SqliteDrizzle, never, Client.SqlClient> = flow(
+) => Layer.Layer<DB, never, Client.SqlClient> = flow(
   makeWithConfig,
-  Layer.effect(SqliteDrizzle)
+  Layer.effect(DB)
 );
 
+// biome-ignore lint/suspicious/noConfusingVoidType: Returning in Effect
+type ExcludeUnknown<T> = [unknown] extends [T] ? void : T;
 // patch
-
 declare module "drizzle-orm" {
   export interface QueryPromise<T>
-    extends Effect.Yieldable<Effect.Effect<T, SqlError>, T, SqlError> {}
+    extends Effect.Yieldable<
+      Effect.Effect<ExcludeUnknown<T>, SqlError>,
+      ExcludeUnknown<T>,
+      SqlError
+    > {}
 }
+// declare module "drizzle-orm/sqlite-core/query-builders/update" {
+//   export interface SQLiteUpdateBase extends Effect.Effect<void, SqlError> {}
+// }
 declare module "drizzle-orm/sqlite-core/query-builders/count" {
   export interface SQLiteCountBuilder<
     TSession extends SQLiteSession<any, any, any, any>,
