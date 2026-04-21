@@ -2,18 +2,7 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { LibSQLVector } from "@mastra/libsql";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  inArray,
-  lte,
-  notInArray,
-  type SQLWrapper,
-  sql,
-} from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import { type BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite";
 import { alias } from "drizzle-orm/sqlite-core";
 import { pick } from "effect/Struct";
@@ -710,39 +699,11 @@ export class LibSQLStore implements StoreProvider {
     slug: string,
     opts?: TimelineOpts
   ): Promise<TimelineEntry[]> {
-    const limit = opts?.limit ?? 100;
-
-    let query = this.drizzleDb
-      .select({
-        id: timeline_entries.id,
-        page_id: timeline_entries.page_id,
-        slug: pages.slug,
-        date: timeline_entries.date,
-        source: timeline_entries.source,
-        summary: timeline_entries.summary,
-        detail: timeline_entries.detail,
-        created_at: timeline_entries.created_at,
-      })
-      .from(timeline_entries)
-      .innerJoin(pages, eq(timeline_entries.page_id, pages.id))
-      .$dynamic();
-
-    const conditions: (SQLWrapper | undefined)[] = [eq(pages.slug, slug)];
-    if (opts?.after) {
-      conditions.push(gte(timeline_entries.date, opts.after));
-    }
-    if (opts?.before) {
-      conditions.push(lte(timeline_entries.date, opts.before));
-    }
-
-    query = query
-      .where(and(...conditions))
-      .orderBy(
-        opts?.asc ? asc(timeline_entries.date) : desc(timeline_entries.date)
-      )
-      .limit(limit);
-
-    const result = await query.execute();
+    const result = await SqlBuilder.getTimeline(
+      this.drizzleDb,
+      slug,
+      opts
+    ).execute();
     return result.map((r) => ({
       ...r,
       created_at: new Date(r.created_at),
@@ -775,27 +736,11 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getRawData(slug: string, source?: string): Promise<RawData[]> {
-    let query = this.drizzleDb
-      .select({
-        id: raw_data.id,
-        page_id: raw_data.page_id,
-        slug: pages.slug,
-        source: raw_data.source,
-        data: raw_data.data,
-        fetched_at: raw_data.fetched_at,
-      })
-      .from(raw_data)
-      .innerJoin(pages, eq(raw_data.page_id, pages.id))
-      .$dynamic();
-
-    const conditions = [eq(pages.slug, slug)];
-    if (source) {
-      conditions.push(eq(raw_data.source, source));
-    }
-
-    query = query.where(and(...conditions));
-
-    const result = await query.execute();
+    const result = await SqlBuilder.getRawData(
+      this.drizzleDb,
+      slug,
+      source
+    ).execute();
 
     return result.map((r) => ({
       source: r.source,
@@ -1326,22 +1271,12 @@ export class LibSQLStore implements StoreProvider {
   // Expose vector search and keyword search directly on the store
   async resolveSlugs(partial: string): Promise<string[]> {
     // Try exact match first
-    const exact = await this.drizzleDb
-      .select({ slug: pages.slug })
-      .from(pages)
-      .where(eq(pages.slug, partial))
-      .limit(1);
+    const exact = await SqlBuilder.resolveSlugExact(this.drizzleDb, partial);
 
     if (exact.length > 0) return [exact[0].slug];
 
     // Fuzzy match using LIKE
-    const fuzzy = await this.drizzleDb
-      .select({ slug: pages.slug })
-      .from(pages)
-      .where(
-        sql`${pages.title} LIKE ${"%" + partial + "%"} OR ${pages.slug} LIKE ${"%" + partial + "%"}`
-      )
-      .limit(5);
+    const fuzzy = await SqlBuilder.resolveSlugFuzzy(this.drizzleDb, partial);
 
     return fuzzy.map((r) => r.slug);
   }
@@ -1350,75 +1285,12 @@ export class LibSQLStore implements StoreProvider {
     query: string,
     opts?: SearchOpts
   ): Promise<SearchResult[]> {
-    const limit = opts?.limit ?? 10;
-    const offset = opts?.offset ?? 0;
-    const dedupe = opts?.dedupe ?? false;
-
     const segmentedQuery = extractWordsForSearch(query);
-
-    const ftsQuery = this.drizzleDb
-      .select({
-        page_id: chunks_fts.page_id,
-        chunk_index: chunks_fts.chunk_index,
-        score: sql<number>`bm25(${chunks_fts})`.as("score"),
-      })
-      .from(chunks_fts)
-      .where(sql`${chunks_fts} MATCH ${segmentedQuery}`)
-      .orderBy(sql`score ASC`)
-      .limit(10000)
-      .as("r");
-
-    const conditions = [];
-    if (opts?.type) {
-      conditions.push(eq(pages.type, opts.type));
-    }
-    if (opts?.detail === "low") {
-      conditions.push(eq(content_chunks.chunk_source, "compiled_truth"));
-    }
-    if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
-      conditions.push(notInArray(pages.slug, opts.exclude_slugs));
-    }
-
-    const mainQuery = this.drizzleDb
-      .select({
-        page_id: pages.id,
-        title: pages.title,
-        type: pages.type,
-        slug: pages.slug,
-        chunk_id: content_chunks.id,
-        chunk_index: content_chunks.chunk_index,
-        chunk_text: content_chunks.chunk_text,
-        chunk_source: content_chunks.chunk_source,
-        token_count: content_chunks.token_count,
-        score: ftsQuery.score,
-        stale:
-          sql<boolean>`(${content_chunks.embedded_at} IS NULL OR ${pages.updated_at} > ${content_chunks.embedded_at})`.as(
-            "stale"
-          ),
-      })
-      .from(ftsQuery)
-      .innerJoin(
-        content_chunks,
-        and(
-          eq(content_chunks.page_id, ftsQuery.page_id),
-          eq(content_chunks.chunk_index, ftsQuery.chunk_index)
-        )
-      )
-      .innerJoin(pages, eq(pages.id, content_chunks.page_id))
-      .orderBy(sql`${ftsQuery.score} ASC`);
-
-    if (conditions.length > 0) {
-      mainQuery.where(and(...conditions));
-    }
-
-    if (dedupe) {
-      // We fetch more results to allow for deduplication in code (handled by caller like hybridSearch)
-      mainQuery.limit((offset + limit) * 5);
-    } else {
-      mainQuery.limit(limit).offset(offset);
-    }
-
-    const rows = await mainQuery.execute();
+    const rows = await SqlBuilder.searchKeyword(
+      this.drizzleDb,
+      segmentedQuery,
+      opts
+    ).execute();
 
     const searchResults = rows.map((r) => ({
       page_id: r.page_id as number,
@@ -1496,41 +1368,12 @@ export class LibSQLStore implements StoreProvider {
     const slugs = Array.from(new Set(hits.map((h) => h.slug)));
     const chunkIndexes = Array.from(new Set(hits.map((h) => h.chunk_index)));
     if (slugs.length === 0 || chunkIndexes.length === 0) return [];
-
-    const conditions = [
-      inArray(pages.slug, slugs),
-      inArray(content_chunks.chunk_index, chunkIndexes),
-    ];
-
-    if (opts?.type) {
-      conditions.push(eq(pages.type, opts.type));
-    }
-    if (opts?.detail === "low") {
-      conditions.push(eq(content_chunks.chunk_source, "compiled_truth"));
-    }
-    if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
-      conditions.push(notInArray(pages.slug, opts.exclude_slugs));
-    }
-
-    const rows = await this.drizzleDb
-      .select({
-        page_id: pages.id,
-        title: pages.title,
-        type: pages.type,
-        slug: pages.slug,
-        chunk_id: content_chunks.id,
-        chunk_index: content_chunks.chunk_index,
-        chunk_text: content_chunks.chunk_text,
-        chunk_source: content_chunks.chunk_source,
-        token_count: content_chunks.token_count,
-        stale:
-          sql<boolean>`(${content_chunks.embedded_at} IS NULL OR ${pages.updated_at} > ${content_chunks.embedded_at})`.as(
-            "stale"
-          ),
-      })
-      .from(content_chunks)
-      .innerJoin(pages, eq(pages.id, content_chunks.page_id))
-      .where(and(...conditions));
+    const rows = await SqlBuilder.searchVectorRows(
+      this.drizzleDb,
+      slugs,
+      chunkIndexes,
+      opts
+    ).execute();
 
     const byKey = new Map<string, (typeof rows)[number]>();
     for (const r of rows) {
