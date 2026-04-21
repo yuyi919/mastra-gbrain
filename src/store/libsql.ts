@@ -46,6 +46,7 @@ import type {
 } from "../types.js";
 import { Page } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
+import * as SqlBuilder from "./SqlBuilder.js";
 import {
   access_tokens,
   chunks_fts,
@@ -126,15 +127,11 @@ export class LibSQLStore implements StoreProvider {
     );
 
     // Create vector index using LibSQLVector
-    try {
-      await this.vectorStore.createIndex({
-        indexName: this.indexName,
-        dimension: this.dimension, // Use configured dimension
-        metric: "cosine",
-      });
-    } catch (err) {
-      // Ignore if index already exists
-    }
+    await this.vectorStore.createIndex({
+      indexName: this.indexName,
+      dimension: this.dimension, // Use configured dimension
+      metric: "cosine",
+    });
   }
 
   async getPage(slug: string): Promise<Page | null> {
@@ -149,55 +146,8 @@ export class LibSQLStore implements StoreProvider {
     return Page.decodeUnsafe(result[0]);
   }
 
-  async listPages(filters?: PageFilters): Promise<Page[]> {
-    const limit = filters?.limit ?? 100;
-    const offset = filters?.offset ?? 0;
-
-    let query = this.drizzleDb.select().from(pages).$dynamic();
-
-    const conditions = [];
-
-    if (filters?.type) {
-      conditions.push(eq(pages.type, filters.type));
-    }
-
-    if (filters?.updated_after) {
-      conditions.push(sql`${pages.updated_at} > ${filters.updated_after}`);
-    }
-
-    if (filters?.tag) {
-      query = this.drizzleDb
-        .select(
-          pick(pages, [
-            "id",
-            "slug",
-            "type",
-            "title",
-            "compiled_truth",
-            "timeline",
-            "frontmatter",
-            "content_hash",
-            "created_at",
-            "updated_at",
-          ])
-        )
-        .from(pages)
-        .innerJoin(tags, eq(pages.id, tags.page_id))
-        .$dynamic() as never;
-
-      conditions.push(inArray(tags.tag, [filters.tag!]));
-    }
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
-    query = query
-      .orderBy(sql`${pages.updated_at} DESC`)
-      .limit(limit)
-      .offset(offset);
-    const result = await query;
-    // console.log(query.toSQL().sql, result)
+  async listPages(filters: PageFilters = {}): Promise<Page[]> {
+    const result = await SqlBuilder.listPages(this.drizzleDb, filters).all();
     return result.map(Page.decodeUnsafe);
   }
 

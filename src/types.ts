@@ -30,6 +30,7 @@ export interface PageInput {
 export interface PageFilters {
   type?: PageType;
   tag?: string;
+  tags?: string[];
   limit?: number;
   offset?: number;
   /** ISO date string (YYYY-MM-DD or full ISO timestamp). Filter to pages updated_at > value. */

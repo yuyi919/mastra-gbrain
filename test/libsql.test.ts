@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { LibSQLStore } from "../src/store/libsql.js";
+import type { ChunkInput } from "./types.js";
 
 let store: LibSQLStore;
 
@@ -51,6 +52,10 @@ test("LibSQLStore getPage and listPages", async () => {
   const aiPages = await store.listPages({ tag: "ai" });
   expect(aiPages.length).toBe(1);
   expect(aiPages[0].slug).toBe("test-list-1");
+
+  const aiPages2 = await store.listPages({ tags: ["ai"], tag:"any" });
+  expect(aiPages2.length).toBe(1);
+  expect(aiPages2[0].slug).toBe("test-list-1");
 });
 
 test("LibSQLStore deletePage", async () => {
@@ -150,7 +155,7 @@ test("LibSQLStore transaction rollback", async () => {
 });
 
 test("LibSQLStore upsert and delete chunks", async () => {
-  const chunks = [
+  const chunks: ChunkInput[] = [
     {
       chunk_index: 0,
       chunk_text: "Hello world",
