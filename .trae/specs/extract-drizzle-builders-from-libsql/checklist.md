@@ -6,9 +6,14 @@
 
 * [x] `SqlBuilder.ts` 不包含任何 `async/await` 语法
 
+* [x] `SqlBuilder.ts` 已改为 class，并通过构造函数注入 `DrizzleDb`
+
+* [x] `UnsafeSql.ts` 已新增并承载 `this.db.xxx` 原生访问
+
+* [x] `libsql.ts` 通过组合 `sqlBuilder` / `unsafeSql` 明确 safe/unsafe 边界
+
 * [x] `libsql.ts` 仅负责执行与映射，不含内联 Drizzle 构建表达式
 
 * [x] `libsql.ts` 不存在 `from "drizzle-orm"` 导入
 
 * [x] 相关类型检查与测试通过（至少 `test/libsql.test.ts`）
-

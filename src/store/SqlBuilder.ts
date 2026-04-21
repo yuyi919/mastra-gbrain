@@ -11,8 +11,8 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/sqlite-core";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+import { alias } from "drizzle-orm/sqlite-core";
 import { pick } from "effect/Struct";
 import type {
   ChunkInput,
@@ -44,16 +44,13 @@ function castArray<A>(a: A | A[]) {
   return Array.isArray(a) ? a : [a];
 }
 
-type DrizzleDb = BaseSQLiteDatabase<any, unknown, any, any>;
+type DrizzleDb = BaseSQLiteDatabase<any, any, any, any>;
 
 /**
  * @internal
  * @returns
  */
-export function listPages(
-  drizzleDb: DrizzleDb,
-  filters: PageFilters
-) {
+export function listPages(drizzleDb: DrizzleDb, filters: PageFilters) {
   const queryFields = pick(pages, [
     "id",
     "slug",
@@ -98,10 +95,7 @@ export function listPages(
 /**
  * 构建按 slug 精确匹配的页面查询。
  */
-export function resolveSlugExact(
-  drizzleDb: DrizzleDb,
-  partial: string
-) {
+export function resolveSlugExact(drizzleDb: DrizzleDb, partial: string) {
   return drizzleDb
     .select({ slug: pages.slug })
     .from(pages)
@@ -112,10 +106,7 @@ export function resolveSlugExact(
 /**
  * 构建按 title/slug 模糊匹配的页面查询。
  */
-export function resolveSlugFuzzy(
-  drizzleDb: DrizzleDb,
-  partial: string
-) {
+export function resolveSlugFuzzy(drizzleDb: DrizzleDb, partial: string) {
   return drizzleDb
     .select({ slug: pages.slug })
     .from(pages)
@@ -231,7 +222,7 @@ export function searchKeyword(
   if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
     conditions.push(notInArray(pages.slug, opts.exclude_slugs));
   }
-  
+
   const mainQuery = drizzleDb
     .select({
       page_id: pages.id,
@@ -420,7 +411,9 @@ export function revertToVersionBySlug(
       updated_at: sql`CURRENT_TIMESTAMP`,
     })
     .from(pv)
-    .where(and(eq(pages.slug, slug), eq(pv.id, versionId), eq(pv.page_id, pages.id)))
+    .where(
+      and(eq(pages.slug, slug), eq(pv.id, versionId), eq(pv.page_id, pages.id))
+    )
     .limit(1);
 }
 
@@ -517,7 +510,10 @@ export function deleteFtsChunksNotIn(
   return drizzleDb
     .delete(chunks_fts)
     .where(
-      and(eq(chunks_fts.page_id, pageId), notInArray(chunks_fts.chunk_index, indices))
+      and(
+        eq(chunks_fts.page_id, pageId),
+        notInArray(chunks_fts.chunk_index, indices)
+      )
     );
 }
 
@@ -580,7 +576,10 @@ export function insertFtsChunks(
 /**
  * 构建按 page_id 删除所有真实 chunk。
  */
-export function deleteContentChunksByPageId(drizzleDb: DrizzleDb, pageId: number) {
+export function deleteContentChunksByPageId(
+  drizzleDb: DrizzleDb,
+  pageId: number
+) {
   return drizzleDb
     .delete(content_chunks)
     .where(eq(content_chunks.page_id, pageId));
@@ -611,7 +610,9 @@ export function deleteLink(
 ) {
   return drizzleDb
     .delete(links)
-    .where(and(eq(links.from_page_id, fromPageId), eq(links.to_page_id, toPageId)));
+    .where(
+      and(eq(links.from_page_id, fromPageId), eq(links.to_page_id, toPageId))
+    );
 }
 
 /**
@@ -633,7 +634,11 @@ export function getOutgoingLinksBySlug(drizzleDb: DrizzleDb, slug: string) {
     .where(
       eq(
         links.from_page_id,
-        drizzleDb.select({ id: pages.id }).from(pages).where(eq(pages.slug, slug)).limit(1)
+        drizzleDb
+          .select({ id: pages.id })
+          .from(pages)
+          .where(eq(pages.slug, slug))
+          .limit(1)
       )
     );
 }
@@ -651,7 +656,12 @@ export function getBacklinksBySlug(drizzleDb: DrizzleDb, slug: string) {
     })
     .from(links)
     .innerJoin(pages, eq(pages.id, links.from_page_id))
-    .where(eq(links.to_page_id, sql`(SELECT id FROM pages WHERE slug = ${slug} LIMIT 1)`));
+    .where(
+      eq(
+        links.to_page_id,
+        sql`(SELECT id FROM pages WHERE slug = ${slug} LIMIT 1)`
+      )
+    );
 }
 
 /**
@@ -668,7 +678,10 @@ export function getLinksOutgoingBySlug(drizzleDb: DrizzleDb, slug: string) {
     .from(links)
     .innerJoin(pages, eq(pages.id, links.to_page_id))
     .where(
-      eq(links.from_page_id, sql`(SELECT id FROM pages WHERE slug = ${slug} LIMIT 1)`)
+      eq(
+        links.from_page_id,
+        sql`(SELECT id FROM pages WHERE slug = ${slug} LIMIT 1)`
+      )
     );
 }
 
@@ -772,7 +785,10 @@ export function upsertFile(
 /**
  * 构建按存储路径查询文件。
  */
-export function getFileByStoragePath(drizzleDb: DrizzleDb, storagePath: string) {
+export function getFileByStoragePath(
+  drizzleDb: DrizzleDb,
+  storagePath: string
+) {
   return drizzleDb
     .select({
       id: files.id,
@@ -807,13 +823,10 @@ export function getConfigByKey(drizzleDb: DrizzleDb, key: string) {
  * 构建写入配置。
  */
 export function upsertConfig(drizzleDb: DrizzleDb, key: string, value: string) {
-  return drizzleDb
-    .insert(config)
-    .values({ key, value })
-    .onConflictDoUpdate({
-      target: config.key,
-      set: { value },
-    });
+  return drizzleDb.insert(config).values({ key, value }).onConflictDoUpdate({
+    target: config.key,
+    set: { value },
+  });
 }
 
 /**
@@ -842,7 +855,11 @@ export function getIngestLog(drizzleDb: DrizzleDb, limit: number) {
 /**
  * 构建更新页面 slug。
  */
-export function updateSlug(drizzleDb: DrizzleDb, oldSlug: string, newSlug: string) {
+export function updateSlug(
+  drizzleDb: DrizzleDb,
+  oldSlug: string,
+  newSlug: string
+) {
   return drizzleDb
     .update(pages)
     .set({ slug: newSlug, updated_at: sql`CURRENT_TIMESTAMP` })
@@ -860,7 +877,10 @@ export function getValidAccessTokenByHash(
     .select()
     .from(access_tokens)
     .where(
-      and(eq(access_tokens.token_hash, tokenHash), sql`${access_tokens.revoked_at} IS NULL`)
+      and(
+        eq(access_tokens.token_hash, tokenHash),
+        sql`${access_tokens.revoked_at} IS NULL`
+      )
     )
     .limit(1);
 }
@@ -940,4 +960,177 @@ export function getChunksBySlug(drizzleDb: DrizzleDb, slug: string) {
     .innerJoin(pages, eq(pages.id, content_chunks.page_id))
     .where(eq(pages.slug, slug))
     .orderBy(content_chunks.chunk_index);
+}
+
+/**
+ * 面向实例的安全 SQL 构建器。
+ * 通过构造函数注入 DrizzleDb，避免每次方法调用重复传参。
+ */
+export class SqlBuilder {
+  constructor(private readonly drizzleDb: DrizzleDb) {}
+
+  listPages(filters: PageFilters) {
+    return listPages(this.drizzleDb, filters);
+  }
+  resolveSlugExact(partial: string) {
+    return resolveSlugExact(this.drizzleDb, partial);
+  }
+  resolveSlugFuzzy(partial: string) {
+    return resolveSlugFuzzy(this.drizzleDb, partial);
+  }
+  getTimeline(slug: string, opts?: TimelineOpts) {
+    return getTimeline(this.drizzleDb, slug, opts);
+  }
+  getRawData(slug: string, source?: string) {
+    return getRawData(this.drizzleDb, slug, source);
+  }
+  searchKeyword(segmentedQuery: string, opts?: SearchOpts) {
+    return searchKeyword(this.drizzleDb, segmentedQuery, opts);
+  }
+  searchVectorRows(slugs: string[], chunkIndexes: number[], opts?: SearchOpts) {
+    return searchVectorRows(this.drizzleDb, slugs, chunkIndexes, opts);
+  }
+  getPageBySlug(slug: string) {
+    return getPageBySlug(this.drizzleDb, slug);
+  }
+  deletePageBySlug(slug: string) {
+    return deletePageBySlug(this.drizzleDb, slug);
+  }
+  getPageIdBySlug(slug: string) {
+    return getPageIdBySlug(this.drizzleDb, slug);
+  }
+  getTagsBySlug(slug: string) {
+    return getTagsBySlug(this.drizzleDb, slug);
+  }
+  getPageForVersionBySlug(slug: string) {
+    return getPageForVersionBySlug(this.drizzleDb, slug);
+  }
+  insertPageVersion(values: {
+    page_id: number;
+    compiled_truth: string;
+    frontmatter: string;
+  }) {
+    return insertPageVersion(this.drizzleDb, values);
+  }
+  getVersionsBySlug(slug: string) {
+    return getVersionsBySlug(this.drizzleDb, slug);
+  }
+  revertToVersionBySlug(slug: string, versionId: number) {
+    return revertToVersionBySlug(this.drizzleDb, slug, versionId);
+  }
+  upsertPage(slug: string, page: PageInput) {
+    return upsertPage(this.drizzleDb, slug, page);
+  }
+  insertTag(pageId: number, tag: string) {
+    return insertTag(this.drizzleDb, pageId, tag);
+  }
+  deleteTag(pageId: number, tag: string) {
+    return deleteTag(this.drizzleDb, pageId, tag);
+  }
+  getPageBasicBySlug(slug: string) {
+    return getPageBasicBySlug(this.drizzleDb, slug);
+  }
+  deleteContentChunksNotIn(pageId: number, indices: number[]) {
+    return deleteContentChunksNotIn(this.drizzleDb, pageId, indices);
+  }
+  deleteFtsChunksNotIn(pageId: number, indices: number[]) {
+    return deleteFtsChunksNotIn(this.drizzleDb, pageId, indices);
+  }
+  upsertContentChunk(pageId: number, chunk: ChunkInput) {
+    return upsertContentChunk(this.drizzleDb, pageId, chunk);
+  }
+  deleteFtsByPageId(pageId: number) {
+    return deleteFtsByPageId(this.drizzleDb, pageId);
+  }
+  insertFtsChunks(
+    values: Array<{
+      page_id: number;
+      chunk_index: number;
+      chunk_text: string;
+      chunk_source: string;
+      token_count: number;
+      chunk_text_segmented: string;
+    }>
+  ) {
+    return insertFtsChunks(this.drizzleDb, values);
+  }
+  deleteContentChunksByPageId(pageId: number) {
+    return deleteContentChunksByPageId(this.drizzleDb, pageId);
+  }
+  insertLink(values: {
+    from_page_id: number;
+    to_page_id: number;
+    link_type: string;
+    context: string;
+  }) {
+    return insertLink(this.drizzleDb, values);
+  }
+  deleteLink(fromPageId: number, toPageId: number) {
+    return deleteLink(this.drizzleDb, fromPageId, toPageId);
+  }
+  getOutgoingLinksBySlug(slug: string) {
+    return getOutgoingLinksBySlug(this.drizzleDb, slug);
+  }
+  getBacklinksBySlug(slug: string) {
+    return getBacklinksBySlug(this.drizzleDb, slug);
+  }
+  getLinksOutgoingBySlug(slug: string) {
+    return getLinksOutgoingBySlug(this.drizzleDb, slug);
+  }
+  insertTimelineEntry(pageId: number, entry: TimelineInput) {
+    return insertTimelineEntry(this.drizzleDb, pageId, entry);
+  }
+  insertTimelineEntryReturningId(pageId: number, entry: TimelineInput) {
+    return insertTimelineEntryReturningId(this.drizzleDb, pageId, entry);
+  }
+  upsertRawData(pageId: number, source: string, dataJson: string) {
+    return upsertRawData(this.drizzleDb, pageId, source, dataJson);
+  }
+  upsertFile(values: {
+    page_id: number | null;
+    filename: string;
+    storage_path: string;
+    mime_type: string | null;
+    size_bytes: number | null;
+    content_hash: string;
+    metadata: string;
+  }) {
+    return upsertFile(this.drizzleDb, values);
+  }
+  getFileByStoragePath(storagePath: string) {
+    return getFileByStoragePath(this.drizzleDb, storagePath);
+  }
+  getConfigByKey(key: string) {
+    return getConfigByKey(this.drizzleDb, key);
+  }
+  upsertConfig(key: string, value: string) {
+    return upsertConfig(this.drizzleDb, key, value);
+  }
+  insertIngestLog(log: IngestLogInput) {
+    return insertIngestLog(this.drizzleDb, log);
+  }
+  getIngestLog(limit: number) {
+    return getIngestLog(this.drizzleDb, limit);
+  }
+  updateSlug(oldSlug: string, newSlug: string) {
+    return updateSlug(this.drizzleDb, oldSlug, newSlug);
+  }
+  getValidAccessTokenByHash(tokenHash: string) {
+    return getValidAccessTokenByHash(this.drizzleDb, tokenHash);
+  }
+  updateAccessTokenLastUsedAt(id: string) {
+    return updateAccessTokenLastUsedAt(this.drizzleDb, id);
+  }
+  insertMcpRequestLog(log: Omit<McpRequestLog, "id" | "created_at">) {
+    return insertMcpRequestLog(this.drizzleDb, log);
+  }
+  markChunksEmbeddedByIds(chunkIds: number[]) {
+    return markChunksEmbeddedByIds(this.drizzleDb, chunkIds);
+  }
+  getStaleChunks() {
+    return getStaleChunks(this.drizzleDb);
+  }
+  getChunksBySlug(slug: string) {
+    return getChunksBySlug(this.drizzleDb, slug);
+  }
 }

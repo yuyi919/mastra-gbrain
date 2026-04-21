@@ -5,14 +5,17 @@
 
 ## What Changes
 - 将 `libsql.ts` 中剩余的 Drizzle 查询构建逻辑继续迁移到 `SqlBuilder.ts`
+- 将 `SqlBuilder.ts` 改写为 `SqlBuilder` class，通过构造函数注入 `DrizzleDb`
 - `libsql.ts` 仅保留业务流程编排、查询执行与结果映射
 - 移除 `libsql.ts` 对 `"drizzle-orm"` 的直接导入
 - 为新增 Builder 提供清晰命名与职责边界（按领域拆分：page/tag/chunk/link/timeline/raw-data/config/log 等）
 - 保持 `SqlBuilder.ts` 为同步构建模块，不引入任何异步语法
+- 新增 `UnsafeSql.ts`，承载 `this.db.xxx` 原生访问（`query/exec/transaction` 等）
+- `LibSQLStore` 通过组合 `sqlBuilder` / `unsafeSql` 明确 safe/unsafe 边界
 
 ## Impact
 - Affected specs: StoreProvider 存储实现边界、查询构建职责边界、检索与写入一致性
-- Affected code: `src/store/libsql.ts`、`src/store/SqlBuilder.ts`、相关测试文件（如 `test/libsql.test.ts`）
+- Affected code: `src/store/libsql.ts`、`src/store/SqlBuilder.ts`、`src/store/UnsafeSql.ts`、相关测试文件（如 `test/libsql.test.ts`）
 
 ## ADDED Requirements
 ### Requirement: LibSQL 查询构建分层
@@ -29,9 +32,16 @@
 - **WHEN** 代码完成迁移
 - **THEN** `libsql.ts` 的 import 列表不包含 `"drizzle-orm"`，并且类型检查通过
 
+### Requirement: Safe/Unsafe 边界可见性
+系统 SHALL 将 Drizzle QueryBuilder 调用与 `bun:sqlite` 原生 SQL 调用分离到不同构建器。
+
+#### Scenario: 运行时查询与原生访问共存
+- **WHEN** `LibSQLStore` 执行查询构建、统计、健康检查、事务和图遍历
+- **THEN** Drizzle 构建走 `SqlBuilder`，原生 `Database` 访问走 `UnsafeSql`
+
 ## MODIFIED Requirements
 ### Requirement: SqlBuilder 模块职责
-`SqlBuilder.ts` 从“部分查询构建”升级为“统一查询构建入口”，覆盖 `libsql.ts` 需要的 Drizzle 构建逻辑，且保持纯同步（无 `async/await`）。
+`SqlBuilder.ts` 从“部分查询构建”升级为“统一查询构建入口”，覆盖 `libsql.ts` 需要的 Drizzle 构建逻辑，且保持纯同步（无 `async/await`），并以 class 形式通过构造函数注入 `DrizzleDb`。
 
 ## REMOVED Requirements
 ### Requirement: 在 libsql.ts 内联构建 Drizzle 查询

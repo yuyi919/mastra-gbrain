@@ -18,7 +18,14 @@
   - [x] SubTask 4.2: 运行与 store 相关测试（至少 `test/libsql.test.ts`）
   - [x] SubTask 4.3: 自检 `libsql.ts` 不再包含 `"drizzle-orm"` import
 
+- [x] Task 5: 记录并完成第二阶段架构重构（class + safe/unsafe）
+  - [x] SubTask 5.1: 将 `SqlBuilder.ts` 改写为 class，构造函数注入 `DrizzleDb`
+  - [x] SubTask 5.2: 新增 `src/store/UnsafeSql.ts` 承载 `this.db.xxx` 原生访问
+  - [x] SubTask 5.3: `libsql.ts` 引入并组合 `sqlBuilder` / `unsafeSql` 实例
+  - [x] SubTask 5.4: 运行诊断与 `test/libsql.test.ts` 验证重构后行为一致
+
 # Task Dependencies
 - Task 2 depends on Task 1
 - Task 3 depends on Task 2
 - Task 4 depends on Task 3
+- Task 5 depends on Task 4

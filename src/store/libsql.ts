@@ -32,8 +32,9 @@ import type {
 } from "../types.js";
 import { Page } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
-import * as SqlBuilder from "./SqlBuilder.js";
+import { SqlBuilder } from "./SqlBuilder.js";
 import { LATEST_VERSION, pages } from "./schema.js";
+import { UnsafeSql } from "./UnsafeSql.js";
 
 export interface LibSQLStoreOptions {
   url: string;
@@ -47,6 +48,8 @@ export interface LibSQLStoreOptions {
 export class LibSQLStore implements StoreProvider {
   private db: Database;
   private drizzleDb: BunSQLiteDatabase<{ pages: typeof pages }>;
+  private sqlBuilder: SqlBuilder;
+  private unsafeSql: UnsafeSql;
   public vectorStore: LibSQLVector;
   public indexName = "gbrain_chunks";
   public readonly url: string;
@@ -83,6 +86,8 @@ export class LibSQLStore implements StoreProvider {
     this.drizzleDb = drizzle(this.db, {
       schema: { pages },
     });
+    this.sqlBuilder = new SqlBuilder(this.drizzleDb);
+    this.unsafeSql = new UnsafeSql(this.db);
   }
 
   private get _inTransaction() {
@@ -90,10 +95,10 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async init() {
-    if (this._inTransaction) return; // Don't init schema in a sub-transaction
+    if (this._inTransaction) return;
 
     // Create tables
-    this.db.exec(
+    this.unsafeSql.exec(
       (await import("./init.sql", { with: { type: "text" } })).default
     );
 
@@ -106,7 +111,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getPage(slug: string): Promise<Page | null> {
-    const result = await SqlBuilder.getPageBySlug(this.drizzleDb, slug);
+    const result = await this.sqlBuilder.getPageBySlug(slug);
 
     if (result.length === 0) return null;
 
@@ -114,7 +119,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async listPages(filters: PageFilters = {}): Promise<Page[]> {
-    const result = await SqlBuilder.listPages(this.drizzleDb, filters).all();
+    const result = await this.sqlBuilder.listPages(filters).all();
     return result.map(Page.decodeUnsafe);
   }
 
@@ -122,25 +127,22 @@ export class LibSQLStore implements StoreProvider {
     // Delete from pages. Due to ON DELETE CASCADE in schema, this should also clean up:
     // tags, content_chunks, links, timeline_entries, raw_data, page_versions
     await Promise.all([
-      SqlBuilder.deletePageBySlug(this.drizzleDb, slug),
+      this.sqlBuilder.deletePageBySlug(slug),
       this._deleteVectorsBySlug(slug),
     ]);
   }
 
   async getTags(slug: string): Promise<string[]> {
-    const result = await SqlBuilder.getTagsBySlug(this.drizzleDb, slug);
+    const result = await this.sqlBuilder.getTagsBySlug(slug);
 
     return result.map((r) => r.tag);
   }
 
   async createVersion(slug: string): Promise<PageVersion> {
-    const pageResult = await SqlBuilder.getPageForVersionBySlug(
-      this.drizzleDb,
-      slug
-    );
+    const pageResult = await this.sqlBuilder.getPageForVersionBySlug(slug);
 
     if (pageResult.length > 0) {
-      const res = await SqlBuilder.insertPageVersion(this.drizzleDb, {
+      const res = await this.sqlBuilder.insertPageVersion({
         page_id: pageResult[0].id,
         compiled_truth: pageResult[0].compiled_truth || "",
         frontmatter: pageResult[0].frontmatter || "{}",
@@ -161,7 +163,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getVersions(slug: string): Promise<PageVersion[]> {
-    const result = await SqlBuilder.getVersionsBySlug(this.drizzleDb, slug);
+    const result = await this.sqlBuilder.getVersionsBySlug(slug);
 
     return result.map((r) => ({
       id: r.id,
@@ -176,11 +178,11 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async revertToVersion(slug: string, versionId: number): Promise<void> {
-    await SqlBuilder.revertToVersionBySlug(this.drizzleDb, slug, versionId);
+    await this.sqlBuilder.revertToVersionBySlug(slug, versionId);
   }
 
   async putPage(slug: string, page: PageInput): Promise<Page> {
-    const record = await SqlBuilder.upsertPage(this.drizzleDb, slug, page);
+    const record = await this.sqlBuilder.upsertPage(slug, page);
 
     await this.createVersion(slug);
 
@@ -190,21 +192,21 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async addTag(slug: string, tag: string): Promise<void> {
-    const pageResult = await SqlBuilder.getPageIdBySlug(this.drizzleDb, slug);
+    const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
     if (pageResult.length === 0) return;
 
-    await SqlBuilder.insertTag(this.drizzleDb, pageResult[0].id, tag);
+    await this.sqlBuilder.insertTag(pageResult[0].id, tag);
   }
 
   async removeTag(slug: string, tag: string): Promise<void> {
-    const pageResult = await SqlBuilder.getPageIdBySlug(this.drizzleDb, slug);
+    const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
     if (pageResult.length === 0) return;
 
-    await SqlBuilder.deleteTag(this.drizzleDb, pageResult[0].id, tag);
+    await this.sqlBuilder.deleteTag(pageResult[0].id, tag);
   }
 
   async upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void> {
-    const pageResult = await SqlBuilder.getPageBasicBySlug(this.drizzleDb, slug);
+    const pageResult = await this.sqlBuilder.getPageBasicBySlug(slug);
     if (pageResult.length === 0) return;
     const page_id = pageResult[0].id;
     const page_title = pageResult[0].title;
@@ -214,12 +216,8 @@ export class LibSQLStore implements StoreProvider {
 
     // Delete chunks that no longer exist
     if (newIndices.length > 0) {
-      await SqlBuilder.deleteContentChunksNotIn(
-        this.drizzleDb,
-        page_id,
-        newIndices
-      );
-      await SqlBuilder.deleteFtsChunksNotIn(this.drizzleDb, page_id, newIndices);
+      await this.sqlBuilder.deleteContentChunksNotIn(page_id, newIndices);
+      await this.sqlBuilder.deleteFtsChunksNotIn(page_id, newIndices);
     } else {
       await this.deleteChunks(slug);
       return;
@@ -228,13 +226,12 @@ export class LibSQLStore implements StoreProvider {
     if (chunks.length > 0) {
       // Upsert into content_chunks (real data)
       for (const chunk of chunks) {
-        await SqlBuilder.upsertContentChunk(this.drizzleDb, page_id, chunk);
+        await this.sqlBuilder.upsertContentChunk(page_id, chunk);
       }
 
       // FTS5 doesn't support UPSERT, so delete and insert
-      await SqlBuilder.deleteFtsByPageId(this.drizzleDb, page_id);
-      await SqlBuilder.insertFtsChunks(
-        this.drizzleDb,
+      await this.sqlBuilder.deleteFtsByPageId(page_id);
+      await this.sqlBuilder.insertFtsChunks(
         chunks.map((chunk) => ({
           page_id,
           chunk_index: chunk.chunk_index,
@@ -277,15 +274,15 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async deleteChunks(slug: string): Promise<void> {
-    const pageResult = await SqlBuilder.getPageIdBySlug(this.drizzleDb, slug);
+    const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
     if (pageResult.length === 0) return;
     const page_id = pageResult[0].id;
 
     // Delete from FTS5
-    await SqlBuilder.deleteFtsByPageId(this.drizzleDb, page_id);
+    await this.sqlBuilder.deleteFtsByPageId(page_id);
 
     // Delete from real table
-    await SqlBuilder.deleteContentChunksByPageId(this.drizzleDb, page_id);
+    await this.sqlBuilder.deleteContentChunksByPageId(page_id);
 
     // Delete from LibSQLVector (since vector IDs are `slug::chunk_index`)
     try {
@@ -303,12 +300,12 @@ export class LibSQLStore implements StoreProvider {
     linkType: string = "references",
     context: string = ""
   ): Promise<void> {
-    const fromPage = await SqlBuilder.getPageIdBySlug(this.drizzleDb, fromSlug);
-    const toPage = await SqlBuilder.getPageIdBySlug(this.drizzleDb, toSlug);
+    const fromPage = await this.sqlBuilder.getPageIdBySlug(fromSlug);
+    const toPage = await this.sqlBuilder.getPageIdBySlug(toSlug);
 
     if (fromPage.length === 0 || toPage.length === 0) return;
 
-    await SqlBuilder.insertLink(this.drizzleDb, {
+    await this.sqlBuilder.insertLink({
       from_page_id: fromPage[0].id,
       to_page_id: toPage[0].id,
       link_type: linkType,
@@ -317,16 +314,16 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async removeLink(fromSlug: string, toSlug: string): Promise<void> {
-    const fromPage = await SqlBuilder.getPageIdBySlug(this.drizzleDb, fromSlug);
-    const toPage = await SqlBuilder.getPageIdBySlug(this.drizzleDb, toSlug);
+    const fromPage = await this.sqlBuilder.getPageIdBySlug(fromSlug);
+    const toPage = await this.sqlBuilder.getPageIdBySlug(toSlug);
 
     if (fromPage.length === 0 || toPage.length === 0) return;
 
-    await SqlBuilder.deleteLink(this.drizzleDb, fromPage[0].id, toPage[0].id);
+    await this.sqlBuilder.deleteLink(fromPage[0].id, toPage[0].id);
   }
 
   async getOutgoingLinks(slug: string): Promise<Link[]> {
-    const result = await SqlBuilder.getOutgoingLinksBySlug(this.drizzleDb, slug);
+    const result = await this.sqlBuilder.getOutgoingLinksBySlug(slug);
 
     return result.map((r) => ({
       from_slug: slug,
@@ -337,7 +334,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getBacklinks(slug: string): Promise<Link[]> {
-    const rows = await SqlBuilder.getBacklinksBySlug(this.drizzleDb, slug);
+    const rows = await this.sqlBuilder.getBacklinksBySlug(slug);
 
     return rows.map((r) => ({
       from_slug: r.from_slug,
@@ -348,7 +345,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getLinks(slug: string): Promise<Link[]> {
-    const outgoing = await SqlBuilder.getLinksOutgoingBySlug(this.drizzleDb, slug);
+    const outgoing = await this.sqlBuilder.getLinksOutgoingBySlug(slug);
 
     const incoming = await this.getBacklinks(slug);
 
@@ -373,17 +370,17 @@ export class LibSQLStore implements StoreProvider {
     if (opts?.skipExistenceCheck) {
       // In a real implementation we might just do a sub-select directly on insert.
       // But Drizzle doesn't easily support INSERT ... SELECT returning id for sqlite in a clean way without raw SQL sometimes.
-      const pageResult = await SqlBuilder.getPageIdBySlug(this.drizzleDb, slug);
+      const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
       if (pageResult.length === 0) return; // skip
       page_id = pageResult[0].id;
     } else {
-      const pageResult = await SqlBuilder.getPageIdBySlug(this.drizzleDb, slug);
+      const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
       if (pageResult.length === 0)
         throw new Error(`addTimelineEntry failed: page "${slug}" not found`);
       page_id = pageResult[0].id;
     }
 
-    await SqlBuilder.insertTimelineEntry(this.drizzleDb, page_id, entry);
+    await this.sqlBuilder.insertTimelineEntry(page_id, entry);
   }
 
   async addTimelineEntriesBatch(
@@ -392,14 +389,10 @@ export class LibSQLStore implements StoreProvider {
     if (entries.length === 0) return 0;
     let count = 0;
     for (const entry of entries) {
-      const pageResult = await SqlBuilder.getPageIdBySlug(
-        this.drizzleDb,
-        entry.slug
-      );
+      const pageResult = await this.sqlBuilder.getPageIdBySlug(entry.slug);
       if (pageResult.length === 0) continue;
 
-      const res = await SqlBuilder.insertTimelineEntryReturningId(
-        this.drizzleDb,
+      const res = await this.sqlBuilder.insertTimelineEntryReturningId(
         pageResult[0].id,
         entry
       );
@@ -413,11 +406,7 @@ export class LibSQLStore implements StoreProvider {
     slug: string,
     opts?: TimelineOpts
   ): Promise<TimelineEntry[]> {
-    const result = await SqlBuilder.getTimeline(
-      this.drizzleDb,
-      slug,
-      opts
-    ).execute();
+    const result = await this.sqlBuilder.getTimeline(slug, opts).execute();
     return result.map((r) => ({
       ...r,
       created_at: new Date(r.created_at),
@@ -426,11 +415,10 @@ export class LibSQLStore implements StoreProvider {
 
   // --- Raw Data Management ---
   async putRawData(slug: string, source: string, data: any): Promise<void> {
-    const pageResult = await SqlBuilder.getPageIdBySlug(this.drizzleDb, slug);
+    const pageResult = await this.sqlBuilder.getPageIdBySlug(slug);
     if (pageResult.length === 0) return;
 
-    await SqlBuilder.upsertRawData(
-      this.drizzleDb,
+    await this.sqlBuilder.upsertRawData(
       pageResult[0].id,
       source,
       JSON.stringify(data)
@@ -438,11 +426,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getRawData(slug: string, source?: string): Promise<RawData[]> {
-    const result = await SqlBuilder.getRawData(
-      this.drizzleDb,
-      slug,
-      source
-    ).execute();
+    const result = await this.sqlBuilder.getRawData(slug, source).execute();
 
     return result.map((r) => ({
       source: r.source,
@@ -460,16 +444,13 @@ export class LibSQLStore implements StoreProvider {
   ): Promise<void> {
     let page_id = null;
     if (file.page_slug) {
-      const pageResult = await SqlBuilder.getPageIdBySlug(
-        this.drizzleDb,
-        file.page_slug
-      );
+      const pageResult = await this.sqlBuilder.getPageIdBySlug(file.page_slug);
       if (pageResult.length > 0) {
         page_id = pageResult[0].id;
       }
     }
 
-    await SqlBuilder.upsertFile(this.drizzleDb, {
+    await this.sqlBuilder.upsertFile({
       page_id,
       filename: file.filename,
       storage_path: file.storage_path,
@@ -481,10 +462,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getFile(storagePath: string): Promise<FileRecord | null> {
-    const result = await SqlBuilder.getFileByStoragePath(
-      this.drizzleDb,
-      storagePath
-    );
+    const result = await this.sqlBuilder.getFileByStoragePath(storagePath);
 
     if (result.length === 0) return null;
     return {
@@ -502,22 +480,22 @@ export class LibSQLStore implements StoreProvider {
 
   // --- Config & Logs Management ---
   async getConfig(key: string): Promise<string | null> {
-    const result = await SqlBuilder.getConfigByKey(this.drizzleDb, key);
+    const result = await this.sqlBuilder.getConfigByKey(key);
 
     return result.length > 0 ? result[0].value : null;
   }
 
   async setConfig(key: string, value: string): Promise<void> {
-    await SqlBuilder.upsertConfig(this.drizzleDb, key, value);
+    await this.sqlBuilder.upsertConfig(key, value);
   }
 
   async logIngest(log: IngestLogInput): Promise<void> {
-    await SqlBuilder.insertIngestLog(this.drizzleDb, log);
+    await this.sqlBuilder.insertIngestLog(log);
   }
 
   async getIngestLog(opts?: { limit?: number }): Promise<IngestLogEntry[]> {
     const limit = opts?.limit ?? 50;
-    const result = await SqlBuilder.getIngestLog(this.drizzleDb, limit);
+    const result = await this.sqlBuilder.getIngestLog(limit);
 
     return result.map((r) => ({
       ...r,
@@ -530,7 +508,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async updateSlug(oldSlug: string, newSlug: string): Promise<void> {
-    await SqlBuilder.updateSlug(this.drizzleDb, oldSlug, newSlug);
+    await this.sqlBuilder.updateSlug(oldSlug, newSlug);
   }
 
   async rewriteLinks(oldSlug: string, newSlug: string): Promise<void> {
@@ -541,15 +519,12 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async verifyAccessToken(tokenHash: string): Promise<AccessToken | null> {
-    const result = await SqlBuilder.getValidAccessTokenByHash(
-      this.drizzleDb,
-      tokenHash
-    );
+    const result = await this.sqlBuilder.getValidAccessTokenByHash(tokenHash);
 
     if (result.length === 0) return null;
 
     // Update last_used_at
-    await SqlBuilder.updateAccessTokenLastUsedAt(this.drizzleDb, result[0].id);
+    await this.sqlBuilder.updateAccessTokenLastUsedAt(result[0].id);
 
     return {
       ...result[0],
@@ -566,7 +541,7 @@ export class LibSQLStore implements StoreProvider {
   async logMcpRequest(
     log: Omit<McpRequestLog, "id" | "created_at">
   ): Promise<void> {
-    await SqlBuilder.insertMcpRequestLog(this.drizzleDb, log);
+    await this.sqlBuilder.insertMcpRequestLog(log);
   }
 
   // --- Lifecycle Management ---
@@ -616,178 +591,15 @@ export class LibSQLStore implements StoreProvider {
 
   async markChunksEmbedded(chunkIds: number[]): Promise<void> {
     if (chunkIds.length === 0) return;
-    await SqlBuilder.markChunksEmbeddedByIds(this.drizzleDb, chunkIds);
+    await this.sqlBuilder.markChunksEmbeddedByIds(chunkIds);
   }
 
   async getStats(): Promise<BrainStats> {
-    const pageCount = this.db
-      .query("SELECT count(*) as count FROM pages")
-      .get() as { count: number };
-    const chunkCount = this.db
-      .query("SELECT count(*) as count FROM content_chunks")
-      .get() as { count: number };
-    const embeddedCount = this.db
-      .query(
-        "SELECT count(*) as count FROM content_chunks WHERE embedded_at IS NOT NULL"
-      )
-      .get() as { count: number };
-    const linkCount = this.db
-      .query("SELECT count(*) as count FROM links")
-      .get() as { count: number };
-    const tagCount = this.db
-      .query("SELECT count(DISTINCT tag) as count FROM tags")
-      .get() as { count: number };
-    const timelineEntryCount = this.db
-      .query("SELECT count(*) as count FROM timeline_entries")
-      .get() as { count: number };
-
-    const types = this.db
-      .query(
-        "SELECT type, count(*) as count FROM pages GROUP BY type ORDER BY count DESC"
-      )
-      .all() as { type: string; count: number }[];
-    const pages_by_type: Record<string, number> = {};
-    for (const t of types) {
-      pages_by_type[t.type] = t.count;
-    }
-
-    return {
-      page_count: pageCount.count,
-      chunk_count: chunkCount.count,
-      embedded_count: embeddedCount.count,
-      link_count: linkCount.count,
-      tag_count: tagCount.count,
-      timeline_entry_count: timelineEntryCount.count,
-      pages_by_type,
-    };
+    return this.unsafeSql.getStats();
   }
 
   async getHealth(): Promise<BrainHealth> {
-    const pageCount = (
-      this.db.query("SELECT count(*) as count FROM pages").get() as {
-        count: number;
-      }
-    ).count;
-    const chunkCount = (
-      this.db.query("SELECT count(*) as count FROM content_chunks").get() as {
-        count: number;
-      }
-    ).count;
-    const embeddedCount = (
-      this.db
-        .query(
-          "SELECT count(*) as count FROM content_chunks WHERE embedded_at IS NOT NULL"
-        )
-        .get() as { count: number }
-    ).count;
-    const stalePages = (
-      this.db
-        .query(
-          `
-      SELECT count(*) as count FROM pages p
-      WHERE (p.compiled_truth != '' OR p.timeline != '')
-        AND NOT EXISTS (SELECT 1 FROM content_chunks cc WHERE cc.page_id = p.id)
-    `
-        )
-        .get() as { count: number }
-    ).count;
-    const orphanPages = (
-      this.db
-        .query(
-          `
-      SELECT count(*) as count FROM pages p
-      WHERE NOT EXISTS (SELECT 1 FROM links l WHERE l.to_page_id = p.id)
-        AND NOT EXISTS (SELECT 1 FROM links l WHERE l.from_page_id = p.id)
-    `
-        )
-        .get() as { count: number }
-    ).count;
-    const deadLinks = (
-      this.db
-        .query(
-          `
-      SELECT count(*) as count FROM links l
-      WHERE NOT EXISTS (SELECT 1 FROM pages p WHERE p.id = l.to_page_id)
-    `
-        )
-        .get() as { count: number }
-    ).count;
-    const missingEmbeddings = chunkCount - embeddedCount;
-    const linkCount = (
-      this.db.query("SELECT count(*) as count FROM links").get() as {
-        count: number;
-      }
-    ).count;
-    const pagesWithTimeline = (
-      this.db
-        .query("SELECT count(DISTINCT page_id) as count FROM timeline_entries")
-        .get() as { count: number }
-    ).count;
-    const entityCount = (
-      this.db
-        .query(
-          "SELECT count(*) as count FROM pages WHERE type IN ('person', 'company')"
-        )
-        .get() as { count: number }
-    ).count;
-    const entityWithLinks = (
-      this.db
-        .query(
-          "SELECT count(DISTINCT to_page_id) as count FROM links l JOIN pages p ON p.id = l.to_page_id WHERE p.type IN ('person', 'company')"
-        )
-        .get() as { count: number }
-    ).count;
-    const entityWithTimeline = (
-      this.db
-        .query(
-          "SELECT count(DISTINCT page_id) as count FROM timeline_entries t JOIN pages p ON p.id = t.page_id WHERE p.type IN ('person', 'company')"
-        )
-        .get() as { count: number }
-    ).count;
-
-    const embedCoverage = chunkCount > 0 ? embeddedCount / chunkCount : 1;
-    const linkDensity = pageCount > 0 ? Math.min(linkCount / pageCount, 1) : 0;
-    const timelineCoverage =
-      pageCount > 0 ? Math.min(pagesWithTimeline / pageCount, 1) : 0;
-    const noOrphans = pageCount > 0 ? 1 - orphanPages / pageCount : 1;
-    const noDeadLinks =
-      pageCount > 0 ? 1 - Math.min(deadLinks / pageCount, 1) : 1;
-
-    const brainScore =
-      pageCount === 0
-        ? 0
-        : Math.round(
-            (embedCoverage * 0.35 +
-              linkDensity * 0.25 +
-              timelineCoverage * 0.15 +
-              noOrphans * 0.15 +
-              noDeadLinks * 0.1) *
-              100
-          );
-
-    const mostConnectedRows = this.db
-      .query(
-        `
-      SELECT p.slug, 
-             (SELECT count(*) FROM links WHERE from_page_id = p.id OR to_page_id = p.id) as link_count
-      FROM pages p
-      ORDER BY link_count DESC
-      LIMIT 5
-    `
-      )
-      .all() as { slug: string; link_count: number }[];
-
-    return {
-      page_count: pageCount,
-      embed_coverage: embedCoverage,
-      stale_pages: stalePages,
-      orphan_pages: orphanPages,
-      missing_embeddings: missingEmbeddings,
-      brain_score: brainScore,
-      link_coverage: entityCount > 0 ? entityWithLinks / entityCount : 1,
-      timeline_coverage: entityCount > 0 ? entityWithTimeline / entityCount : 1,
-      most_connected: mostConnectedRows,
-    };
+    return this.unsafeSql.getHealth();
   }
 
   async getHealthReport(): Promise<DatabaseHealth> {
@@ -801,12 +613,7 @@ export class LibSQLStore implements StoreProvider {
     };
 
     try {
-      const dbTest = this.db.query("SELECT 1 as result").get() as
-        | { result: number }
-        | undefined;
-      if (dbTest && dbTest.result === 1) {
-        report.connectionOk = true;
-      }
+      report.connectionOk = this.unsafeSql.checkConnection();
     } catch (e) {
       report.connectionOk = false;
     }
@@ -821,10 +628,8 @@ export class LibSQLStore implements StoreProvider {
     ];
     for (const table of tables) {
       try {
-        const res = this.db
-          .query(`SELECT count(*) as count FROM ${table}`)
-          .get() as { count: number };
-        report.tableDetails[table] = { ok: true, rows: res?.count };
+        const rows = this.unsafeSql.getTableRowCount(table);
+        report.tableDetails[table] = { ok: true, rows };
       } catch (e: any) {
         report.tableDetails[table] = { ok: false, error: e.message };
         report.tablesOk = false;
@@ -832,26 +637,14 @@ export class LibSQLStore implements StoreProvider {
     }
 
     try {
-      this.db
-        .query(`INSERT INTO chunks_fts(chunks_fts) VALUES('integrity-check')`)
-        .run();
+      this.unsafeSql.checkFtsIntegrity();
       report.ftsOk = true;
     } catch (e: any) {
       report.ftsOk = false;
     }
 
     try {
-      const chunkCount = this.db
-        .query(`SELECT count(*) as count FROM content_chunks`)
-        .get() as { count: number };
-      report.vectorCoverage.total = chunkCount?.count || 0;
-
-      const embeddedCount = this.db
-        .query(
-          `SELECT count(*) as count FROM content_chunks WHERE embedded_at IS NOT NULL`
-        )
-        .get() as { count: number };
-      report.vectorCoverage.embedded = embeddedCount?.count || 0;
+      report.vectorCoverage = this.unsafeSql.getVectorCoverage();
     } catch (e) {}
 
     try {
@@ -867,7 +660,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getStaleChunks(): Promise<StaleChunk[]> {
-    const rows = await SqlBuilder.getStaleChunks(this.drizzleDb);
+    const rows = await this.sqlBuilder.getStaleChunks();
     return rows as StaleChunk[];
   }
 
@@ -877,7 +670,7 @@ export class LibSQLStore implements StoreProvider {
     }
     // Start transaction
     try {
-      this.db.exec("BEGIN TRANSACTION");
+      this.db.run("BEGIN TRANSACTION");
       const txStore = new LibSQLStore({
         url: this.url,
         authToken: this.authToken,
@@ -886,10 +679,10 @@ export class LibSQLStore implements StoreProvider {
         vectorStore: this.vectorStore,
       });
       const result = await fn(txStore);
-      this.db.exec("COMMIT");
+      this.db.run("COMMIT");
       return result;
     } catch (error) {
-      this.db.exec("ROLLBACK");
+      this.db.run("ROLLBACK");
       throw error;
     }
   }
@@ -897,12 +690,12 @@ export class LibSQLStore implements StoreProvider {
   // Expose vector search and keyword search directly on the store
   async resolveSlugs(partial: string): Promise<string[]> {
     // Try exact match first
-    const exact = await SqlBuilder.resolveSlugExact(this.drizzleDb, partial);
+    const exact = await this.sqlBuilder.resolveSlugExact(partial);
 
     if (exact.length > 0) return [exact[0].slug];
 
     // Fuzzy match using LIKE
-    const fuzzy = await SqlBuilder.resolveSlugFuzzy(this.drizzleDb, partial);
+    const fuzzy = await this.sqlBuilder.resolveSlugFuzzy(partial);
 
     return fuzzy.map((r) => r.slug);
   }
@@ -912,11 +705,9 @@ export class LibSQLStore implements StoreProvider {
     opts?: SearchOpts
   ): Promise<SearchResult[]> {
     const segmentedQuery = extractWordsForSearch(query);
-    const rows = await SqlBuilder.searchKeyword(
-      this.drizzleDb,
-      segmentedQuery,
-      opts
-    ).execute();
+    const rows = await this.sqlBuilder
+      .searchKeyword(segmentedQuery, opts)
+      .execute();
 
     const searchResults = rows.map((r) => ({
       page_id: r.page_id as number,
@@ -994,12 +785,9 @@ export class LibSQLStore implements StoreProvider {
     const slugs = Array.from(new Set(hits.map((h) => h.slug)));
     const chunkIndexes = Array.from(new Set(hits.map((h) => h.chunk_index)));
     if (slugs.length === 0 || chunkIndexes.length === 0) return [];
-    const rows = await SqlBuilder.searchVectorRows(
-      this.drizzleDb,
-      slugs,
-      chunkIndexes,
-      opts
-    ).execute();
+    const rows = await this.sqlBuilder
+      .searchVectorRows(slugs, chunkIndexes, opts)
+      .execute();
 
     const byKey = new Map<string, (typeof rows)[number]>();
     for (const r of rows) {
@@ -1041,11 +829,7 @@ export class LibSQLStore implements StoreProvider {
     // Alternatively, if LibSQLStore options.db has the vector data (e.g. vector_store table):
     const result = new Map<number, Float32Array>();
     try {
-      const rows = this.db
-        .query(
-          `SELECT id, vector FROM vector_store WHERE id IN (${ids.map((id) => `'${id}'`).join(",")})`
-        )
-        .all() as any[];
+      const rows = this.unsafeSql.queryVectorStoreByIds(ids);
       for (const row of rows) {
         const idStr = row.id as string;
         // id format is slug::chunk_index, but this function takes chunk_ids...
@@ -1060,7 +844,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getChunks(slug: string): Promise<Chunk[]> {
-    const rows = await SqlBuilder.getChunksBySlug(this.drizzleDb, slug);
+    const rows = await this.sqlBuilder.getChunksBySlug(slug);
 
     return rows.map((r) => ({
       ...r,
@@ -1076,34 +860,8 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async traverseGraph(slug: string, depth: number = 5): Promise<GraphNode[]> {
-    // We use a recursive CTE to traverse the graph and use json_group_array(json_object(...))
-    // to safely serialize links without raw string concatenation risks.
-    const sqlQuery = `
-      WITH RECURSIVE graph AS (
-        SELECT p.id, p.slug, p.title, p.type, 0 as depth
-        FROM pages p WHERE p.slug = ?
-        
-        UNION
-        
-        SELECT p2.id, p2.slug, p2.title, p2.type, g.depth + 1
-        FROM graph g
-        JOIN links l ON l.from_page_id = g.id
-        JOIN pages p2 ON p2.id = l.to_page_id
-        WHERE g.depth < ?
-      )
-      SELECT DISTINCT g.slug, g.title, g.type, g.depth,
-        (
-          SELECT json_group_array(json_object('to_slug', p3.slug, 'link_type', l2.link_type))
-          FROM links l2
-          JOIN pages p3 ON p3.id = l2.to_page_id
-          WHERE l2.from_page_id = g.id
-        ) as links_json
-      FROM graph g
-      ORDER BY g.depth, g.slug
-    `;
-
     try {
-      const rows = this.db.query(sqlQuery).all(slug, depth) as any[];
+      const rows = this.unsafeSql.traverseGraph(slug, depth);
       return rows.map((r) => ({
         slug: r.slug as string,
         title: r.title as string,

@@ -53,7 +53,7 @@ test("LibSQLStore getPage and listPages", async () => {
   expect(aiPages.length).toBe(1);
   expect(aiPages[0].slug).toBe("test-list-1");
 
-  const aiPages2 = await store.listPages({ tags: ["ai"], tag:"any" });
+  const aiPages2 = await store.listPages({ tags: ["ai"], tag: "any" });
   expect(aiPages2.length).toBe(1);
   expect(aiPages2[0].slug).toBe("test-list-1");
 });
