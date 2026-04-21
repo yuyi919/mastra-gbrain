@@ -5,8 +5,10 @@ import {
   eq,
   gte,
   inArray,
+  like,
   lte,
   notInArray,
+  or,
   sql,
 } from "drizzle-orm";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
@@ -99,7 +101,7 @@ export function resolveSlugFuzzy(
     .select({ slug: pages.slug })
     .from(pages)
     .where(
-      sql`${pages.title} LIKE ${"%" + partial + "%"} OR ${pages.slug} LIKE ${"%" + partial + "%"}`
+      or(like(pages.title, `%${partial}%`), like(pages.slug, `%${partial}%`))
     )
     .limit(5);
 }
@@ -210,7 +212,7 @@ export function searchKeyword(
   if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
     conditions.push(notInArray(pages.slug, opts.exclude_slugs));
   }
-
+  
   const mainQuery = drizzleDb
     .select({
       page_id: pages.id,
