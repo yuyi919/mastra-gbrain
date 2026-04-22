@@ -4,6 +4,8 @@ import { LibSQLStore } from "../src/store/libsql.js";
 let store: LibSQLStore;
 
 beforeAll(async () => {
+  const tempStore = new LibSQLStore({ url: "file:./tmp/test-ext.db", dimension: 1536 });
+  await tempStore.cleanDBFile(true);
   store = new LibSQLStore({ url: "file:./tmp/test-ext.db", dimension: 1536 });
   await store.init();
 
@@ -234,30 +236,37 @@ test("Graph traversal and Links", async () => {
 });
 
 test("updateSlug and rewriteLinks", async () => {
-  await store.putPage("page-rename", {
+  await store.putPage("page-rename-src", {
     type: "concept",
     title: "Rename Me",
+    compiled_truth: "Rename truth",
     frontmatter: {},
-    compiled_truth: "",
-    timeline: "",
-    content_hash: "rename",
   });
-  await store.updateSlug("page-rename", "page-renamed");
+  await store.updateSlug("page-rename-src", "page-renamed-new");
 
-  const oldPage = await store.getPage("page-rename");
+  const oldPage = await store.getPage("page-rename-src");
   expect(oldPage).toBeNull();
 
-  const newPage = await store.getPage("page-renamed");
+  const newPage = await store.getPage("page-renamed-new");
   expect(newPage).not.toBeNull();
   expect(newPage?.title).toBe("Rename Me");
 
-  await store.rewriteLinks("page-rename", "page-renamed"); // Should not throw
+  await store.rewriteLinks("page-rename-src", "page-renamed-new"); // Should not throw
 });
 
 test("Timeline entries advanced management", async () => {
+  await store.putPage("test-timeline-page", {
+    type: "concept",
+    title: "Timeline Test Page",
+    compiled_truth: "Test timeline",
+    timeline: "",
+    frontmatter: {},
+    content_hash: "test-hash",
+  });
+
   await store.addTimelineEntriesBatch([
     {
-      slug: "page-a",
+      slug: "test-timeline-page",
       date: "2025-01-01",
       source: "test",
       summary: "New year",
@@ -265,18 +274,18 @@ test("Timeline entries advanced management", async () => {
     },
   ]);
 
-  await store.addTimelineEntry("page-a", {
+  await store.addTimelineEntry("test-timeline-page", {
     date: "2025-02-01",
     source: "manual",
     summary: "Feb update",
     detail: "",
   });
 
-  const entries = await store.getTimeline("page-a", { after: "2025-01-15" });
+  const entries = await store.getTimeline("test-timeline-page", { after: "2025-01-15" });
   expect(entries.length).toBe(1);
   expect(entries[0].date).toBe("2025-02-01");
 
-  const allEntries = await store.getTimeline("page-a");
+  const allEntries = await store.getTimeline("test-timeline-page");
   expect(allEntries.length).toBe(2);
   expect(allEntries[0].date).toBe("2025-02-01"); // DESC order
 });

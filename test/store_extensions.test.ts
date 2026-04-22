@@ -4,6 +4,8 @@ import { LibSQLStore } from "../src/store/libsql.js";
 let store: LibSQLStore;
 
 beforeAll(async () => {
+  const tempStore = new LibSQLStore({ url: "file:./tmp/test-ext-2.db", dimension: 1536 });
+  await tempStore.cleanDBFile(true);
   store = new LibSQLStore({ url: "file:./tmp/test-ext-2.db", dimension: 1536 });
   await store.init();
 
@@ -48,9 +50,15 @@ test("Links management", async () => {
 });
 
 test("Timeline entries management", async () => {
+  await store.putPage("test-timeline-ext", {
+    type: "concept",
+    title: "Timeline Ext Test",
+    compiled_truth: "Ext truth",
+    frontmatter: {},
+  });
   await store.addTimelineEntriesBatch([
     {
-      slug: "page-a",
+      slug: "test-timeline-ext",
       date: "2025-01-01",
       source: "test",
       summary: "New year",
@@ -58,7 +66,7 @@ test("Timeline entries management", async () => {
     },
   ]);
 
-  const entries = await store.getTimeline("page-a");
+  const entries = await store.getTimeline("test-timeline-ext");
   expect(entries.length).toBe(1);
   expect(entries[0].date).toBe("2025-01-01");
   expect(entries[0].summary).toBe("New year");

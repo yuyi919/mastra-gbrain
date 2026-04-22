@@ -151,7 +151,23 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       slug: string,
       versionId: number
     ) {
-      yield* mappers.revertToVersionBySlug(slug, versionId);
+      return yield* sql.withTransaction(Eff.gen(function* () {
+        const versions = yield* mappers.getVersionsBySlug(slug);
+        const targetVersion = versions.find((v: any) => v.id === versionId);
+        if (!targetVersion) return;
+        
+        const existingPage = yield* mappers.getPageBySlug(slug);
+        if (!existingPage) return;
+        
+        yield* mappers.upsertPage(slug, {
+          title: existingPage.title,
+          type: existingPage.type,
+          timeline: existingPage.timeline || "",
+          content_hash: existingPage.content_hash || "",
+          compiled_truth: targetVersion.compiled_truth,
+          frontmatter: targetVersion.frontmatter ? JSON.parse(targetVersion.frontmatter) : {},
+        });
+      }));
     }, catchStoreError),
     putPage: Eff.fn("putPage")(function* (slug: string, page: PageInput) {
       return yield* sql.withTransaction(Eff.gen(function* () {
@@ -832,9 +848,10 @@ export function makeLayer(options: { url: string; db?: any } & BrainStore.Option
   const SqlLive = SqliteClient.layer({ filename });
   const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
   const DatabaseLive = Layer.mergeAll(SqlLive, DrizzleLive);
-  return Layer.effect(BrainStore, makeStore(options)).pipe(
+  const BrainStoreLayer = Layer.effect(BrainStore, makeStore(options)).pipe(
     Layer.provide(DatabaseLive)
   );
+  return Layer.mergeAll(BrainStoreLayer, DatabaseLive);
 }
 
 export function make(options: { url: string } & BrainStore.Options) {

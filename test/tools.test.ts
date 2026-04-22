@@ -9,6 +9,12 @@ let ingestTool: any;
 let searchTool: any;
 
 beforeAll(async () => {
+  const tempStore = new LibSQLStore({
+    url: "file:./tmp/test-tools.db",
+    dimension: 1536,
+  });
+  await tempStore.cleanDBFile(true);
+
   testStore = new LibSQLStore({
     url: "file:./tmp/test-tools.db",
     dimension: 1536,
@@ -20,7 +26,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testStore.cleanDBFile();
+  await testStore.cleanDBFile(true);
 });
 
 test("Ingest Tool imports content", async () => {

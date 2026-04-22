@@ -74,7 +74,7 @@ export class Page extends Model.Class<Page>("Pages")({
   frontmatter: Schema.Record(Schema.String, Schema.Any).pipe(
     Model.JsonFromString
   ),
-  content_hash: Schema.NonEmptyString,
+  content_hash: Schema.NullOr(Schema.String),
   created_at: Model.DateTimeInsert,
   updated_at: Model.DateTimeUpdate,
 }) {

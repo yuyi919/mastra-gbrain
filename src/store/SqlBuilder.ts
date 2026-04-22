@@ -12,8 +12,10 @@ import {
   ne,
   notInArray,
   or,
+  desc,
   sql,
 } from "drizzle-orm";
+
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { alias } from "drizzle-orm/sqlite-core";
 import { pick } from "effect/Struct";
@@ -394,7 +396,7 @@ export function getVersionsBySlug(drizzleDb: DrizzleDb, slug: string) {
     .from(table.page_versions)
     .innerJoin(table.pages, eq(table.page_versions.page_id, table.pages.id))
     .where(eq(table.pages.slug, slug))
-    .orderBy(sql`${table.page_versions.snapshot_at} DESC`);
+    .orderBy(desc(table.page_versions.snapshot_at), desc(table.page_versions.id));
 }
 
 /**
@@ -405,22 +407,23 @@ export function revertToVersionBySlug(
   slug: string,
   versionId: number
 ) {
-  const pv = alias(table.page_versions, "pv");
+  const pv = table.page_versions;
+  const p = table.pages;
+  
+  // Drizzle SQLite update...from might be buggy, using subquery
   return drizzleDb
-    .update(table.pages)
+    .update(p)
     .set({
-      ...pick(pv, ["compiled_truth", "frontmatter"]),
+      compiled_truth: sql`(SELECT ${pv.compiled_truth} FROM ${pv} WHERE ${pv.id} = ${versionId})`,
+      frontmatter: sql`(SELECT ${pv.frontmatter} FROM ${pv} WHERE ${pv.id} = ${versionId})`,
       updated_at: sql`CURRENT_TIMESTAMP`,
     })
-    .from(pv)
     .where(
       and(
-        eq(table.pages.slug, slug),
-        eq(pv.id, versionId),
-        eq(pv.page_id, table.pages.id)
+        eq(p.slug, slug),
+        sql`EXISTS (SELECT 1 FROM ${pv} WHERE ${pv.id} = ${versionId} AND ${pv.page_id} = ${p.id})`
       )
-    )
-    .limit(1);
+    );
 }
 
 /**

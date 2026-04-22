@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { bulkImport } from "../src/scripts/import.js";
 import { createDefaultEmbedder } from "../src/store/index.js";
+import { DummyEmbeddingProvider } from "../src/store/dummy-embedder.js";
 import { LibSQLStore } from "../src/store/libsql.js";
 import { createLinksTools } from "../src/tools/links.js";
 import { createListPagesTool } from "../src/tools/list.js";
@@ -10,9 +11,15 @@ import { createSearchTool } from "../src/tools/search.js";
 import { createTimelineTool } from "../src/tools/timeline.js";
 
 let testStore: LibSQLStore;
-const embedder = await createDefaultEmbedder();
+// Use dummy embedder for tests to avoid node-llama-cpp timeouts
+const embedder = new DummyEmbeddingProvider(1536);
 beforeAll(async () => {
   await testStore?.dispose();
+  const tempStore = new LibSQLStore({
+    url: "file:./tmp/test-integration.db",
+    dimension: embedder.dimension,
+  });
+  await tempStore.cleanDBFile(true);
   // Use a specific test database for integration
   testStore = new LibSQLStore({
     url: "file:./tmp/test-integration.db",
@@ -112,4 +119,4 @@ test("Bulk import and Extended Tools Integration", async () => {
   expect(links.backlinks.length).toBe(1);
   expect(links.backlinks[0].from_slug).toBe("concepts/gbrain");
   expect(links.backlinks[0].link_type).toBe("created_by");
-});
+}, 60000);

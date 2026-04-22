@@ -3,9 +3,12 @@ import { resolve } from "node:path";
 import { embedStale } from "../../src/scripts/embed.js";
 import { LibSQLStore } from "../../src/store/libsql.js";
 
+import { rmSync } from "node:fs";
+
 const dbPath = resolve(__dirname, "../../tmp/embed-stale.db");
 
 beforeAll(async () => {
+  rmSync(dbPath, { force: true });
   const store = new LibSQLStore({ url: `file:${dbPath}`, dimension: 1536 });
   await store.init();
 

@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 import type { DrizzleDb } from "./SqlBuilder.js";
 
+import * as Client from "effect/unstable/sql/SqlClient";
+import { Context, Effect } from "effect";
+
 /**
  * 封装对 bun:sqlite 原生 Database 的不安全访问。
  */
@@ -14,6 +17,7 @@ export class UnsafeSql<TResultKind extends "sync" | "async" = "async"> {
   }
 
   traverseGraph(slug: string, depth: number) {
+    const self = this;
     const sqlQuery = sql`
       WITH RECURSIVE graph AS (
         SELECT p.id, p.slug, p.title, p.type, 0 as depth
@@ -37,7 +41,24 @@ export class UnsafeSql<TResultKind extends "sync" | "async" = "async"> {
       FROM graph g
       ORDER BY g.depth, g.slug
     `;
-    return this.db.all<any>(sqlQuery);
+    return {
+      asEffect: () => Effect.gen(function* () {
+        const rows = yield* Effect.promise(() => self.db.all<any>(sqlQuery));
+        // Map arrays to objects
+        return rows.map((row: any) => {
+          if (Array.isArray(row)) {
+            return {
+              slug: row[0],
+              title: row[1],
+              type: row[2],
+              depth: row[3],
+              links: row[4],
+            };
+          }
+          return row;
+        });
+      })
+    };
   }
 
   checkFtsIntegrity() {
