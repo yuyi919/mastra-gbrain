@@ -1,6 +1,10 @@
 {
   "workflow": {
     "auto": false,
+    "auto_advance": true,
+    "research": true,
+    "plan_check": true,
+    "verifier": true,
     "language": "zh-CN"
   },
   "preferences": {
