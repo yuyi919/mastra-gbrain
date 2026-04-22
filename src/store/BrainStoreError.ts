@@ -1,4 +1,4 @@
-import { Schema } from "@tslibs/effect";
+import { Schema } from "@yuyi919/tslibs-effect";
 import { Effect } from "effect";
 import { or } from "effect/Predicate";
 import { isSchemaError } from "effect/Schema";

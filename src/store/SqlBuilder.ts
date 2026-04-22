@@ -330,10 +330,11 @@ export function deletePageBySlug(drizzleDb: DrizzleDb, slug: string) {
  * 构建按 slug 查询页面 id。
  */
 export function getPageIdBySlug(drizzleDb: DrizzleDb, slug: string) {
-  return drizzleDb.query.pages.findFirst({
-    columns: { id: true },
-    where: eq(table.pages.slug, slug),
-  });
+  return drizzleDb
+    .select({ id: table.pages.id })
+    .from(table.pages)
+    .where(eq(table.pages.slug, slug))
+    .limit(1);
 }
 
 /**

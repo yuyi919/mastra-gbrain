@@ -1,5 +1,5 @@
-import * as Eff from "@tslibs/effect/effect-next";
-import { Context } from "@tslibs/effect/effect-next";
+import * as Eff from "@yuyi919/tslibs-effect/effect-next";
+import { Context } from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "effect";
 import type { SqlClient } from "effect/unstable/sql/SqlClient";
 import * as SqliteDrizzle from "../libs/effect-drizzle/sqlite.js";

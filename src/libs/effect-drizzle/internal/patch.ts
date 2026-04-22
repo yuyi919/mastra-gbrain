@@ -75,14 +75,16 @@ export const makeRemoteCallback = Effect.gen(function* () {
       });
     }
     let effect: Effect.Effect<any, SqlError> =
-      method === "all" || method === "values"
+      method === "all" || method === "values" || method === "get"
         ? statement.values
         : statement.withoutTransform;
     if (method === "get") {
-      effect = Effect.map(effect, (rows) => rows[0] ?? []);
+      effect = Effect.map(effect, (rows) => rows[0] ?? undefined);
     }
     return runPromise(
-      Effect.result(Effect.map(effect, (rows) => ({ rows })))
+      Effect.result(Effect.map(effect, (rows) => {
+        return { rows };
+      }))
     ).then((res) => {
       if (res._tag === "Failure") {
         throw res.failure.cause;

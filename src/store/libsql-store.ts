@@ -1,6 +1,6 @@
 import { SqliteClient } from "@effect/sql-sqlite-bun";
-import * as Eff from "@tslibs/effect/effect-next";
-import { Layer, pipe } from "@tslibs/effect/effect-next";
+import * as Eff from "@yuyi919/tslibs-effect/effect-next";
+import { Layer, pipe } from "@yuyi919/tslibs-effect/effect-next";
 import { SqlClient } from "effect/unstable/sql";
 import { extractWordsForSearch } from "../segmenter.js";
 import type {
@@ -25,7 +25,8 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
-import type { BrainStore, TimelineBatchInput } from "./BrainStore.js";
+import { BrainStore } from "./BrainStore.js";
+import type { TimelineBatchInput } from "./BrainStore.js";
 import { StoreError } from "./BrainStoreError.js";
 import { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import init from "./init.sql" with { type: "text" };
@@ -153,9 +154,11 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       yield* mappers.revertToVersionBySlug(slug, versionId);
     }, catchStoreError),
     putPage: Eff.fn("putPage")(function* (slug: string, page: PageInput) {
-      const record = yield* mappers.upsertPage(slug, page);
-      yield* ingestion.createVersion(slug);
-      return Page.decode(record[0]);
+      return yield* sql.withTransaction(Eff.gen(function* () {
+        const record = yield* mappers.upsertPage(slug, page);
+        yield* ingestion.createVersion(slug);
+        return Page.decode(record[0]);
+      }));
     }, catchStoreError),
     deletePage: Eff.fn("deletePage")(function* (slug: string) {
       yield* Eff.all([
@@ -164,12 +167,14 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       ]);
     }, catchStoreError),
     addTag: Eff.fn("addTag")(function* (slug: string, tag: string) {
-      const pageResult = yield* mappers.getPageIdBySlug(slug);
+      const result = yield* mappers.getPageIdBySlug(slug);
+      const pageResult = Array.isArray(result) ? result[0] : result;
       if (!pageResult) return;
       yield* mappers.insertTag(pageResult.id, tag);
     }, catchStoreError),
     removeTag: Eff.fn("removeTag")(function* (slug: string, tag: string) {
-      const pageResult = yield* mappers.getPageIdBySlug(slug);
+      const result = yield* mappers.getPageIdBySlug(slug);
+      const pageResult = Array.isArray(result) ? result[0] : result;
       if (!pageResult) return;
       yield* mappers.deleteTag(pageResult.id, tag);
     }, catchStoreError),
@@ -239,7 +244,8 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     }, catchStoreError),
     deleteChunks: Eff.fn("deleteChunks")(
       function* (slug: string) {
-        const pageResult = yield* mappers.getPageIdBySlug(slug);
+        const result = yield* mappers.getPageIdBySlug(slug);
+        const pageResult = Array.isArray(result) ? result[0] : result;
         if (!pageResult) return;
         const page_id = pageResult.id;
         yield* Eff.all([
@@ -282,8 +288,10 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       linkType = "references",
       context = ""
     ) {
-      const fromPage = yield* mappers.getPageIdBySlug(fromSlug);
-      const toPage = yield* mappers.getPageIdBySlug(toSlug);
+      const fromResult = yield* mappers.getPageIdBySlug(fromSlug);
+      const toResult = yield* mappers.getPageIdBySlug(toSlug);
+      const fromPage = Array.isArray(fromResult) ? fromResult[0] : fromResult;
+      const toPage = Array.isArray(toResult) ? toResult[0] : toResult;
       if (!fromPage || !toPage) return;
       yield* mappers.insertLink({
         from_page_id: fromPage.id,
@@ -296,8 +304,10 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       fromSlug: string,
       toSlug: string
     ) {
-      const fromPage = yield* mappers.getPageIdBySlug(fromSlug);
-      const toPage = yield* mappers.getPageIdBySlug(toSlug);
+      const fromResult = yield* mappers.getPageIdBySlug(fromSlug);
+      const toResult = yield* mappers.getPageIdBySlug(toSlug);
+      const fromPage = Array.isArray(fromResult) ? fromResult[0] : fromResult;
+      const toPage = Array.isArray(toResult) ? toResult[0] : toResult;
       if (!fromPage || !toPage) return;
       yield* mappers.deleteLink(fromPage.id, toPage.id);
     }, catchStoreError),
@@ -431,7 +441,8 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       entry: TimelineInput,
       opts?: { skipExistenceCheck?: boolean }
     ) {
-      const pageResult = yield* mappers.getPageIdBySlug(slug);
+      const result = yield* mappers.getPageIdBySlug(slug);
+      const pageResult = Array.isArray(result) ? result[0] : result;
       if (!pageResult) {
         if (opts?.skipExistenceCheck) return;
         throw new Error(`addTimelineEntry failed: page "${slug}" not found`);
@@ -445,7 +456,8 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       if (entries.length === 0) return 0;
       let count = 0;
       for (const entry of entries) {
-        const pageResult = yield* mappers.getPageIdBySlug(entry.slug);
+        const result = yield* mappers.getPageIdBySlug(entry.slug);
+        const pageResult = Array.isArray(result) ? result[0] : result;
         if (!pageResult) continue;
         const res = yield* mappers.insertTimelineEntryReturningId(
           pageResult.id,
@@ -476,7 +488,8 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       source: string,
       data: any
     ) {
-      const pageResult = yield* mappers.getPageIdBySlug(slug);
+      const result = yield* mappers.getPageIdBySlug(slug);
+      const pageResult = Array.isArray(result) ? result[0] : result;
       if (!pageResult) return;
       yield* mappers.upsertRawData(pageResult.id, source, JSON.stringify(data));
     }, catchStoreError),
@@ -496,7 +509,8 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     ) {
       let page_id: number | null = null;
       if (file.page_slug) {
-        const pageResult = yield* mappers.getPageIdBySlug(file.page_slug);
+        const result = yield* mappers.getPageIdBySlug(file.page_slug);
+        const pageResult = Array.isArray(result) ? result[0] : result;
         if (!pageResult) return;
         page_id = pageResult.id;
       }
@@ -782,7 +796,7 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     }, catchStoreError),
   };
 
-  return {
+  const store: BrainStore.Service = {
     ...hybridSearch,
     ...link,
     ...ingestion,
@@ -802,8 +816,26 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     dispose: Eff.fn("dispose")(function* () {
       // 由 Layer/Runtime 管理生命周期，当前无需显式释放。
     }, catchStoreError),
-  } satisfies BrainStore.Service;
+    transaction: Eff.fn("transaction")(function* <T, E>(
+      fn: (tx: BrainStore.Service) => Eff.Effect<T, E>
+    ) {
+      return yield* sql.withTransaction(fn(store));
+    }, catchStoreError),
+  };
+
+  return store;
 });
+
+export function makeLayer(options: { url: string; db?: any } & BrainStore.Options) {
+  const filename = options.url.replace(/^file:/, "");
+  console.log("makeLayer filename:", filename);
+  const SqlLive = SqliteClient.layer({ filename });
+  const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
+  const DatabaseLive = Layer.mergeAll(SqlLive, DrizzleLive);
+  return Layer.effect(BrainStore, makeStore(options)).pipe(
+    Layer.provide(DatabaseLive)
+  );
+}
 
 export function make(options: { url: string } & BrainStore.Options) {
   return Eff.gen(function* () {

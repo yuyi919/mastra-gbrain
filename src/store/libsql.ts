@@ -28,6 +28,10 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
+import { BrainStore } from "./BrainStore.js";
+import { makeLayer as makeLibSQLStoreLayer } from "./libsql-store.js";
+import * as Effect from "@yuyi919/tslibs-effect/effect-next";
+import { ManagedRuntime } from "effect";
 import { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
 import { SqlBuilder } from "./SqlBuilder.js";
@@ -52,6 +56,7 @@ export class LibSQLStore implements StoreProvider {
   public readonly vectorUrl: string;
   public readonly authToken?: string;
   public readonly dimension: number;
+  public readonly brainStore: ManagedRuntime.ManagedRuntime<BrainStore.Service, never>;
 
   constructor(options: LibSQLStoreOptions) {
     this.url = options.url;
@@ -84,6 +89,15 @@ export class LibSQLStore implements StoreProvider {
       schema: Schemas,
     });
     this.mappers = new SqlBuilder(this.drizzleDb);
+
+    const layer = makeLibSQLStoreLayer({
+      url: this.url,
+      vectorUrl: this.vectorUrl,
+      authToken: this.authToken,
+      dimension: this.dimension,
+      vectorStore: this.vectorStore,
+    });
+    this.brainStore = ManagedRuntime.make(layer);
   }
 
   private get _inTransaction() {
@@ -111,168 +125,117 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getPage(slug: string): Promise<Page | null> {
-    const result = await this.mappers.getPageBySlug(slug);
-
-    if (!result) return null;
-
-    return Page.decodeUnsafe(result);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getPage(slug);
+      })
+    );
   }
 
   async listPages(filters: PageFilters = {}): Promise<Page[]> {
-    const result = await this.mappers.listPages(filters).all();
-    return result.map(Page.decodeUnsafe);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.listPages(filters);
+      })
+    );
   }
 
   async deletePage(slug: string): Promise<void> {
-    // Delete from pages. Due to ON DELETE CASCADE in schema, this should also clean up:
-    // tags, content_chunks, links, timeline_entries, raw_data, page_versions
-    await Promise.all([
-      this.mappers.deletePageBySlug(slug),
-      this._deleteVectorsBySlug(slug),
-    ]);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.deletePage(slug);
+      })
+    );
   }
 
   async getTags(slug: string): Promise<string[]> {
-    const result = await this.mappers.getTagsBySlug(slug);
-
-    return result.map((r) => r.tag);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getTags(slug);
+      })
+    );
   }
 
   async createVersion(slug: string): Promise<PageVersion> {
-    const pageResult = await this.mappers.getPageForVersionBySlug(slug);
-
-    if (pageResult) {
-      const res = await this.mappers.insertPageVersion({
-        page_id: pageResult.id,
-        compiled_truth: pageResult.compiled_truth || "",
-        frontmatter: pageResult.frontmatter || "{}",
-      });
-
-      return PageVersion.decodeUnsafe(res[0]);
-    }
-    throw new Error(`Page ${slug} not found`);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        const effect = yield* store.createVersion(slug);
+        return yield* effect;
+      })
+    );
   }
 
   async getVersions(slug: string): Promise<PageVersion[]> {
-    const result = await this.mappers.getVersionsBySlug(slug);
-
-    return result.map(PageVersion.decodeUnsafe);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getVersions(slug);
+      })
+    );
   }
 
   async revertToVersion(slug: string, versionId: number): Promise<void> {
-    await this.mappers.revertToVersionBySlug(slug, versionId);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.revertToVersion(slug, versionId);
+      })
+    );
   }
 
   async putPage(slug: string, page: PageInput): Promise<Page> {
-    const record = await this.mappers.upsertPage(slug, page);
-
-    await this.createVersion(slug);
-
-    const result = await this.getPage(slug);
-    if (!result) throw new Error(`Failed to return putPage result for ${slug}`);
-    return Page.decodeUnsafe(record[0]);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        const effect = yield* store.putPage(slug, page);
+        return yield* effect;
+      })
+    );
   }
 
   async addTag(slug: string, tag: string): Promise<void> {
-    const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (!pageResult) return;
-
-    await this.mappers.insertTag(pageResult.id, tag);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        yield* store.addTag(slug, tag);
+      })
+    );
   }
 
   async removeTag(slug: string, tag: string): Promise<void> {
-    const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (!pageResult) return;
-
-    await this.mappers.deleteTag(pageResult.id, tag);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        yield* store.removeTag(slug, tag);
+      })
+    );
   }
 
   async upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void> {
-    const pageResult = await this.mappers.getPageBasicBySlug(slug);
-    if (pageResult.length === 0) return;
-    const page_id = pageResult[0].id;
-    const page_title = pageResult[0].title;
-    const page_type = pageResult[0].type;
-
-    const newIndices = chunks.map((c) => c.chunk_index);
-
-    // Delete chunks that no longer exist
-    if (newIndices.length > 0) {
-      await this.mappers.deleteContentChunksNotIn(page_id, newIndices);
-      await this.mappers.deleteFtsChunksNotIn(page_id, newIndices);
-    } else {
-      await this.deleteChunks(slug);
-      return;
-    }
-
-    if (chunks.length > 0) {
-      // Upsert into content_chunks (real data)
-      for (const chunk of chunks) {
-        await this.mappers.upsertContentChunk(page_id, chunk);
-      }
-
-      // FTS5 doesn't support UPSERT, so delete and insert
-      await this.mappers.deleteFtsByPageId(page_id);
-      await this.mappers.insertFtsChunks(
-        chunks.map((chunk) => ({
-          page_id,
-          chunk_index: chunk.chunk_index,
-          chunk_text: chunk.chunk_text,
-          chunk_source: chunk.chunk_source,
-          token_count: chunk.token_count ?? 0,
-          chunk_text_segmented: extractWordsForSearch(chunk.chunk_text),
-        }))
-      );
-    }
-
-    // Now upsert embeddings using LibSQLVector
-    // We only use LibSQLVector if embeddings are provided
-    const vectorData = chunks
-      .filter((c) => c.embedding)
-      .map((c) => ({
-        id: `${slug}::${c.chunk_index}`,
-        vector: Array.from(c.embedding!),
-        metadata: {
-          page_id,
-          slug,
-          title: page_title,
-          type: page_type,
-          chunk_index: c.chunk_index,
-          chunk_source: c.chunk_source,
-          chunk_text: c.chunk_text,
-          token_count: c.token_count ?? 0,
-        } satisfies VectorMetadata,
-      }));
-
-    if (vectorData.length > 0) {
-      await this.vectorStore.upsert({
-        indexName: this.indexName,
-        vectors: vectorData.map((v) => v.vector),
-        ids: vectorData.map((v) => v.id),
-        metadata: vectorData.map((v) => v.metadata),
-        deleteFilter: { slug: { $eq: slug } },
-      });
-    }
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        if (store.transaction) {
+          yield* store.transaction((tx) => tx.upsertChunks(slug, chunks));
+        } else {
+          yield* store.upsertChunks(slug, chunks);
+        }
+      })
+    );
   }
 
   async deleteChunks(slug: string): Promise<void> {
-    const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (!pageResult) return;
-    const page_id = pageResult.id;
-
-    // Delete from FTS5
-    await this.mappers.deleteFtsByPageId(page_id);
-
-    // Delete from real table
-    await this.mappers.deleteContentChunksByPageId(page_id);
-
-    // Delete from LibSQLVector (since vector IDs are `slug::chunk_index`)
-    try {
-      await this._deleteVectorsBySlug(slug);
-    } catch (err) {
-      // Fallback: we cannot reliably delete if the driver lacks it
-      console.warn(`Could not delete vectors for ${slug}:`, err);
-    }
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        yield* store.deleteChunks(slug);
+      })
+    );
   }
 
   // --- Links Management ---
@@ -282,26 +245,21 @@ export class LibSQLStore implements StoreProvider {
     linkType: string = "references",
     context: string = ""
   ): Promise<void> {
-    const fromPage = await this.mappers.getPageIdBySlug(fromSlug);
-    const toPage = await this.mappers.getPageIdBySlug(toSlug);
-
-    if (!fromPage || !toPage) return;
-
-    await this.mappers.insertLink({
-      from_page_id: fromPage.id,
-      to_page_id: toPage.id,
-      link_type: linkType,
-      context,
-    });
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        yield* store.addLink(fromSlug, toSlug, linkType, context);
+      })
+    );
   }
 
   async removeLink(fromSlug: string, toSlug: string): Promise<void> {
-    const fromPage = await this.mappers.getPageIdBySlug(fromSlug);
-    const toPage = await this.mappers.getPageIdBySlug(toSlug);
-
-    if (!fromPage || !toPage) return;
-
-    await this.mappers.deleteLink(fromPage.id, toPage.id);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        yield* store.removeLink(fromSlug, toSlug);
+      })
+    );
   }
 
   async getOutgoingLinks(slug: string): Promise<Link[]> {
@@ -316,30 +274,21 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getBacklinks(slug: string): Promise<Link[]> {
-    const rows = await this.mappers.getBacklinksBySlug(slug);
-
-    return rows.map((r) => ({
-      from_slug: r.from_slug,
-      to_slug: r.to_slug,
-      link_type: r.link_type || "",
-      context: r.context || "",
-    }));
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getBacklinks(slug);
+      })
+    );
   }
 
   async getLinks(slug: string): Promise<Link[]> {
-    const outgoing = await this.mappers.getLinksOutgoingBySlug(slug);
-
-    const incoming = await this.getBacklinks(slug);
-
-    return [
-      ...outgoing.map((r) => ({
-        from_slug: r.from_slug,
-        to_slug: r.to_slug,
-        link_type: r.link_type || "",
-        context: r.context || "",
-      })),
-      ...incoming,
-    ];
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getLinks(slug);
+      })
+    );
   }
 
   // --- Timeline Management ---
@@ -353,13 +302,13 @@ export class LibSQLStore implements StoreProvider {
       // In a real implementation we might just do a sub-select directly on insert.
       // But Drizzle doesn't easily support INSERT ... SELECT returning id for sqlite in a clean way without raw SQL sometimes.
       const pageResult = await this.mappers.getPageIdBySlug(slug);
-      if (!pageResult) return;
-      page_id = pageResult.id;
+      if (pageResult.length === 0) return;
+      page_id = pageResult[0].id;
     } else {
       const pageResult = await this.mappers.getPageIdBySlug(slug);
-      if (!pageResult)
+      if (pageResult.length === 0)
         throw new Error(`addTimelineEntry failed: page "${slug}" not found`);
-      page_id = pageResult.id;
+      page_id = pageResult[0].id;
     }
 
     await this.mappers.insertTimelineEntry(page_id, entry);
@@ -372,10 +321,10 @@ export class LibSQLStore implements StoreProvider {
     let count = 0;
     for (const entry of entries) {
       const pageResult = await this.mappers.getPageIdBySlug(entry.slug);
-      if (!pageResult) continue;
+      if (pageResult.length === 0) continue;
 
       const res = await this.mappers.insertTimelineEntryReturningId(
-        pageResult.id,
+        pageResult[0].id,
         entry
       );
 
@@ -398,10 +347,10 @@ export class LibSQLStore implements StoreProvider {
   // --- Raw Data Management ---
   async putRawData(slug: string, source: string, data: any): Promise<void> {
     const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (!pageResult) return;
+    if (pageResult.length === 0) return;
 
     await this.mappers.upsertRawData(
-      pageResult.id,
+      pageResult[0].id,
       source,
       JSON.stringify(data)
     );
@@ -427,8 +376,8 @@ export class LibSQLStore implements StoreProvider {
     let page_id = null;
     if (file.page_slug) {
       const pageResult = await this.mappers.getPageIdBySlug(file.page_slug);
-      if (!pageResult) return;
-      page_id = pageResult.id;
+      if (pageResult.length === 0) return;
+      page_id = pageResult[0].id;
     }
 
     await this.mappers.upsertFile({
@@ -581,341 +530,91 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async markChunksEmbedded(chunkIds: number[]): Promise<void> {
-    if (chunkIds.length === 0) return;
-    await this.mappers.markChunksEmbeddedByIds(chunkIds);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.markChunksEmbedded(chunkIds);
+      })
+    );
   }
 
   async getStats(): Promise<BrainStats> {
-    const [
-      page_count,
-      chunk_count,
-      embedded_count,
-      link_count,
-      timeline_entry_count,
-      tagCountRow,
-      types,
-    ] = await Promise.all([
-      this.mappers.countPages(),
-      this.mappers.countContentChunks(),
-      this.mappers.countContentChunks(true),
-      this.mappers.countLinks(),
-      this.mappers.countTimelineEntries(),
-      this.mappers.countDistinctTags(),
-      this.mappers.getPageTypeCounts(),
-    ]);
-
-    const pages_by_type: Record<string, number> = {};
-    for (const t of types) {
-      pages_by_type[t.type] = t.count;
-    }
-
-    return {
-      page_count,
-      chunk_count,
-      embedded_count,
-      link_count,
-      tag_count: tagCountRow[0]?.count ?? 0,
-      timeline_entry_count,
-      pages_by_type,
-    };
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getStats();
+      })
+    );
   }
 
   async getHealth(): Promise<BrainHealth> {
-    const [
-      pageCount,
-      chunkCount,
-      embeddedCount,
-      stalePagesRow,
-      orphanPagesRow,
-      deadLinksRow,
-      linkCount,
-      pagesWithTimelineRow,
-      entityCount,
-      entityWithLinksRow,
-      entityWithTimelineRow,
-      mostConnectedRows,
-    ] = await Promise.all([
-      this.mappers.countPages(),
-      this.mappers.countContentChunks(),
-      this.mappers.countContentChunks(true),
-      this.mappers.countStalePages(),
-      this.mappers.countOrphanPages(),
-      this.mappers.countDeadLinks(),
-      this.mappers.countLinks(),
-      this.mappers.countPagesWithTimeline(),
-      this.mappers.countEntities(),
-      this.mappers.countEntitiesWithLinks(),
-      this.mappers.countEntitiesWithTimeline(),
-      this.mappers.getMostConnectedPages(),
-    ]);
-
-    const stalePages = stalePagesRow[0]?.count ?? 0;
-    const orphanPages = orphanPagesRow[0]?.count ?? 0;
-    const deadLinks = deadLinksRow[0]?.count ?? 0;
-    const pagesWithTimeline = pagesWithTimelineRow[0]?.count ?? 0;
-    const entityWithLinks = entityWithLinksRow[0]?.count ?? 0;
-    const entityWithTimeline = entityWithTimelineRow[0]?.count ?? 0;
-
-    const missingEmbeddings = chunkCount - embeddedCount;
-    const embedCoverage = chunkCount > 0 ? embeddedCount / chunkCount : 1;
-    const linkDensity = pageCount > 0 ? Math.min(linkCount / pageCount, 1) : 0;
-    const timelineCoverage =
-      pageCount > 0 ? Math.min(pagesWithTimeline / pageCount, 1) : 0;
-    const noOrphans = pageCount > 0 ? 1 - orphanPages / pageCount : 1;
-    const noDeadLinks =
-      pageCount > 0 ? 1 - Math.min(deadLinks / pageCount, 1) : 1;
-
-    const brainScore =
-      pageCount === 0
-        ? 0
-        : Math.round(
-            (embedCoverage * 0.35 +
-              linkDensity * 0.25 +
-              timelineCoverage * 0.15 +
-              noOrphans * 0.15 +
-              noDeadLinks * 0.1) *
-              100
-          );
-
-    return {
-      page_count: pageCount,
-      embed_coverage: embedCoverage,
-      stale_pages: stalePages,
-      orphan_pages: orphanPages,
-      missing_embeddings: missingEmbeddings,
-      brain_score: brainScore,
-      link_coverage: entityCount > 0 ? entityWithLinks / entityCount : 1,
-      timeline_coverage: entityCount > 0 ? entityWithTimeline / entityCount : 1,
-      most_connected: mostConnectedRows,
-    };
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getHealth();
+      })
+    );
   }
 
   async getHealthReport(): Promise<DatabaseHealth> {
-    const report: DatabaseHealth = {
-      connectionOk: false,
-      tablesOk: true,
-      ftsOk: false,
-      tableDetails: {},
-      vectorCoverage: { total: 0, embedded: 0 },
-      schemaVersion: { current: 0, latest: LATEST_VERSION, ok: false },
-    };
-
-    try {
-      await this.mappers.countPages();
-      report.connectionOk = true;
-    } catch (e) {
-      report.connectionOk = false;
-    }
-
-    const tables = [
-      "pages",
-      "content_chunks",
-      "links",
-      "timeline_entries",
-      "tags",
-      "chunks_fts",
-    ];
-    for (const table of tables) {
-      try {
-        const rows =
-          table === "pages"
-            ? await this.mappers.countPages()
-            : table === "content_chunks"
-              ? await this.mappers.countContentChunks()
-              : table === "links"
-                ? await this.mappers.countLinks()
-                : table === "timeline_entries"
-                  ? await this.mappers.countTimelineEntries()
-                  : table === "tags"
-                    ? await this.mappers.countTags()
-                    : await this.mappers.countChunksFts();
-        report.tableDetails[table] = { ok: true, rows };
-      } catch (e: any) {
-        report.tableDetails[table] = { ok: false, error: e.message };
-        report.tablesOk = false;
-      }
-    }
-
-    this.mappers.unsafe.checkFtsIntegrity();
-    try {
-      report.ftsOk = true;
-    } catch (e: any) {
-      report.ftsOk = false;
-    }
-
-    try {
-      const embedded = await this.mappers.countContentChunks(true);
-      const total = await this.mappers.countContentChunks();
-      report.vectorCoverage = { total, embedded };
-    } catch (e) {}
-
-    try {
-      const versionStr = await this.getConfig("version");
-      const v = parseInt(versionStr || "" + LATEST_VERSION, 10);
-      report.schemaVersion.current = v;
-      report.schemaVersion.ok = v >= LATEST_VERSION;
-    } catch (e) {
-      report.schemaVersion.ok = false;
-    }
-
-    return report;
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getHealthReport();
+      })
+    );
   }
 
   async getStaleChunks(): Promise<StaleChunk[]> {
-    const rows = await this.mappers.getStaleChunks();
-    return rows as StaleChunk[];
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getStaleChunks();
+      })
+    );
   }
 
   async transaction<T>(fn: (tx: StoreProvider) => Promise<T>): Promise<T> {
-    if (this._inTransaction) {
-      return fn(this); // already in transaction
-    }
-    // Start transaction
-    try {
-      this.db.run("BEGIN TRANSACTION");
-      const txStore = new LibSQLStore({
-        url: this.url,
-        authToken: this.authToken,
-        dimension: this.dimension,
-        db: this.db,
-        vectorStore: this.vectorStore,
-      });
-      const result = await fn(txStore);
-      this.db.run("COMMIT");
-      return result;
-    } catch (error) {
-      this.db.run("ROLLBACK");
-      throw error;
-    }
+    // SQLite transaction across different connections (bun:sqlite and effect-sql)
+    // causes SQLITE_BUSY_SNAPSHOT. Since we are migrating to BrainStore,
+    // we just execute the callback without a wrapper transaction.
+    // Individual operations like putPage are transaction-wrapped internally.
+    return fn(this);
   }
 
   // Expose vector search and keyword search directly on the store
   async resolveSlugs(partial: string): Promise<string[]> {
-    // Try exact match first
-    const exact = await this.mappers.resolveSlugExact(partial);
-
-    if (exact) return [exact.slug];
-
-    // Fuzzy match using LIKE
-    const fuzzy = await this.mappers.resolveSlugFuzzy(partial);
-
-    return fuzzy.map((r) => r.slug);
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.resolveSlugs(partial);
+      })
+    );
   }
 
   async searchKeyword(
     query: string,
     opts?: SearchOpts
   ): Promise<SearchResult[]> {
-    const segmentedQuery = extractWordsForSearch(query);
-    const rows = await this.mappers
-      .searchKeyword(segmentedQuery, opts)
-      .execute();
-
-    const searchResults = rows.map((r) => ({
-      page_id: r.page_id as number,
-      title: r.title as string,
-      type: r.type as any,
-      slug: r.slug as string,
-      chunk_id: r.chunk_id as number,
-      chunk_index: r.chunk_index as number,
-      chunk_text: r.chunk_text as string,
-      chunk_source: r.chunk_source as ChunkSource,
-      token_count: Number(r.token_count ?? 0),
-      score: r.score as number,
-      stale: !!r.stale,
-    }));
-
-    return searchResults;
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.searchKeyword(query, opts);
+      })
+    );
   }
 
-  async _deleteVectorsBySlug(slug: string) {
-    return await this.vectorStore.deleteVectors({
-      indexName: this.indexName,
-      filter: { slug: { $eq: slug } },
-    });
-  }
-  async _queryVectors(
-    queryVector: number[],
-    opts?: SearchOpts & { slug?: string }
-  ) {
-    const limit = opts?.limit ?? 10;
-
-    // Apply metadata filters if supported by vectorStore, but we'll also filter in the SQL layer
-    // to be completely sure.
-    const filter: Record<string, any> = {};
-    if (opts?.type) filter.type = { $eq: opts.type };
-    if (opts?.detail === "low") filter.chunk_source = { $eq: "compiled_truth" };
-    if (opts?.slug) {
-      filter.slug = { $eq: opts.slug };
-    } else if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
-      filter.slug = { $nin: opts.exclude_slugs };
-    }
-
-    const vectorResults = await this.vectorStore.query({
-      indexName: this.indexName,
-      queryVector: Array.from(queryVector) as any,
-      topK: limit * 2, // Fetch more to account for post-filtering if vectorStore doesn't support all filters
-      filter: Object.keys(filter).length > 0 ? filter : undefined,
-    });
-    return vectorResults;
-  }
 
   async searchVector(
     queryVector: number[],
     opts?: SearchOpts & { slug?: string }
   ): Promise<SearchResult[]> {
-    const limit = opts?.limit ?? 10;
-    const vectorResults = await this._queryVectors(queryVector, opts);
-
-    const hits = vectorResults
-      .map((match) => ({
-        score: match.score as number,
-        slug: (match.metadata?.slug ??
-          (typeof match.id === "string"
-            ? match.id.split("::")[0]
-            : undefined)) as string | undefined,
-        chunk_index: (match.metadata?.chunk_index ??
-          (typeof match.id === "string"
-            ? Number(match.id.split("::")[1])
-            : undefined)) as number | undefined,
-      }))
-      .filter(
-        (h): h is { score: number; slug: string; chunk_index: number } =>
-          !!h.slug && Number.isFinite(h.chunk_index)
-      );
-
-    const slugs = Array.from(new Set(hits.map((h) => h.slug)));
-    const chunkIndexes = Array.from(new Set(hits.map((h) => h.chunk_index)));
-    if (slugs.length === 0 || chunkIndexes.length === 0) return [];
-    const rows = await this.mappers
-      .searchVectorRows(slugs, chunkIndexes, opts)
-      .execute();
-
-    const byKey = new Map<string, (typeof rows)[number]>();
-    for (const r of rows) {
-      byKey.set(`${r.slug}::${r.chunk_index}`, r);
-    }
-
-    const out: SearchResult[] = [];
-    for (const h of hits) {
-      const row = byKey.get(`${h.slug}::${h.chunk_index}`);
-      if (!row) continue;
-      out.push({
-        page_id: row.page_id,
-        title: row.title,
-        type: row.type as any,
-        slug: row.slug,
-        chunk_id: row.chunk_id,
-        chunk_index: row.chunk_index,
-        chunk_text: row.chunk_text,
-        chunk_source: row.chunk_source as ChunkSource,
-        score: h.score,
-        stale: !!row.stale,
-      } as SearchResult);
-      if (out.length >= limit) break;
-    }
-
-    return out;
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.searchVector(queryVector, opts);
+      })
+    );
   }
 
   async getEmbeddingsByChunkIds(
@@ -946,29 +645,30 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getChunks(slug: string): Promise<Chunk[]> {
-    const rows = await this.mappers.getChunksBySlug(slug);
-
-    return rows.map((r) => ({
-      ...r,
-      chunk_source: r.chunk_source,
-      embedding: null,
-      model: r.model,
-      embedded_at: r.embedded_at ? new Date(r.embedded_at) : null,
-    }));
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getChunks(slug);
+      })
+    );
   }
 
   async getChunksWithEmbeddings(slug: string): Promise<Chunk[]> {
-    return this.getChunks(slug); // We don't return raw embeddings here due to vectorStore separation
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.getChunksWithEmbeddings(slug);
+      })
+    );
   }
 
   async traverseGraph(slug: string, depth: number = 5): Promise<GraphNode[]> {
-    try {
-      const rows = this.mappers.unsafe.traverseGraph(slug, depth);
-      return rows.map(GraphNode.decodeUnsafe);
-    } catch (e) {
-      console.error("traverseGraph failed:", e);
-      return [];
-    }
+    return this.brainStore.runPromise(
+      Effect.gen(function* () {
+        const store = yield* BrainStore;
+        return yield* store.traverseGraph(slug, depth);
+      })
+    );
   }
 
   async upsertVectors(

@@ -1,6 +1,8 @@
+import { BrainStore } from "../store/BrainStore.js";
 import type { StoreProvider } from "../store/interface.js";
 import type { SearchOpts, SearchResult } from "../types.js";
 import { rrfFusion } from "./rrf.js";
+import * as Effect from "@yuyi919/tslibs-effect/effect-next";
 
 export interface HybridSearchOpts extends SearchOpts {
   embed?: (text: string) => Promise<number[]>;
@@ -15,6 +17,61 @@ export interface HybridSearchOpts extends SearchOpts {
 const COSINE_DEDUP_THRESHOLD = 0.85;
 const MAX_TYPE_RATIO = 0.6;
 const MAX_PER_PAGE = 3; // Keep 2-3 chunks per page
+
+export function hybridSearchEffect(
+  query: string,
+  opts?: HybridSearchOpts,
+  queryVector?: number[]
+): Effect.Effect<SearchResult[], Error, BrainStore> {
+  return Effect.gen(function* () {
+    const backend = yield* BrainStore;
+    const limit = opts?.limit ?? 20;
+    const offset = opts?.offset ?? 0;
+    const innerLimit = Math.min(limit * 2, 200);
+
+    const keywordResults = yield* backend.searchKeyword(query, {
+      ...opts,
+      limit: innerLimit,
+    });
+
+    if (!opts?.embed && !queryVector) {
+      return dedupResults(keywordResults, opts).slice(offset, offset + limit);
+    }
+
+    const queries =
+      opts?.queryVariants && opts.queryVariants.length > 0
+        ? opts.queryVariants
+        : [query];
+    let vectorLists: SearchResult[][] = [];
+    try {
+      if (queryVector) {
+        vectorLists = [
+          yield* backend.searchVector(queryVector, { ...opts, limit: innerLimit }),
+        ];
+      } else if (opts?.embed) {
+        const embeddings = yield* Effect.promise(() => Promise.all(queries.map((q) => opts!.embed!(q))));
+        vectorLists = yield* Effect.all(
+          embeddings.map((e) =>
+            backend.searchVector(e, { ...opts, limit: innerLimit })
+          )
+        );
+      }
+    } catch {
+      vectorLists = [];
+    }
+
+    if (vectorLists.length === 0) {
+      return dedupResults(keywordResults, opts).slice(offset, offset + limit);
+    }
+
+    const fused = rrfFusion([...vectorLists, keywordResults], {
+      k: opts?.rrfK,
+      keyFn: opts?.keyFn,
+    });
+
+    return dedupResults(fused, opts).slice(offset, offset + limit);
+  });
+}
 
 export async function hybridSearch(
   backend: StoreProvider,

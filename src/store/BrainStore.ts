@@ -1,6 +1,6 @@
 import type { LibSQLVector } from "@mastra/libsql";
-import type * as Eff from "@tslibs/effect/effect-next";
-import { Context } from "@tslibs/effect/effect-next";
+import type * as Eff from "@yuyi919/tslibs-effect/effect-next";
+import { Context } from "@yuyi919/tslibs-effect/effect-next";
 import type { SchemaError } from "effect/Schema";
 import type {
   AccessToken,

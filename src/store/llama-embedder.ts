@@ -1,5 +1,5 @@
 import { SqliteClient } from "@effect/sql-sqlite-bun";
-import { Metric, ScopedCache } from "@tslibs/effect";
+import { Metric, ScopedCache } from "@yuyi919/tslibs-effect";
 import {
   Effect,
   Exit,
@@ -8,9 +8,11 @@ import {
   Logger,
   Pool,
   Scope,
-} from "@tslibs/effect/effect-next";
-import { FsUtilsLive } from "@tslibs/effect/FsUtils";
+} from "@yuyi919/tslibs-effect/effect-next";
+import { FsUtilsLive } from "@yuyi919/tslibs-effect/FsUtils";
 import { Persistence } from "effect/unstable/persistence";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import {
   getLlama,
   type LlamaEmbeddingContext,
@@ -66,11 +68,13 @@ const init = (
       requireServicesAt: "lookup",
     }).pipe(Effect.provideScope(globalScope));
     const handle = yield* Effect.runtime();
+    const cacheDbPath = "./tmp/cache/vector.db";
+    try { mkdirSync(dirname(cacheDbPath), { recursive: true }); } catch (e) {}
     const LocalPersistence = yield* Persistence.layerSql.pipe(
       Layer.provideMerge(
         SqliteClient.layer({
           create: true,
-          filename: "./tmp/cache/vector.db",
+          filename: cacheDbPath,
         })
       ),
       Layer.build,
