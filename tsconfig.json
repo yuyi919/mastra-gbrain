@@ -32,6 +32,10 @@
         "name": "@effect/language-service"
       }
     ],
+    "paths": {
+      "@tslibs/effect": ["./node_modules/@yuyi919/tslibs-effect"],
+      "@tslibs/effect/*": ["./node_modules/@yuyi919/tslibs-effect/*"]
+    },
     "emitDeclarationOnly": true
   },
   "include": ["src/**/*", "test/**/*"],

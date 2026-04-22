@@ -226,7 +226,7 @@ test("LibSQLStore upsert and delete chunks", async () => {
 
   await store.deleteChunks("chunk-slug");
   const emptyResults = await store.searchKeyword("Hello", { limit: 10 });
-  const emptyVectorResults = await store._queryVectors(
+  const emptyVectorResults = await store.searchVector(
     new Array(1536).fill(0.1),
     { slug: "chunk-slug" }
   );

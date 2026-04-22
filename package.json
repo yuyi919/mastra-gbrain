@@ -38,12 +38,23 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@effect/sql-sqlite-bun": "catalog:",
     "@types/bun": "catalog:",
     "@typia/unplugin": "^12.0.1",
     "drizzle-kit": "^0.31.10",
+    "effect": "4.0.0-beta.55",
     "node-llama-cpp": "^3.18.1",
     "tsup": "^8.5.1",
     "typescript": "^5.6.3",
     "typia": "^12.0.1"
+  },
+  "resolutions": {
+    "es-toolkit": "1.46.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "es-toolkit": "1.46.0"
+    }
   }
 }
