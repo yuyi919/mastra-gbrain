@@ -13,9 +13,9 @@ changes that are irrelevant to code review.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/pr-branch.md
+@/workspace/.trae/get-shit-done/workflows/pr-branch.md
 </execution_context>
 
 <process>
-Execute the pr-branch workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/pr-branch.md end-to-end.
+Execute the pr-branch workflow from @/workspace/.trae/get-shit-done/workflows/pr-branch.md end-to-end.
 </process>

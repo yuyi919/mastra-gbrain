@@ -29,11 +29,11 @@ Create a physical workspace directory containing copies of specified git repos (
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/new-workspace.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ui-brand.md
+@/workspace/.trae/get-shit-done/workflows/new-workspace.md
+@/workspace/.trae/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <process>
-Execute the new-workspace workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/new-workspace.md end-to-end.
+Execute the new-workspace workflow from @/workspace/.trae/get-shit-done/workflows/new-workspace.md end-to-end.
 Preserve all workflow gates (validation, approvals, commits, routing).
 </process>

@@ -12,8 +12,8 @@ Create executable phase prompts (PLAN.md files) for a roadmap phase with integra
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/plan-phase.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ui-brand.md
+@/workspace/.trae/get-shit-done/workflows/plan-phase.md
+@/workspace/.trae/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <runtime_note>
@@ -36,6 +36,6 @@ Normalize phase input in step 2 before any directory lookups.
 </context>
 
 <process>
-Execute the plan-phase workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/plan-phase.md end-to-end.
+Execute the plan-phase workflow from @/workspace/.trae/get-shit-done/workflows/plan-phase.md end-to-end.
 Preserve all workflow gates (validation, research, planning, verification loop, routing).
 </process>

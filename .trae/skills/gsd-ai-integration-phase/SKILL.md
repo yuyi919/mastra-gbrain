@@ -10,9 +10,9 @@ Flow: Select Framework → Research Docs → Research Domain → Design Eval Str
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/ai-integration-phase.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ai-frameworks.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ai-evals.md
+@/workspace/.trae/get-shit-done/workflows/ai-integration-phase.md
+@/workspace/.trae/get-shit-done/references/ai-frameworks.md
+@/workspace/.trae/get-shit-done/references/ai-evals.md
 </execution_context>
 
 <context>
@@ -20,6 +20,6 @@ Phase number: {{GSD_ARGS}} — optional, auto-detects next unplanned phase if om
 </context>
 
 <process>
-Execute @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/ai-integration-phase.md end-to-end.
+Execute @/workspace/.trae/get-shit-done/workflows/ai-integration-phase.md end-to-end.
 Preserve all workflow gates.
 </process>

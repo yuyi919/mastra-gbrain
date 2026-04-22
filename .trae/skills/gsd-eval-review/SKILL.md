@@ -10,8 +10,8 @@ Produces EVAL-REVIEW.md with score, verdict, gaps, and remediation plan.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/eval-review.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ai-evals.md
+@/workspace/.trae/get-shit-done/workflows/eval-review.md
+@/workspace/.trae/get-shit-done/references/ai-evals.md
 </execution_context>
 
 <context>
@@ -19,6 +19,6 @@ Phase: {{GSD_ARGS}} — optional, defaults to last completed phase.
 </context>
 
 <process>
-Execute @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/eval-review.md end-to-end.
+Execute @/workspace/.trae/get-shit-done/workflows/eval-review.md end-to-end.
 Preserve all workflow gates.
 </process>

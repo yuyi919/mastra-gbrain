@@ -14,8 +14,8 @@ Output: Milestone archived (roadmap + requirements), PROJECT.md evolved, git tag
 <execution_context>
 **Load these files NOW (before proceeding):**
 
-- @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/complete-milestone.md (main workflow)
-- @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/templates/milestone-archive.md (archive template)
+- @/workspace/.trae/get-shit-done/workflows/complete-milestone.md (main workflow)
+- @/workspace/.trae/get-shit-done/templates/milestone-archive.md (archive template)
   </execution_context>
 
 <context>

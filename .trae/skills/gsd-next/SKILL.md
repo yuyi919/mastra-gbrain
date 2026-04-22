@@ -15,9 +15,9 @@ Before routing to the next step, scans all prior phases for incomplete work: pla
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/next.md
+@/workspace/.trae/get-shit-done/workflows/next.md
 </execution_context>
 
 <process>
-Execute the next workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/next.md end-to-end.
+Execute the next workflow from @/workspace/.trae/get-shit-done/workflows/next.md end-to-end.
 </process>

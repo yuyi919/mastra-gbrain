@@ -14,9 +14,9 @@ Three modes:
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/undo.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ui-brand.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/gate-prompts.md
+@/workspace/.trae/get-shit-done/workflows/undo.md
+@/workspace/.trae/get-shit-done/references/ui-brand.md
+@/workspace/.trae/get-shit-done/references/gate-prompts.md
 </execution_context>
 
 <context>
@@ -24,5 +24,5 @@ Three modes:
 </context>
 
 <process>
-Execute the undo workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/undo.md end-to-end.
+Execute the undo workflow from @/workspace/.trae/get-shit-done/workflows/undo.md end-to-end.
 </process>

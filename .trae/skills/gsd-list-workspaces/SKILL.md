@@ -8,10 +8,10 @@ Scan `~/gsd-workspaces/` for workspace directories containing `WORKSPACE.md` man
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/list-workspaces.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ui-brand.md
+@/workspace/.trae/get-shit-done/workflows/list-workspaces.md
+@/workspace/.trae/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <process>
-Execute the list-workspaces workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/list-workspaces.md end-to-end.
+Execute the list-workspaces workflow from @/workspace/.trae/get-shit-done/workflows/list-workspaces.md end-to-end.
 </process>

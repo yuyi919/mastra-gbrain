@@ -15,9 +15,9 @@ Flags:
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/audit-fix.md
+@/workspace/.trae/get-shit-done/workflows/audit-fix.md
 </execution_context>
 
 <process>
-Execute the audit-fix workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/audit-fix.md end-to-end.
+Execute the audit-fix workflow from @/workspace/.trae/get-shit-done/workflows/audit-fix.md end-to-end.
 </process>

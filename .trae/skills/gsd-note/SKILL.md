@@ -15,8 +15,8 @@ Runs inline — no Task, no AskUserQuestion, no Bash.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/note.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ui-brand.md
+@/workspace/.trae/get-shit-done/workflows/note.md
+@/workspace/.trae/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>
@@ -24,6 +24,6 @@ Runs inline — no Task, no AskUserQuestion, no Bash.
 </context>
 
 <process>
-Execute the note workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/note.md end-to-end.
+Execute the note workflow from @/workspace/.trae/get-shit-done/workflows/note.md end-to-end.
 Capture the note, list notes, or promote to todo — depending on arguments.
 </process>

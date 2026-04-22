@@ -12,9 +12,9 @@ Accepts an optional topic argument: `/gsd-explore authentication strategy`
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/explore.md
+@/workspace/.trae/get-shit-done/workflows/explore.md
 </execution_context>
 
 <process>
-Execute the explore workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/explore.md end-to-end.
+Execute the explore workflow from @/workspace/.trae/get-shit-done/workflows/explore.md end-to-end.
 </process>

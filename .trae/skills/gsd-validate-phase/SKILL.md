@@ -13,7 +13,7 @@ Output: updated VALIDATION.md + generated test files.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/validate-phase.md
+@/workspace/.trae/get-shit-done/workflows/validate-phase.md
 </execution_context>
 
 <context>
@@ -21,6 +21,6 @@ Phase: {{GSD_ARGS}} — optional, defaults to last completed phase.
 </context>
 
 <process>
-Execute @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/validate-phase.md.
+Execute @/workspace/.trae/get-shit-done/workflows/validate-phase.md.
 Preserve all workflow gates.
 </process>

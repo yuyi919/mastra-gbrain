@@ -12,7 +12,7 @@ Output: Forensic report saved to `.planning/forensics/`, presented inline, with 
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/forensics.md
+@/workspace/.trae/get-shit-done/workflows/forensics.md
 </execution_context>
 
 <context>
@@ -29,7 +29,7 @@ Output: Forensic report saved to `.planning/forensics/`, presented inline, with 
 </context>
 
 <process>
-Read and execute the forensics workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/forensics.md end-to-end.
+Read and execute the forensics workflow from @/workspace/.trae/get-shit-done/workflows/forensics.md end-to-end.
 </process>
 
 <success_criteria>

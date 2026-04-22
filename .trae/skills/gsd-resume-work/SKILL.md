@@ -17,11 +17,11 @@ Routes to the resume-project workflow which handles:
   </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/resume-project.md
+@/workspace/.trae/get-shit-done/workflows/resume-project.md
 </execution_context>
 
 <process>
-**Follow the resume-project workflow** from `@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/resume-project.md`.
+**Follow the resume-project workflow** from `@/workspace/.trae/get-shit-done/workflows/resume-project.md`.
 
 The workflow handles all resumption logic including:
 

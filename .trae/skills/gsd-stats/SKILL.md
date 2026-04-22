@@ -8,9 +8,9 @@ Display comprehensive project statistics including phase progress, plan executio
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/stats.md
+@/workspace/.trae/get-shit-done/workflows/stats.md
 </execution_context>
 
 <process>
-Execute the stats workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/stats.md end-to-end.
+Execute the stats workflow from @/workspace/.trae/get-shit-done/workflows/stats.md end-to-end.
 </process>

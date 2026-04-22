@@ -13,7 +13,7 @@ Output: .planning/codebase/ folder with 7 structured documents about the codebas
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/map-codebase.md
+@/workspace/.trae/get-shit-done/workflows/map-codebase.md
 </execution_context>
 
 <context>

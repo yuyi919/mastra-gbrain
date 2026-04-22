@@ -13,9 +13,10 @@ Future: `--prd` mode for PRD extraction is planned for a follow-up PR.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/import.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ui-brand.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/gate-prompts.md
+@/workspace/.trae/get-shit-done/workflows/import.md
+@/workspace/.trae/get-shit-done/references/ui-brand.md
+@/workspace/.trae/get-shit-done/references/gate-prompts.md
+@/workspace/.trae/get-shit-done/references/doc-conflict-engine.md
 </execution_context>
 
 <context>

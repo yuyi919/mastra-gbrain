@@ -13,7 +13,7 @@ planning via /gsd-plan-phase --reviews.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/review.md
+@/workspace/.trae/get-shit-done/workflows/review.md
 </execution_context>
 
 <context>
@@ -30,5 +30,5 @@ Phase number: extracted from {{GSD_ARGS}} (required)
 </context>
 
 <process>
-Execute the review workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/review.md end-to-end.
+Execute the review workflow from @/workspace/.trae/get-shit-done/workflows/review.md end-to-end.
 </process>

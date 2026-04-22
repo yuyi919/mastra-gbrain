@@ -8,7 +8,7 @@ Scan all phases for pending, skipped, blocked, and human_needed UAT items. Cross
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/audit-uat.md
+@/workspace/.trae/get-shit-done/workflows/audit-uat.md
 </execution_context>
 
 <context>

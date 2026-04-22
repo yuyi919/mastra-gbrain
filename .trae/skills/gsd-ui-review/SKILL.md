@@ -10,8 +10,8 @@ Output: {phase_num}-UI-REVIEW.md
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/ui-review.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ui-brand.md
+@/workspace/.trae/get-shit-done/workflows/ui-review.md
+@/workspace/.trae/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>
@@ -19,6 +19,6 @@ Phase: {{GSD_ARGS}} — optional, defaults to last completed phase.
 </context>
 
 <process>
-Execute @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/ui-review.md end-to-end.
+Execute @/workspace/.trae/get-shit-done/workflows/ui-review.md end-to-end.
 Preserve all workflow gates.
 </process>

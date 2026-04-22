@@ -367,11 +367,11 @@ This annotation is consumed by downstream workflows (`new-project`, `progress`) 
 | 2. Name | 0/2 | Not started | - |
 ```
 
-Reference full template: `D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/templates/roadmap.md`
+Reference full template: `/workspace/.trae/get-shit-done/templates/roadmap.md`
 
 ## STATE.md Structure
 
-Use template from `D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/templates/state.md`.
+Use template from `/workspace/.trae/get-shit-done/templates/state.md`.
 
 Key sections:
 - Project Reference (core value, current focus)

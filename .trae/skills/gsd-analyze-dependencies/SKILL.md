@@ -13,7 +13,7 @@ Then suggest `Depends on` updates to ROADMAP.md.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/analyze-dependencies.md
+@/workspace/.trae/get-shit-done/workflows/analyze-dependencies.md
 </execution_context>
 
 <context>
@@ -23,6 +23,6 @@ Run this command BEFORE `/gsd-manager` to fill in missing `Depends on` fields an
 </context>
 
 <process>
-Execute the analyze-dependencies workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/analyze-dependencies.md end-to-end.
+Execute the analyze-dependencies workflow from @/workspace/.trae/get-shit-done/workflows/analyze-dependencies.md end-to-end.
 Present dependency suggestions clearly and apply confirmed updates to ROADMAP.md.
 </process>

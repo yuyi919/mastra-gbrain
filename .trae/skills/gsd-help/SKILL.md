@@ -14,10 +14,10 @@ Output ONLY the reference content below. Do NOT add:
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/help.md
+@/workspace/.trae/get-shit-done/workflows/help.md
 </execution_context>
 
 <process>
-Output the complete GSD command reference from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/help.md.
+Output the complete GSD command reference from @/workspace/.trae/get-shit-done/workflows/help.md.
 Display the reference content directly — no additions or modifications.
 </process>

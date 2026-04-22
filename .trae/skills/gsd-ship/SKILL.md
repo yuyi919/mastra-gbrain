@@ -10,7 +10,7 @@ Closes the plan → execute → verify → ship loop.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/ship.md
+@/workspace/.trae/get-shit-done/workflows/ship.md
 </execution_context>
 
-Execute the ship workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/ship.md end-to-end.
+Execute the ship workflow from @/workspace/.trae/get-shit-done/workflows/ship.md end-to-end.

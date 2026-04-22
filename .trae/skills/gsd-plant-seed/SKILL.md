@@ -14,9 +14,9 @@ Consumed by: /gsd-new-milestone (scans seeds and presents matches)
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/plant-seed.md
+@/workspace/.trae/get-shit-done/workflows/plant-seed.md
 </execution_context>
 
 <process>
-Execute the plant-seed workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/plant-seed.md end-to-end.
+Execute the plant-seed workflow from @/workspace/.trae/get-shit-done/workflows/plant-seed.md end-to-end.
 </process>

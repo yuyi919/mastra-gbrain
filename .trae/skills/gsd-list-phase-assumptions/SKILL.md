@@ -12,7 +12,7 @@ Output: Conversational output only (no file creation) - ends with "What do you t
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/list-phase-assumptions.md
+@/workspace/.trae/get-shit-done/workflows/list-phase-assumptions.md
 </execution_context>
 
 <context>

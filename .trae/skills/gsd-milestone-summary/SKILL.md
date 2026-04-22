@@ -12,7 +12,7 @@ Output: MILESTONE_SUMMARY written to `.planning/reports/`, presented inline, opt
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/milestone-summary.md
+@/workspace/.trae/get-shit-done/workflows/milestone-summary.md
 </execution_context>
 
 <context>
@@ -30,7 +30,7 @@ Output: MILESTONE_SUMMARY written to `.planning/reports/`, presented inline, opt
 </context>
 
 <process>
-Read and execute the milestone-summary workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/milestone-summary.md end-to-end.
+Read and execute the milestone-summary workflow from @/workspace/.trae/get-shit-done/workflows/milestone-summary.md end-to-end.
 </process>
 
 <success_criteria>

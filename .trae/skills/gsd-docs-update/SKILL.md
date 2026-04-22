@@ -16,7 +16,7 @@ Flag handling rule:
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/docs-update.md
+@/workspace/.trae/get-shit-done/workflows/docs-update.md
 </execution_context>
 
 <context>
@@ -34,6 +34,6 @@ Arguments: {{GSD_ARGS}}
 </context>
 
 <process>
-Execute the docs-update workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/docs-update.md end-to-end.
+Execute the docs-update workflow from @/workspace/.trae/get-shit-done/workflows/docs-update.md end-to-end.
 Preserve all workflow gates (preservation_check, flag handling, wave execution, monorepo dispatch, commit, reporting).
 </process>

@@ -12,8 +12,8 @@ Use when you know what you want but don't know which `/gsd-*` command to run.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/do.md
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/references/ui-brand.md
+@/workspace/.trae/get-shit-done/workflows/do.md
+@/workspace/.trae/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>
@@ -21,6 +21,6 @@ Use when you know what you want but don't know which `/gsd-*` command to run.
 </context>
 
 <process>
-Execute the do workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/do.md end-to-end.
+Execute the do workflow from @/workspace/.trae/get-shit-done/workflows/do.md end-to-end.
 Route user intent to the best GSD command and invoke it.
 </process>

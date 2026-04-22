@@ -11,9 +11,9 @@ Lightweight alternative to `/gsd-map-codebase` — spawns one mapper agent inste
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/scan.md
+@/workspace/.trae/get-shit-done/workflows/scan.md
 </execution_context>
 
 <process>
-Execute the scan workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/scan.md end-to-end.
+Execute the scan workflow from @/workspace/.trae/get-shit-done/workflows/scan.md end-to-end.
 </process>

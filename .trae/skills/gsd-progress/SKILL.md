@@ -1,6 +1,6 @@
 ---
 name: gsd-progress
-description: Check project progress, show context, and route to next action (execute or plan)
+description: Check project progress, show context, and route to next action (execute or plan). Use --forensic to append a 6-check integrity audit after the standard report.
 ---
 
 <objective>
@@ -10,10 +10,10 @@ Provides situational awareness before continuing work.
 </objective>
 
 <execution_context>
-@D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/progress.md
+@/workspace/.trae/get-shit-done/workflows/progress.md
 </execution_context>
 
 <process>
-Execute the progress workflow from @D:/workspace/@yuyi919/external/whole-ends-kneel/packages/yui-agent/packages/brain-mastra/.trae/get-shit-done/workflows/progress.md end-to-end.
+Execute the progress workflow from @/workspace/.trae/get-shit-done/workflows/progress.md end-to-end.
 Preserve all routing logic (Routes A through F) and edge case handling.
 </process>
