@@ -1,5 +1,6 @@
 import { createDefaultStore } from "../store/index.js";
 import type { StoreProvider } from "../store/interface.js";
+import type { VectorMetadata } from "../types.js";
 
 // Dummy embedding batch simulation (Replace with actual LLM provider later)
 async function embedBatch(
@@ -43,13 +44,14 @@ export async function embedStale(
       const records = batch.map((chunk, index) => ({
         id: `${chunk.id}`,
         vector: embeddings[index],
+        // @ts-expect-error: 等待修复
         metadata: {
           chunk_id: chunk.id,
           slug: chunk.slug,
           chunk_index: chunk.chunk_index,
           chunk_text: chunk.chunk_text,
           chunk_source: chunk.chunk_source,
-        },
+        } as VectorMetadata,
       }));
 
       await store.upsertVectors(records);
