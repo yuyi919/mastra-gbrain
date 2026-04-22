@@ -87,8 +87,8 @@ export class LibSQLStore implements StoreProvider {
       // logger: true,
       schema: Schemas,
     });
-    this.mappers = new SqlBuilder(this.drizzleDb as never);
-    this.unsafeSql = new UnsafeSql(this.db);
+    this.mappers = new SqlBuilder(this.drizzleDb);
+    this.unsafeSql = new UnsafeSql(this.drizzleDb);
   }
 
   private get _inTransaction() {
@@ -99,9 +99,13 @@ export class LibSQLStore implements StoreProvider {
     if (this._inTransaction) return;
 
     // Create tables
-    this.unsafeSql.exec(
-      (await import("./init.sql", { with: { type: "text" } })).default
-    );
+    for (const sql of (
+      await import("./init.sql", { with: { type: "text" } })
+    ).default
+      .split(";\n")
+      .filter(Boolean)) {
+      this.drizzleDb.run(sql);
+    }
 
     // Create vector index using LibSQLVector
     await this.vectorStore.createIndex({
@@ -571,14 +575,25 @@ export class LibSQLStore implements StoreProvider {
     let i = 0;
     while (i++ < 100) {
       try {
-        await Bun.file(this.db.filename).unlink();
-        await Bun.file(this.vectorUrl.replace("file:", "")).unlink();
+        try {
+          await Bun.file(this.db.filename).unlink();
+        } catch (error: any) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+        try {
+          await Bun.file(this.vectorUrl.replace("file:", "")).unlink();
+        } catch (error: any) {
+          if (error?.code !== "ENOENT") throw error;
+        }
         break;
       } catch (error) {
+        const code =
+          error && typeof error === "object" && "code" in error
+            ? (error as any).code
+            : undefined;
         if (i < 100) await Bun.sleep(20);
-        else {
-          console.warn(error instanceof Error ? error.message : error);
-        }
+        else if (code === "EBUSY" || code === "EPERM") break;
+        else console.warn(error instanceof Error ? error.message : error);
       }
     }
   }
@@ -596,11 +611,108 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getStats(): Promise<BrainStats> {
-    return this.unsafeSql.getStats();
+    const [
+      page_count,
+      chunk_count,
+      embedded_count,
+      link_count,
+      timeline_entry_count,
+      tagCountRow,
+      types,
+    ] = await Promise.all([
+      this.mappers.countPages(),
+      this.mappers.countContentChunks(),
+      this.mappers.countContentChunks(true),
+      this.mappers.countLinks(),
+      this.mappers.countTimelineEntries(),
+      this.mappers.countDistinctTags(),
+      this.mappers.getPageTypeCounts(),
+    ]);
+
+    const pages_by_type: Record<string, number> = {};
+    for (const t of types) {
+      pages_by_type[t.type] = t.count;
+    }
+
+    return {
+      page_count,
+      chunk_count,
+      embedded_count,
+      link_count,
+      tag_count: tagCountRow[0]?.count ?? 0,
+      timeline_entry_count,
+      pages_by_type,
+    };
   }
 
   async getHealth(): Promise<BrainHealth> {
-    return this.unsafeSql.getHealth();
+    const [
+      pageCount,
+      chunkCount,
+      embeddedCount,
+      stalePagesRow,
+      orphanPagesRow,
+      deadLinksRow,
+      linkCount,
+      pagesWithTimelineRow,
+      entityCount,
+      entityWithLinksRow,
+      entityWithTimelineRow,
+      mostConnectedRows,
+    ] = await Promise.all([
+      this.mappers.countPages(),
+      this.mappers.countContentChunks(),
+      this.mappers.countContentChunks(true),
+      this.mappers.countStalePages(),
+      this.mappers.countOrphanPages(),
+      this.mappers.countDeadLinks(),
+      this.mappers.countLinks(),
+      this.mappers.countPagesWithTimeline(),
+      this.mappers.countEntities(),
+      this.mappers.countEntitiesWithLinks(),
+      this.mappers.countEntitiesWithTimeline(),
+      this.mappers.getMostConnectedPages(),
+    ]);
+
+    const stalePages = stalePagesRow[0]?.count ?? 0;
+    const orphanPages = orphanPagesRow[0]?.count ?? 0;
+    const deadLinks = deadLinksRow[0]?.count ?? 0;
+    const pagesWithTimeline = pagesWithTimelineRow[0]?.count ?? 0;
+    const entityWithLinks = entityWithLinksRow[0]?.count ?? 0;
+    const entityWithTimeline = entityWithTimelineRow[0]?.count ?? 0;
+
+    const missingEmbeddings = chunkCount - embeddedCount;
+    const embedCoverage = chunkCount > 0 ? embeddedCount / chunkCount : 1;
+    const linkDensity = pageCount > 0 ? Math.min(linkCount / pageCount, 1) : 0;
+    const timelineCoverage =
+      pageCount > 0 ? Math.min(pagesWithTimeline / pageCount, 1) : 0;
+    const noOrphans = pageCount > 0 ? 1 - orphanPages / pageCount : 1;
+    const noDeadLinks =
+      pageCount > 0 ? 1 - Math.min(deadLinks / pageCount, 1) : 1;
+
+    const brainScore =
+      pageCount === 0
+        ? 0
+        : Math.round(
+            (embedCoverage * 0.35 +
+              linkDensity * 0.25 +
+              timelineCoverage * 0.15 +
+              noOrphans * 0.15 +
+              noDeadLinks * 0.1) *
+              100
+          );
+
+    return {
+      page_count: pageCount,
+      embed_coverage: embedCoverage,
+      stale_pages: stalePages,
+      orphan_pages: orphanPages,
+      missing_embeddings: missingEmbeddings,
+      brain_score: brainScore,
+      link_coverage: entityCount > 0 ? entityWithLinks / entityCount : 1,
+      timeline_coverage: entityCount > 0 ? entityWithTimeline / entityCount : 1,
+      most_connected: mostConnectedRows,
+    };
   }
 
   async getHealthReport(): Promise<DatabaseHealth> {
@@ -614,7 +726,8 @@ export class LibSQLStore implements StoreProvider {
     };
 
     try {
-      report.connectionOk = this.unsafeSql.checkConnection();
+      await this.mappers.countPages();
+      report.connectionOk = true;
     } catch (e) {
       report.connectionOk = false;
     }
@@ -629,7 +742,18 @@ export class LibSQLStore implements StoreProvider {
     ];
     for (const table of tables) {
       try {
-        const rows = this.unsafeSql.getTableRowCount(table);
+        const rows =
+          table === "pages"
+            ? await this.mappers.countPages()
+            : table === "content_chunks"
+              ? await this.mappers.countContentChunks()
+              : table === "links"
+                ? await this.mappers.countLinks()
+                : table === "timeline_entries"
+                  ? await this.mappers.countTimelineEntries()
+                  : table === "tags"
+                    ? await this.mappers.countTags()
+                    : await this.mappers.countChunksFts();
         report.tableDetails[table] = { ok: true, rows };
       } catch (e: any) {
         report.tableDetails[table] = { ok: false, error: e.message };
@@ -637,18 +761,17 @@ export class LibSQLStore implements StoreProvider {
       }
     }
 
+    this.unsafeSql.checkFtsIntegrity();
     try {
-      this.unsafeSql.checkFtsIntegrity();
       report.ftsOk = true;
     } catch (e: any) {
       report.ftsOk = false;
     }
 
     try {
-      const countEmbedded = await this.mappers.countContentChunks(true);
-      const countTotal = await this.mappers.countContentChunks();
-      console.log({ countEmbedded, countTotal });
-      report.vectorCoverage = this.unsafeSql.getVectorCoverage();
+      const embedded = await this.mappers.countContentChunks(true);
+      const total = await this.mappers.countContentChunks();
+      report.vectorCoverage = { total, embedded };
     } catch (e) {}
 
     try {
@@ -696,7 +819,7 @@ export class LibSQLStore implements StoreProvider {
     // Try exact match first
     const exact = await this.mappers.resolveSlugExact(partial);
 
-    if (exact.length > 0) return [exact[0].slug];
+    if (exact) return [exact.slug];
 
     // Fuzzy match using LIKE
     const fuzzy = await this.mappers.resolveSlugFuzzy(partial);
@@ -852,7 +975,7 @@ export class LibSQLStore implements StoreProvider {
 
     return rows.map((r) => ({
       ...r,
-      chunk_source: r.chunk_source as "compiled_truth" | "timeline",
+      chunk_source: r.chunk_source,
       embedding: null,
       model: r.model,
       embedded_at: r.embedded_at ? new Date(r.embedded_at) : null,

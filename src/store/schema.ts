@@ -6,7 +6,7 @@ import {
   text,
   unique,
 } from "drizzle-orm/sqlite-core";
-import type { PageType } from "../types.js";
+import type { ChunkSource, PageType } from "../types.js";
 
 export const LATEST_VERSION = 1;
 
@@ -39,7 +39,10 @@ export const content_chunks = sqliteTable(
       .references(() => pages.id, { onDelete: "cascade" }),
     chunk_index: integer().notNull(),
     chunk_text: text().notNull(),
-    chunk_source: text().notNull().default("compiled_truth"),
+    chunk_source: text()
+      .$type<ChunkSource>()
+      .notNull()
+      .default("compiled_truth"),
     model: text().notNull().default("text-embedding-3-large"),
     token_count: integer(),
     embedded_at: timestampAllowNull(),
@@ -223,3 +226,5 @@ export const Schemas = {
   pagesRelations,
 };
 export type Schemas = typeof Schemas;
+
+export type Relations = typeof import("./relations.js");

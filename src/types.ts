@@ -54,7 +54,7 @@ export interface Chunk {
   page_id: number;
   chunk_index: number;
   chunk_text: string;
-  chunk_source: "compiled_truth" | "timeline";
+  chunk_source: ChunkSource;
   embedding: Float32Array | null;
   model: string;
   token_count: number | null;
@@ -64,7 +64,7 @@ export interface Chunk {
 export interface ChunkInput {
   chunk_index: number;
   chunk_text: string;
-  chunk_source: "compiled_truth" | "timeline";
+  chunk_source: ChunkSource;
   embedding?: Float32Array;
   model?: string;
   token_count?: number;
@@ -77,7 +77,7 @@ export interface SearchResult {
   title: string;
   type: PageType;
   chunk_text: string;
-  chunk_source: "compiled_truth" | "timeline";
+  chunk_source: ChunkSource;
   chunk_id: number;
   chunk_index: number;
   score: number;
@@ -226,8 +226,6 @@ export class GBrainError extends Error {
     this.name = "GBrainError";
   }
 }
-
-// Below are specific types for mastra-gbrain implementation
 
 export type ChunkSource = "compiled_truth" | "timeline";
 

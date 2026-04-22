@@ -8,6 +8,7 @@ import {
   isNotNull,
   like,
   lte,
+  ne,
   notInArray,
   or,
   sql,
@@ -31,12 +32,8 @@ function castArray<A>(a: A | A[]) {
   return Array.isArray(a) ? a : [a];
 }
 
-type DrizzleDb<TResultKind extends "sync" | "async" = any> = BaseSQLiteDatabase<
-  TResultKind,
-  any,
-  table.Schemas,
-  any
->;
+export type DrizzleDb<TResultKind extends "sync" | "async" = any> =
+  BaseSQLiteDatabase<TResultKind, void, table.Schemas>;
 
 /**
  * @internal
@@ -91,27 +88,29 @@ export function listPages(drizzleDb: DrizzleDb, filters: PageFilters) {
  * 构建按 slug 精确匹配的页面查询。
  */
 export function resolveSlugExact(drizzleDb: DrizzleDb, partial: string) {
-  return drizzleDb
-    .select({ slug: table.pages.slug })
-    .from(table.pages)
-    .where(eq(table.pages.slug, partial))
-    .limit(1);
+  return drizzleDb.query.pages.findFirst({
+    where: eq(table.pages.slug, partial),
+    columns: {
+      slug: true,
+    },
+  });
 }
 
 /**
  * 构建按 title/slug 模糊匹配的页面查询。
  */
 export function resolveSlugFuzzy(drizzleDb: DrizzleDb, partial: string) {
-  return drizzleDb
-    .select({ slug: table.pages.slug })
-    .from(table.pages)
-    .where(
-      or(
-        like(table.pages.title, `%${partial}%`),
-        like(table.pages.slug, `%${partial}%`)
-      )
-    )
-    .limit(5);
+  partial = `%${partial}%`;
+  return drizzleDb.query.pages.findMany({
+    where: or(
+      like(table.pages.title, partial),
+      like(table.pages.slug, partial)
+    ),
+    columns: {
+      slug: true,
+    },
+    limit: 5,
+  });
 }
 
 /**
@@ -978,6 +977,151 @@ export function getChunksBySlug(drizzleDb: DrizzleDb, slug: string) {
     .orderBy(table.content_chunks.chunk_index);
 }
 
+export function countPages(drizzleDb: DrizzleDb) {
+  return drizzleDb.$count(table.pages);
+}
+
+export function countLinks(drizzleDb: DrizzleDb) {
+  return drizzleDb.$count(table.links);
+}
+
+export function countTimelineEntries(drizzleDb: DrizzleDb) {
+  return drizzleDb.$count(table.timeline_entries);
+}
+
+export function countTags(drizzleDb: DrizzleDb) {
+  return drizzleDb.$count(table.tags);
+}
+
+export function countChunksFts(drizzleDb: DrizzleDb) {
+  return drizzleDb.$count(table.chunks_fts);
+}
+
+export function countDistinctTags(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({
+      count: sql<number>`count(DISTINCT ${table.tags.tag})`.as("count"),
+    })
+    .from(table.tags)
+    .limit(1);
+}
+
+export function getPageTypeCounts(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({
+      type: table.pages.type,
+      count: sql<number>`count(*)`.as("count"),
+    })
+    .from(table.pages)
+    .groupBy(table.pages.type)
+    .orderBy(sql`count DESC`);
+}
+
+export function countStalePages(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({ count: sql<number>`count(*)`.as("count") })
+    .from(table.pages)
+    .where(
+      and(
+        or(ne(table.pages.compiled_truth, ""), ne(table.pages.timeline, "")),
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${table.content_chunks}
+          WHERE ${table.content_chunks.page_id} = ${table.pages.id}
+        )`
+      )
+    )
+    .limit(1);
+}
+
+export function countOrphanPages(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({ count: sql<number>`count(*)`.as("count") })
+    .from(table.pages)
+    .where(
+      and(
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${table.links}
+          WHERE ${table.links.to_page_id} = ${table.pages.id}
+        )`,
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${table.links}
+          WHERE ${table.links.from_page_id} = ${table.pages.id}
+        )`
+      )
+    )
+    .limit(1);
+}
+
+export function countDeadLinks(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({ count: sql<number>`count(*)`.as("count") })
+    .from(table.links)
+    .where(
+      sql`NOT EXISTS (
+        SELECT 1 FROM ${table.pages}
+        WHERE ${table.pages.id} = ${table.links.to_page_id}
+      )`
+    )
+    .limit(1);
+}
+
+export function countPagesWithTimeline(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({
+      count: sql<number>`count(DISTINCT ${table.timeline_entries.page_id})`.as(
+        "count"
+      ),
+    })
+    .from(table.timeline_entries)
+    .limit(1);
+}
+
+export function countEntities(drizzleDb: DrizzleDb) {
+  return drizzleDb.$count(
+    table.pages,
+    inArray(table.pages.type, ["person", "company"] as any)
+  );
+}
+
+export function countEntitiesWithLinks(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({
+      count: sql<number>`count(DISTINCT ${table.links.to_page_id})`.as("count"),
+    })
+    .from(table.links)
+    .innerJoin(table.pages, eq(table.pages.id, table.links.to_page_id))
+    .where(inArray(table.pages.type, ["person", "company"] as any))
+    .limit(1);
+}
+
+export function countEntitiesWithTimeline(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({
+      count: sql<number>`count(DISTINCT ${table.timeline_entries.page_id})`.as(
+        "count"
+      ),
+    })
+    .from(table.timeline_entries)
+    .innerJoin(table.pages, eq(table.pages.id, table.timeline_entries.page_id))
+    .where(inArray(table.pages.type, ["person", "company"] as any))
+    .limit(1);
+}
+
+export function getMostConnectedPages(drizzleDb: DrizzleDb) {
+  return drizzleDb
+    .select({
+      slug: table.pages.slug,
+      link_count: sql<number>`(
+          SELECT count(*) FROM ${table.links}
+          WHERE ${table.links.from_page_id} = ${table.pages.id}
+             OR ${table.links.to_page_id} = ${table.pages.id}
+        )`.as("link_count"),
+    })
+    .from(table.pages)
+    .orderBy(sql`link_count DESC`)
+    .limit(5);
+}
+
 /**
  * 面向实例的安全 SQL 构建器。
  * 通过构造函数注入 DrizzleDb，避免每次方法调用重复传参。
@@ -1155,5 +1299,51 @@ export class SqlBuilder<TResultKind extends "sync" | "async" = "async"> {
       table.content_chunks,
       embedded ? isNotNull(table.content_chunks.embedded_at) : undefined
     );
+  }
+
+  countPages() {
+    return countPages(this.drizzleDb);
+  }
+  countLinks() {
+    return countLinks(this.drizzleDb);
+  }
+  countTimelineEntries() {
+    return countTimelineEntries(this.drizzleDb);
+  }
+  countTags() {
+    return countTags(this.drizzleDb);
+  }
+  countChunksFts() {
+    return countChunksFts(this.drizzleDb);
+  }
+  countDistinctTags() {
+    return countDistinctTags(this.drizzleDb);
+  }
+  getPageTypeCounts() {
+    return getPageTypeCounts(this.drizzleDb);
+  }
+  countStalePages() {
+    return countStalePages(this.drizzleDb);
+  }
+  countOrphanPages() {
+    return countOrphanPages(this.drizzleDb);
+  }
+  countDeadLinks() {
+    return countDeadLinks(this.drizzleDb);
+  }
+  countPagesWithTimeline() {
+    return countPagesWithTimeline(this.drizzleDb);
+  }
+  countEntities() {
+    return countEntities(this.drizzleDb);
+  }
+  countEntitiesWithLinks() {
+    return countEntitiesWithLinks(this.drizzleDb);
+  }
+  countEntitiesWithTimeline() {
+    return countEntitiesWithTimeline(this.drizzleDb);
+  }
+  getMostConnectedPages() {
+    return getMostConnectedPages(this.drizzleDb);
   }
 }

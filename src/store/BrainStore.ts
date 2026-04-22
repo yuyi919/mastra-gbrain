@@ -29,6 +29,12 @@ import type {
 } from "../types.js";
 import type { StoreError } from "./BrainStoreError.js";
 
+/**
+ * `Eff.Effect<T, StoreError>`的别名
+ * @description 用于表示数据库操作的 Effect 类型，包含 StoreError 类型的错误
+ */
+export type EngineEffect<T> = Eff.Effect<T, StoreError>;
+
 export interface LinkBatchInput {
   from_slug: string;
   to_slug: string;
@@ -46,46 +52,44 @@ export interface TimelineBatchInput {
 
 export interface IngestionStore {
   // Core content
-  getPage(slug: string): Eff.Effect<Page | null, StoreError>;
-  listPages(filters?: PageFilters): Eff.Effect<Page[], StoreError>;
-  resolveSlugs(partial: string): Eff.Effect<string[]>;
-  getTags(slug: string): Eff.Effect<string[]>;
+  getPage(slug: string): EngineEffect<Page | null>;
+  listPages(filters?: PageFilters): EngineEffect<Page[]>;
+  resolveSlugs(partial: string): EngineEffect<string[]>;
+  getTags(slug: string): EngineEffect<string[]>;
   // Versions
-  createVersion(slug: string): Eff.Effect<PageVersion>;
-  getVersions(slug: string): Eff.Effect<PageVersion[]>;
-  revertToVersion(slug: string, versionId: number): Eff.Effect<void>;
+  createVersion(slug: string): EngineEffect<PageVersion>;
+  getVersions(slug: string): EngineEffect<PageVersion[]>;
+  revertToVersion(slug: string, versionId: number): EngineEffect<void>;
 
-  putPage(slug: string, page: PageInput): Eff.Effect<Page>;
-  updateSlug(oldSlug: string, newSlug: string): Eff.Effect<void, StoreError>;
-  deletePage(slug: string): Eff.Effect<void>;
+  putPage(slug: string, page: PageInput): EngineEffect<Page>;
+  updateSlug(oldSlug: string, newSlug: string): EngineEffect<void>;
+  deletePage(slug: string): EngineEffect<void>;
 
   // Tags
-  addTag(slug: string, tag: string): Eff.Effect<void>;
-  removeTag(slug: string, tag: string): Eff.Effect<void>;
+  addTag(slug: string, tag: string): EngineEffect<void>;
+  removeTag(slug: string, tag: string): EngineEffect<void>;
 
   // Chunks
-  upsertChunks(slug: string, chunks: ChunkInput[]): Eff.Effect<void>;
-  deleteChunks(slug: string): Eff.Effect<void>;
-  getChunks(slug: string): Eff.Effect<Chunk[]>;
-  getChunksWithEmbeddings(slug: string): Eff.Effect<Chunk[]>;
-  getEmbeddingsByChunkIds(ids: number[]): Eff.Effect<Map<number, Float32Array>>;
+  upsertChunks(slug: string, chunks: ChunkInput[]): EngineEffect<void>;
+  deleteChunks(slug: string): EngineEffect<void>;
+  getChunks(slug: string): EngineEffect<Chunk[]>;
+  getChunksWithEmbeddings(slug: string): EngineEffect<Chunk[]>;
+  getEmbeddingsByChunkIds(
+    ids: number[]
+  ): EngineEffect<Map<number, Float32Array>>;
 
   // Transaction
-  transaction?<T>(fn: (tx: BrainStoreService) => Eff.Effect<T>): Eff.Effect<T>;
+  transaction?<T, E>(
+    fn: (tx: BrainStoreService) => Eff.Effect<T, E>
+  ): Eff.Effect<T, E>;
 }
 
 export interface HybridSearchBackend {
-  searchKeyword(query: string, opts?: SearchOpts): Eff.Effect<SearchResult[]>;
+  searchKeyword(query: string, opts?: SearchOpts): EngineEffect<SearchResult[]>;
   searchVector(
     embedding: number[],
     opts?: SearchOpts
-  ): Eff.Effect<SearchResult[]>;
-}
-
-export interface EmbeddingService {
-  embedQuery(text: string): Eff.Effect<number[]>;
-  embedBatch(texts: string[]): Eff.Effect<number[][]>;
-  readonly dimension: number;
+  ): EngineEffect<SearchResult[]>;
 }
 
 export interface LinkService {
@@ -95,13 +99,13 @@ export interface LinkService {
     toSlug: string,
     linkType?: string,
     context?: string
-  ): Eff.Effect<void>;
-  addLinksBatch?(links: LinkBatchInput[]): Eff.Effect<number>;
-  removeLink(fromSlug: string, toSlug: string): Eff.Effect<void>;
-  getLinks(slug: string): Eff.Effect<Link[]>;
-  getBacklinks(slug: string): Eff.Effect<Link[]>;
-  rewriteLinks(oldSlug: string, newSlug: string): Eff.Effect<void>;
-  traverseGraph(slug: string, depth?: number): Eff.Effect<GraphNode[]>;
+  ): EngineEffect<void>;
+  addLinksBatch?(links: LinkBatchInput[]): EngineEffect<number>;
+  removeLink(fromSlug: string, toSlug: string): EngineEffect<void>;
+  getLinks(slug: string): EngineEffect<Link[]>;
+  getBacklinks(slug: string): EngineEffect<Link[]>;
+  rewriteLinks(oldSlug: string, newSlug: string): EngineEffect<void>;
+  traverseGraph(slug: string, depth?: number): EngineEffect<GraphNode[]>;
   traversePaths?(
     slug: string,
     opts?: {
@@ -109,8 +113,8 @@ export interface LinkService {
       linkType?: string;
       direction?: "in" | "out" | "both";
     }
-  ): Eff.Effect<GraphPath[]>;
-  getBacklinkCounts?(slugs: string[]): Eff.Effect<Map<string, number>>;
+  ): EngineEffect<GraphPath[]>;
+  getBacklinkCounts?(slugs: string[]): EngineEffect<Map<string, number>>;
 }
 export interface TimelineService {
   // Timeline
@@ -118,51 +122,59 @@ export interface TimelineService {
     slug: string,
     entry: TimelineInput,
     opts?: { skipExistenceCheck?: boolean }
-  ): Eff.Effect<void>;
-  addTimelineEntriesBatch(entries: TimelineBatchInput[]): Eff.Effect<number>;
-  getTimeline(slug: string, opts?: TimelineOpts): Eff.Effect<TimelineEntry[]>;
+  ): EngineEffect<void>;
+  addTimelineEntriesBatch(entries: TimelineBatchInput[]): EngineEffect<number>;
+  getTimeline(slug: string, opts?: TimelineOpts): EngineEffect<TimelineEntry[]>;
 }
 export interface ExtService {
   // Raw Data
-  putRawData(slug: string, source: string, data: any): Eff.Effect<void>;
-  getRawData(slug: string, source?: string): Eff.Effect<RawData[]>;
+  putRawData(slug: string, source: string, data: any): EngineEffect<void>;
+  getRawData(slug: string, source?: string): EngineEffect<RawData[]>;
 
   // Files
   upsertFile(
     file: Omit<FileRecord, "id" | "page_id" | "created_at">
-  ): Eff.Effect<void>;
-  getFile(storagePath: string): Eff.Effect<FileRecord | null>;
+  ): EngineEffect<void>;
+  getFile(storagePath: string): EngineEffect<FileRecord | null>;
 
   // Config & Logs
-  getConfig(key: string): Eff.Effect<string | null>;
-  setConfig(key: string, value: string): Eff.Effect<void>;
-  logIngest(log: IngestLogInput): Eff.Effect<void>;
-  verifyAccessToken(tokenHash: string): Eff.Effect<AccessToken | null>;
+  getConfig(key: string): EngineEffect<string | null>;
+  setConfig(key: string, value: string): EngineEffect<void>;
+  logIngest(log: IngestLogInput): EngineEffect<void>;
+  verifyAccessToken(tokenHash: string): EngineEffect<AccessToken | null>;
   logMcpRequest(
     log: Omit<McpRequestLog, "id" | "created_at">
-  ): Eff.Effect<void>;
-
-  // Lifecycle
-  init(): Eff.Effect<void>;
-  dispose(): Eff.Effect<void>;
+  ): EngineEffect<void>;
 
   // Health and Maintenance Methods
-  getHealthReport(): Eff.Effect<DatabaseHealth>;
-  getStats(): Eff.Effect<BrainStats>;
-  getHealth(): Eff.Effect<BrainHealth>;
-  getStaleChunks(): Eff.Effect<StaleChunk[]>;
+  getHealthReport(): EngineEffect<DatabaseHealth>;
+  getStats(): EngineEffect<BrainStats>;
+  getHealth(): EngineEffect<BrainHealth>;
+  getStaleChunks(): EngineEffect<StaleChunk[]>;
   upsertVectors(
     vectors: { id: string; vector: number[]; metadata: any }[]
-  ): Eff.Effect<void>;
-  markChunksEmbedded(chunkIds: number[]): Eff.Effect<void>;
-  getIngestLog(opts?: { limit?: number }): Eff.Effect<IngestLogEntry[]>;
+  ): EngineEffect<void>;
+  markChunksEmbedded(chunkIds: number[]): EngineEffect<void>;
+  getIngestLog(opts?: { limit?: number }): EngineEffect<IngestLogEntry[]>;
 }
+export interface Lifecycle {
+  init(): EngineEffect<void>;
+  dispose(): EngineEffect<void>;
+}
+
+export interface EmbeddingService {
+  embedQuery(text: string): EngineEffect<number[]>;
+  embedBatch(texts: string[]): EngineEffect<number[][]>;
+  readonly dimension: number;
+}
+
 export interface BrainStoreService
   extends LinkService,
     IngestionStore,
     HybridSearchBackend,
     TimelineService,
-    ExtService {}
+    ExtService,
+    Lifecycle {}
 
 export declare namespace BrainStore {
   export type Service = BrainStoreService;
