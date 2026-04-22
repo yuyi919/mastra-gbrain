@@ -1,0 +1,29 @@
+# 项目路线图 (ROADMAP)
+
+## 阶段 1：分析与准备工作 (Analysis & Preparation)
+- **目标**：全面梳理现有 `LibSQLStore` 和 `BrainStore` 之间的接口差异与实现细节。
+- **任务**：
+  - 阅读并分析 `/workspace/src/store/libsql.ts` 与相关的 `BrainStore` 运行时。
+  - 定位目前所有的 Promise / Async / Drizzle 数据库调用。
+  - 确认现有的 `bun test` 用例覆盖率及关键测试点。
+
+## 阶段 2：替换核心运行时 (Replace Runtime)
+- **目标**：在 `LibSQLStore` 中逐步引入 `BrainStore` 的 Effect 运行时。
+- **任务**：
+  - 将数据库连接、事务管理以及依赖注入使用 `@effect/sql-drizzle` 或 Effect 环境替代。
+  - 针对 `upsertPages`, `upsertContentChunks`, `hybridSearch` 等核心操作，将原来的基于 Promise 的 Drizzle SQL 查询封装为 `Effect`。
+  - 解决 `any` 与类型安全的隐患（如 `@ts-expect-error`）。
+  - 在保持外部接口 `GBrainStore` 不变的前提下，完成底层的运行时切换。
+
+## 阶段 3：测试验证与功能修复 (Test & Fix)
+- **目标**：验证所有现存测试用例在 Effect 重构后的正确性。
+- **任务**：
+  - 运行 `bun test` 触发所有相关的测试脚本。
+  - 解决可能因为异步控制流改变或错误映射不同导致的 Bug（特别是事务回滚和连接释放）。
+  - 修复集成脚本（`doctor.ts`, `backlinks.ts`, `embed.ts`）因底层变动可能引发的异常。
+
+## 阶段 4：性能优化与重构推进规划 (Optimize & Advance)
+- **目标**：确认性能并为系统其他模块的 Effect 改造铺路。
+- **任务**：
+  - 分析并优化新运行时的性能（如通过 `Effect.all` 或 `Effect.forEach` 改造 N+1 的批量插入瓶颈）。
+  - 撰写报告总结 Effect 改造带来的收益，并规划下一步对 `Agent` 层和 `Search` 层进行 Effect 重构的路线图。
