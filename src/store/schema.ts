@@ -20,7 +20,7 @@ export const pages = sqliteTable("pages", {
   title: text().notNull(),
   compiled_truth: text().notNull().default(""),
   timeline: text().notNull().default(""),
-  frontmatter: text({ mode: "json" }).notNull().default("{}").$type<any>(),
+  frontmatter: text({ mode: "json" }).notNull().default("{}").$type<string>(),
   content_hash: text().notNull(),
   created_at: timestamp(),
   updated_at: timestamp(),
@@ -148,7 +148,7 @@ export const page_versions = sqliteTable(
       .notNull()
       .references(() => pages.id, { onDelete: "restrict" }),
     compiled_truth: text().notNull(),
-    frontmatter: text({ mode: "json" }).notNull().default("{}"),
+    frontmatter: text({ mode: "json" }).notNull().default("{}").$type<string>(),
     snapshot_at: timestamp(),
   },
   (t) => [index("idx_versions_page").on(t.page_id)]
@@ -158,7 +158,7 @@ export const ingest_log = sqliteTable("ingest_log", {
   id: integer().primaryKey({ autoIncrement: true }),
   source_type: text().notNull(),
   source_ref: text().notNull(),
-  pages_updated: text({ mode: "json" }).notNull().default("[]"),
+  pages_updated: text({ mode: "json" }).notNull().default("[]").$type<string>(),
   summary: text().notNull().default(""),
   created_at: timestamp(),
 });

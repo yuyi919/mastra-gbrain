@@ -86,7 +86,11 @@ declare module "drizzle-orm" {
 declare module "drizzle-orm/sqlite-core/query-builders/count" {
   export interface SQLiteCountBuilder<
     TSession extends SQLiteSession<any, any, any, any>,
-  > extends Effect.Effect<number, SqlError> {}
+  > extends Effect.Yieldable<
+      Effect.Effect<number, SqlError>,
+      number,
+      SqlError
+    > {}
 }
 patch(QueryPromise.prototype);
 patch(TypedQueryBuilder.prototype);

@@ -1,6 +1,7 @@
 import type { LibSQLVector } from "@mastra/libsql";
 import type * as Eff from "@tslibs/effect/effect-next";
 import { Context } from "@tslibs/effect/effect-next";
+import type { SchemaError } from "effect/Schema";
 import type {
   AccessToken,
   BrainHealth,
@@ -34,6 +35,7 @@ import type { StoreError } from "./BrainStoreError.js";
  * @description 用于表示数据库操作的 Effect 类型，包含 StoreError 类型的错误
  */
 export type EngineEffect<T> = Eff.Effect<T, StoreError>;
+export type PutReturning<T> = Eff.Effect<T, SchemaError>;
 
 export interface LinkBatchInput {
   from_slug: string;
@@ -57,11 +59,11 @@ export interface IngestionStore {
   resolveSlugs(partial: string): EngineEffect<string[]>;
   getTags(slug: string): EngineEffect<string[]>;
   // Versions
-  createVersion(slug: string): EngineEffect<PageVersion>;
+  createVersion(slug: string): EngineEffect<PutReturning<PageVersion>>;
   getVersions(slug: string): EngineEffect<PageVersion[]>;
   revertToVersion(slug: string, versionId: number): EngineEffect<void>;
 
-  putPage(slug: string, page: PageInput): EngineEffect<Page>;
+  putPage(slug: string, page: PageInput): EngineEffect<PutReturning<Page>>;
   updateSlug(oldSlug: string, newSlug: string): EngineEffect<void>;
   deletePage(slug: string): EngineEffect<void>;
 

@@ -1,0 +1,5 @@
+- [x] `LibSQLStore.getStats()` 与 `LibSQLStore.getHealth()` 不再依赖 `UnsafeSql.getStats/getHealth`
+- [x] `getHealthReport()` 的 tableDetails 行数统计不包含动态表名 SQL（不存在 `FROM ${table}` 风格）
+- [x] `vectorCoverage.total/embedded` 来源统一（通过 Drizzle 计数得到），不再重复调用原生 SQL 统计
+- [x] `UnsafeSql` 仅保留确实需要原生能力/未纳入 Drizzle schema 的方法（例如 vector_store/graph/fts）
+- [x] `bun test` 全量通过，且 `test/ext.test.ts` 的 Stats/Health 断言保持通过

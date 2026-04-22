@@ -6,6 +6,7 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   like,
   lte,
   ne,
@@ -27,6 +28,7 @@ import type {
   TimelineOpts,
 } from "../types.js";
 import * as table from "./schema.js";
+import { UnsafeSql } from "./UnsafeSql.js";
 
 function castArray<A>(a: A | A[]) {
   return Array.isArray(a) ? a : [a];
@@ -312,11 +314,9 @@ export function searchVectorRows(
  * 构建按 slug 查询页面详情。
  */
 export function getPageBySlug(drizzleDb: DrizzleDb, slug: string) {
-  return drizzleDb
-    .select()
-    .from(table.pages)
-    .where(eq(table.pages.slug, slug))
-    .limit(1);
+  return drizzleDb.query.pages.findFirst({
+    where: eq(table.pages.slug, slug),
+  });
 }
 
 /**
@@ -330,11 +330,10 @@ export function deletePageBySlug(drizzleDb: DrizzleDb, slug: string) {
  * 构建按 slug 查询页面 id。
  */
 export function getPageIdBySlug(drizzleDb: DrizzleDb, slug: string) {
-  return drizzleDb
-    .select({ id: table.pages.id })
-    .from(table.pages)
-    .where(eq(table.pages.slug, slug))
-    .limit(1);
+  return drizzleDb.query.pages.findFirst({
+    columns: { id: true },
+    where: eq(table.pages.slug, slug),
+  });
 }
 
 /**
@@ -352,15 +351,14 @@ export function getTagsBySlug(drizzleDb: DrizzleDb, slug: string) {
  * 构建版本快照所需页面字段查询。
  */
 export function getPageForVersionBySlug(drizzleDb: DrizzleDb, slug: string) {
-  return drizzleDb
-    .select({
-      id: table.pages.id,
-      compiled_truth: table.pages.compiled_truth,
-      frontmatter: table.pages.frontmatter,
-    })
-    .from(table.pages)
-    .where(eq(table.pages.slug, slug))
-    .limit(1);
+  return drizzleDb.query.pages.findFirst({
+    columns: {
+      id: true,
+      compiled_truth: true,
+      frontmatter: true,
+    },
+    where: eq(table.pages.slug, slug),
+  });
 }
 
 /**
@@ -824,11 +822,10 @@ export function getFileByStoragePath(
  * 构建读取配置。
  */
 export function getConfigByKey(drizzleDb: DrizzleDb, key: string) {
-  return drizzleDb
-    .select({ value: table.config.value })
-    .from(table.config)
-    .where(eq(table.config.key, key))
-    .limit(1);
+  return drizzleDb.query.config.findFirst({
+    columns: { value: true },
+    where: eq(table.config.key, key),
+  });
 }
 
 /**
@@ -894,7 +891,7 @@ export function getValidAccessTokenByHash(
     .where(
       and(
         eq(table.access_tokens.token_hash, tokenHash),
-        sql`${table.access_tokens.revoked_at} IS NULL`
+        isNull(table.access_tokens.revoked_at)
       )
     )
     .limit(1);
@@ -1127,7 +1124,10 @@ export function getMostConnectedPages(drizzleDb: DrizzleDb) {
  * 通过构造函数注入 DrizzleDb，避免每次方法调用重复传参。
  */
 export class SqlBuilder<TResultKind extends "sync" | "async" = "async"> {
-  constructor(private readonly drizzleDb: DrizzleDb<TResultKind>) {}
+  unsafe: UnsafeSql<TResultKind>;
+  constructor(private readonly drizzleDb: DrizzleDb<TResultKind>) {
+    this.unsafe = new UnsafeSql(drizzleDb);
+  }
 
   listPages(filters: PageFilters) {
     return listPages(this.drizzleDb, filters);
@@ -1294,7 +1294,7 @@ export class SqlBuilder<TResultKind extends "sync" | "async" = "async"> {
     return getChunksBySlug(this.drizzleDb, slug);
   }
 
-  countContentChunks<Embedded extends boolean>(embedded?: Embedded) {
+  countContentChunks(embedded?: boolean) {
     return this.drizzleDb.$count(
       table.content_chunks,
       embedded ? isNotNull(table.content_chunks.embedded_at) : undefined

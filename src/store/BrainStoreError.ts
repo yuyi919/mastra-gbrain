@@ -1,5 +1,7 @@
 import { Schema } from "@tslibs/effect";
 import { Effect } from "effect";
+import { or } from "effect/Predicate";
+import { isSchemaError } from "effect/Schema";
 import { SqlError } from "effect/unstable/sql";
 
 export type StoreErrorReason = SqlError.SqlError | Schema.SchemaError;
@@ -29,7 +31,15 @@ export class StoreError extends Schema.TaggedClass<StoreError>()(
   static failed(reason: StoreErrorReason) {
     return Effect.fail(StoreError.from(reason));
   }
-  static catch<T, E extends StoreErrorReason>(effect: Effect.Effect<T, E>) {
-    return Effect.catch(effect, StoreError.failed);
+  static catch<T, E = never>(
+    effect: Effect.Effect<T, E>
+  ): Effect.Effect<
+    T,
+    Exclude<E, Schema.SchemaError | SqlError.SqlError> | StoreError,
+    never
+  > {
+    return Effect.catchIf(effect, or(SqlError.isSqlError, isSchemaError), (e) =>
+      StoreError.failed(e)
+    );
   }
 }

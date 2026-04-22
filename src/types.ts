@@ -1,22 +1,11 @@
-import { Page } from "./store/effect-schema.js";
+import {
+  GraphNode,
+  Page,
+  PageType,
+  PageVersion,
+} from "./store/effect-schema.js";
 
-export type PageType =
-  | "person"
-  | "company"
-  | "deal"
-  | "project"
-  | "source"
-  | "media"
-  | "yc"
-  | "civic"
-  | "concept"
-  | "writing"
-  | "analysis"
-  | "guide"
-  | "hardware"
-  | "architecture";
-
-export { Page };
+export { GraphNode, Page, PageType };
 
 export interface PageInput {
   type: PageType;
@@ -104,14 +93,6 @@ export interface Link {
   context: string;
 }
 
-export interface GraphNode {
-  slug: string;
-  title: string;
-  type: PageType;
-  depth: number;
-  links: { to_slug: string; link_type: string }[];
-}
-
 export interface GraphPath {
   from_slug: string;
   to_slug: string;
@@ -154,13 +135,7 @@ export interface RawData {
 }
 
 // Versions
-export interface PageVersion {
-  id: number;
-  page_id: number;
-  compiled_truth: string;
-  frontmatter: Record<string, unknown>;
-  snapshot_at: Date;
-}
+export { PageVersion };
 
 // Stats + Health
 export interface BrainStats {
@@ -250,7 +225,7 @@ export interface DatabaseHealth {
   ftsOk: boolean;
   tableDetails: Record<string, { ok: boolean; rows?: number; error?: string }>;
   vectorCoverage: { total: number; embedded: number };
-  schemaVersion?: { current: number; latest: number; ok: boolean };
+  schemaVersion: { current: number; latest: number; ok: boolean };
 }
 
 export interface StaleChunk {

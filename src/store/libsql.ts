@@ -13,14 +13,12 @@ import type {
   ChunkSource,
   DatabaseHealth,
   FileRecord,
-  GraphNode,
   IngestLogEntry,
   IngestLogInput,
   Link,
   McpRequestLog,
   PageFilters,
   PageInput,
-  PageVersion,
   RawData,
   SearchOpts,
   SearchResult,
@@ -30,11 +28,10 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
-import { Page } from "./effect-schema.js";
+import { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
 import { SqlBuilder } from "./SqlBuilder.js";
 import { LATEST_VERSION, Schemas } from "./schema.js";
-import { UnsafeSql } from "./UnsafeSql.js";
 
 export interface LibSQLStoreOptions {
   url: string;
@@ -49,7 +46,6 @@ export class LibSQLStore implements StoreProvider {
   private db: Database;
   private drizzleDb: BunSQLiteDatabase<Schemas>;
   private mappers: SqlBuilder<"sync">;
-  private unsafeSql: UnsafeSql;
   public vectorStore: LibSQLVector;
   public indexName = "gbrain_chunks";
   public readonly url: string;
@@ -88,7 +84,6 @@ export class LibSQLStore implements StoreProvider {
       schema: Schemas,
     });
     this.mappers = new SqlBuilder(this.drizzleDb);
-    this.unsafeSql = new UnsafeSql(this.drizzleDb);
   }
 
   private get _inTransaction() {
@@ -118,9 +113,9 @@ export class LibSQLStore implements StoreProvider {
   async getPage(slug: string): Promise<Page | null> {
     const result = await this.mappers.getPageBySlug(slug);
 
-    if (result.length === 0) return null;
+    if (!result) return null;
 
-    return Page.decodeUnsafe(result[0]);
+    return Page.decodeUnsafe(result);
   }
 
   async listPages(filters: PageFilters = {}): Promise<Page[]> {
@@ -146,23 +141,14 @@ export class LibSQLStore implements StoreProvider {
   async createVersion(slug: string): Promise<PageVersion> {
     const pageResult = await this.mappers.getPageForVersionBySlug(slug);
 
-    if (pageResult.length > 0) {
+    if (pageResult) {
       const res = await this.mappers.insertPageVersion({
-        page_id: pageResult[0].id,
-        compiled_truth: pageResult[0].compiled_truth || "",
-        frontmatter: pageResult[0].frontmatter || "{}",
+        page_id: pageResult.id,
+        compiled_truth: pageResult.compiled_truth || "",
+        frontmatter: pageResult.frontmatter || "{}",
       });
 
-      return {
-        id: res[0].id,
-        page_id: res[0].page_id,
-        compiled_truth: res[0].compiled_truth,
-        frontmatter:
-          typeof res[0].frontmatter === "string"
-            ? JSON.parse(res[0].frontmatter)
-            : res[0].frontmatter,
-        snapshot_at: new Date(res[0].snapshot_at),
-      };
+      return PageVersion.decodeUnsafe(res[0]);
     }
     throw new Error(`Page ${slug} not found`);
   }
@@ -170,16 +156,7 @@ export class LibSQLStore implements StoreProvider {
   async getVersions(slug: string): Promise<PageVersion[]> {
     const result = await this.mappers.getVersionsBySlug(slug);
 
-    return result.map((r) => ({
-      id: r.id,
-      page_id: r.page_id,
-      compiled_truth: r.compiled_truth,
-      frontmatter:
-        typeof r.frontmatter === "string"
-          ? JSON.parse(r.frontmatter)
-          : r.frontmatter,
-      snapshot_at: new Date(r.snapshot_at),
-    }));
+    return result.map(PageVersion.decodeUnsafe);
   }
 
   async revertToVersion(slug: string, versionId: number): Promise<void> {
@@ -198,16 +175,16 @@ export class LibSQLStore implements StoreProvider {
 
   async addTag(slug: string, tag: string): Promise<void> {
     const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (pageResult.length === 0) return;
+    if (!pageResult) return;
 
-    await this.mappers.insertTag(pageResult[0].id, tag);
+    await this.mappers.insertTag(pageResult.id, tag);
   }
 
   async removeTag(slug: string, tag: string): Promise<void> {
     const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (pageResult.length === 0) return;
+    if (!pageResult) return;
 
-    await this.mappers.deleteTag(pageResult[0].id, tag);
+    await this.mappers.deleteTag(pageResult.id, tag);
   }
 
   async upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void> {
@@ -280,8 +257,8 @@ export class LibSQLStore implements StoreProvider {
 
   async deleteChunks(slug: string): Promise<void> {
     const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (pageResult.length === 0) return;
-    const page_id = pageResult[0].id;
+    if (!pageResult) return;
+    const page_id = pageResult.id;
 
     // Delete from FTS5
     await this.mappers.deleteFtsByPageId(page_id);
@@ -308,11 +285,11 @@ export class LibSQLStore implements StoreProvider {
     const fromPage = await this.mappers.getPageIdBySlug(fromSlug);
     const toPage = await this.mappers.getPageIdBySlug(toSlug);
 
-    if (fromPage.length === 0 || toPage.length === 0) return;
+    if (!fromPage || !toPage) return;
 
     await this.mappers.insertLink({
-      from_page_id: fromPage[0].id,
-      to_page_id: toPage[0].id,
+      from_page_id: fromPage.id,
+      to_page_id: toPage.id,
       link_type: linkType,
       context,
     });
@@ -322,9 +299,9 @@ export class LibSQLStore implements StoreProvider {
     const fromPage = await this.mappers.getPageIdBySlug(fromSlug);
     const toPage = await this.mappers.getPageIdBySlug(toSlug);
 
-    if (fromPage.length === 0 || toPage.length === 0) return;
+    if (!fromPage || !toPage) return;
 
-    await this.mappers.deleteLink(fromPage[0].id, toPage[0].id);
+    await this.mappers.deleteLink(fromPage.id, toPage.id);
   }
 
   async getOutgoingLinks(slug: string): Promise<Link[]> {
@@ -376,13 +353,13 @@ export class LibSQLStore implements StoreProvider {
       // In a real implementation we might just do a sub-select directly on insert.
       // But Drizzle doesn't easily support INSERT ... SELECT returning id for sqlite in a clean way without raw SQL sometimes.
       const pageResult = await this.mappers.getPageIdBySlug(slug);
-      if (pageResult.length === 0) return; // skip
-      page_id = pageResult[0].id;
+      if (!pageResult) return;
+      page_id = pageResult.id;
     } else {
       const pageResult = await this.mappers.getPageIdBySlug(slug);
-      if (pageResult.length === 0)
+      if (!pageResult)
         throw new Error(`addTimelineEntry failed: page "${slug}" not found`);
-      page_id = pageResult[0].id;
+      page_id = pageResult.id;
     }
 
     await this.mappers.insertTimelineEntry(page_id, entry);
@@ -395,10 +372,10 @@ export class LibSQLStore implements StoreProvider {
     let count = 0;
     for (const entry of entries) {
       const pageResult = await this.mappers.getPageIdBySlug(entry.slug);
-      if (pageResult.length === 0) continue;
+      if (!pageResult) continue;
 
       const res = await this.mappers.insertTimelineEntryReturningId(
-        pageResult[0].id,
+        pageResult.id,
         entry
       );
 
@@ -421,10 +398,10 @@ export class LibSQLStore implements StoreProvider {
   // --- Raw Data Management ---
   async putRawData(slug: string, source: string, data: any): Promise<void> {
     const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (pageResult.length === 0) return;
+    if (!pageResult) return;
 
     await this.mappers.upsertRawData(
-      pageResult[0].id,
+      pageResult.id,
       source,
       JSON.stringify(data)
     );
@@ -450,9 +427,8 @@ export class LibSQLStore implements StoreProvider {
     let page_id = null;
     if (file.page_slug) {
       const pageResult = await this.mappers.getPageIdBySlug(file.page_slug);
-      if (pageResult.length > 0) {
-        page_id = pageResult[0].id;
-      }
+      if (!pageResult) return;
+      page_id = pageResult.id;
     }
 
     await this.mappers.upsertFile({
@@ -486,8 +462,7 @@ export class LibSQLStore implements StoreProvider {
   // --- Config & Logs Management ---
   async getConfig(key: string): Promise<string | null> {
     const result = await this.mappers.getConfigByKey(key);
-
-    return result.length > 0 ? result[0].value : null;
+    return result?.value ?? null;
   }
 
   async setConfig(key: string, value: string): Promise<void> {
@@ -761,7 +736,7 @@ export class LibSQLStore implements StoreProvider {
       }
     }
 
-    this.unsafeSql.checkFtsIntegrity();
+    this.mappers.unsafe.checkFtsIntegrity();
     try {
       report.ftsOk = true;
     } catch (e: any) {
@@ -776,11 +751,11 @@ export class LibSQLStore implements StoreProvider {
 
     try {
       const versionStr = await this.getConfig("version");
-      const v = parseInt(versionStr || "0", 10);
-      report.schemaVersion!.current = v;
-      report.schemaVersion!.ok = v >= LATEST_VERSION;
+      const v = parseInt(versionStr || "" + LATEST_VERSION, 10);
+      report.schemaVersion.current = v;
+      report.schemaVersion.ok = v >= LATEST_VERSION;
     } catch (e) {
-      report.schemaVersion!.ok = false;
+      report.schemaVersion.ok = false;
     }
 
     return report;
@@ -956,7 +931,7 @@ export class LibSQLStore implements StoreProvider {
     // Alternatively, if LibSQLStore options.db has the vector data (e.g. vector_store table):
     const result = new Map<number, Float32Array>();
     try {
-      const rows = this.unsafeSql.queryVectorStoreByIds(ids);
+      const rows = this.mappers.unsafe.queryVectorStoreByIds(ids);
       for (const row of rows) {
         const idStr = row.id as string;
         // id format is slug::chunk_index, but this function takes chunk_ids...
@@ -988,15 +963,8 @@ export class LibSQLStore implements StoreProvider {
 
   async traverseGraph(slug: string, depth: number = 5): Promise<GraphNode[]> {
     try {
-      const rows = this.unsafeSql.traverseGraph(slug, depth);
-      return rows.map((r) => ({
-        slug: r.slug as string,
-        title: r.title as string,
-        type: r.type as any,
-        depth: r.depth as number,
-        links:
-          r.links_json && r.links_json !== "[]" ? JSON.parse(r.links_json) : [],
-      }));
+      const rows = this.mappers.unsafe.traverseGraph(slug, depth);
+      return rows.map(GraphNode.decodeUnsafe);
     } catch (e) {
       console.error("traverseGraph failed:", e);
       return [];
