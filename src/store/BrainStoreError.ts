@@ -17,16 +17,12 @@ export class StoreError extends Schema.TaggedClass<StoreError>()(
     reason: StoreErrorReason,
   }
 ) {
-  constructor(reason: StoreErrorReason) {
-    super({ reason });
-  }
-
   get message(): string {
     return this.reason.message;
   }
 
   static from(reason: StoreErrorReason) {
-    return new StoreError(reason);
+    return new StoreError({ reason });
   }
   static failed(reason: StoreErrorReason) {
     return Effect.fail(StoreError.from(reason));
