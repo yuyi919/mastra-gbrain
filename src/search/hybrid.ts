@@ -1,4 +1,5 @@
-import { BrainStore } from "../store/BrainStore.js";
+import { BrainStore, type EngineEffect } from "../store/BrainStore.js";
+import type { StoreError } from "../store/BrainStoreError.js";
 import type { StoreProvider } from "../store/interface.js";
 import type { SearchOpts, SearchResult } from "../types.js";
 import { rrfFusion } from "./rrf.js";
@@ -22,7 +23,7 @@ export function hybridSearchEffect(
   query: string,
   opts?: HybridSearchOpts,
   queryVector?: number[]
-): Effect.Effect<SearchResult[], Error, BrainStore> {
+): Effect.Effect<SearchResult[], StoreError, BrainStore> {
   return Effect.gen(function* () {
     const backend = yield* BrainStore;
     const limit = opts?.limit ?? 20;

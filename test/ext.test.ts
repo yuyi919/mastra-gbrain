@@ -241,6 +241,7 @@ test("updateSlug and rewriteLinks", async () => {
     title: "Rename Me",
     compiled_truth: "Rename truth",
     frontmatter: {},
+    content_hash: "rename-hash",
   });
   await store.updateSlug("page-rename-src", "page-renamed-new");
 

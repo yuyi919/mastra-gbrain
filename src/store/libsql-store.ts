@@ -832,11 +832,9 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     dispose: Eff.fn("dispose")(function* () {
       // 由 Layer/Runtime 管理生命周期，当前无需显式释放。
     }, catchStoreError),
-    transaction: Eff.fn("transaction")(function* <T, E>(
-      fn: (tx: BrainStore.Service) => Eff.Effect<T, E>
-    ) {
-      return yield* sql.withTransaction(fn(store));
-    }, catchStoreError),
+    transaction: <T, E>(fn: (tx: BrainStore.Service) => Eff.Effect<T, E>) => {
+      return sql.withTransaction(fn(store)) as any;
+    },
   };
 
   return store;

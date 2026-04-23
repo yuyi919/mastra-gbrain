@@ -56,7 +56,7 @@ export class LibSQLStore implements StoreProvider {
   public readonly vectorUrl: string;
   public readonly authToken?: string;
   public readonly dimension: number;
-  public readonly brainStore: ManagedRuntime.ManagedRuntime<BrainStore.Service, never>;
+  public readonly brainStore: ManagedRuntime.ManagedRuntime<BrainStore | any, never>;
 
   constructor(options: LibSQLStoreOptions) {
     this.url = options.url;

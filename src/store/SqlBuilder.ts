@@ -12,7 +12,6 @@ import {
   ne,
   notInArray,
   or,
-  desc,
   sql,
 } from "drizzle-orm";
 

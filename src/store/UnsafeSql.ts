@@ -3,6 +3,7 @@ import type { DrizzleDb } from "./SqlBuilder.js";
 
 import * as Client from "effect/unstable/sql/SqlClient";
 import { Context, Effect } from "effect";
+import { SqlError } from "effect/unstable/sql";
 
 /**
  * 封装对 bun:sqlite 原生 Database 的不安全访问。
@@ -43,7 +44,10 @@ export class UnsafeSql<TResultKind extends "sync" | "async" = "async"> {
     `;
     return {
       asEffect: () => Effect.gen(function* () {
-        const rows = yield* Effect.promise(() => self.db.all<any>(sqlQuery));
+        const rows = yield* Effect.tryPromise({
+          try: () => Promise.resolve(self.db.all<any>(sqlQuery)),
+          catch: (e) => new SqlError.SqlError({ reason: new SqlError.UnknownError({ cause: e, message: String(e) }) })
+        });
         // Map arrays to objects
         return rows.map((row: any) => {
           if (Array.isArray(row)) {

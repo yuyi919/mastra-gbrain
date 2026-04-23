@@ -55,6 +55,7 @@ test("Timeline entries management", async () => {
     title: "Timeline Ext Test",
     compiled_truth: "Ext truth",
     frontmatter: {},
+    content_hash: "hash-timeline",
   });
   await store.addTimelineEntriesBatch([
     {
