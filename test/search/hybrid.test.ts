@@ -41,8 +41,15 @@ describe("hybridSearch", () => {
       searchKeyword: async () => [r("k1", "k", 100), r("shared", "s", 90)],
       searchVector: async () => [r("shared", "s", 0.9), r("v1", "v", 0.8)],
     } as unknown as StoreProvider;
-    const embed = async () => [0.1, 0.2];
-    const results = await hybridSearch(backend, "q", { embed, limit: 10 });
+    const embed = () => [0.1, 0.2];
+    const results = await hybridSearch(
+      backend,
+      "q",
+      {
+        limit: 10,
+      },
+      embed()
+    );
     expect(results[0]?.slug).toBe("shared");
   });
 });

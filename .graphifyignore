@@ -1,0 +1,17 @@
+.git/
+.hg/
+.svn/
+
+node_modules/
+dist/
+build/
+coverage/
+
+.planning/
+.trae/
+
+tmp/
+**/tmp/
+
+*.lock
+*.log

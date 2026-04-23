@@ -23,9 +23,12 @@
   "learnings": {
     "max_inject": 12
   },
+  "intel": {
+    "enabled": true
+  },
   "graphify": {
     "enabled": true,
-    "build_timeout": 300
+    "build_timeout": 600
   },
   "preferences": {
     "testing": "bun test",

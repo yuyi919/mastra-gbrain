@@ -1,3 +1,4 @@
+import type { ManagedRuntime } from "effect";
 import type {
   AccessToken,
   BrainHealth,
@@ -25,6 +26,7 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
+import type { BrainStore } from "./BrainStore.js";
 
 export interface LinkBatchInput {
   from_slug: string;
@@ -82,6 +84,9 @@ export interface EmbeddingProvider {
 }
 
 export interface StoreProvider extends IngestionStore, HybridSearchBackend {
+  // Effect
+  brainStore: ManagedRuntime.ManagedRuntime<BrainStore, never>;
+
   // Links
   addLink(
     fromSlug: string,

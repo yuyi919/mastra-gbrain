@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { rrfFusion } from "../../src/search/rrf.js";
 
 describe("rrfFusion", () => {
-  test("merges ranked lists and assigns scores", () => {
+  test("merges ranked lists and assigns scores", async () => {
     const r = (slug: string, chunk_text: string, score: number) => ({
       page_id: 1,
       title: slug,
@@ -18,7 +19,7 @@ describe("rrfFusion", () => {
     });
     const listA = [r("a", "x", 10), r("b", "y", 9)];
     const listB = [r("b", "y", 100), r("c", "z", 99)];
-    const fused = rrfFusion([listA, listB], { k: 60 });
+    const fused = await Effect.runPromise(rrfFusion([listA, listB], 60));
     expect(fused.map((r) => r.slug)).toEqual(["b", "a", "c"]);
     expect(fused[0].score).toBeGreaterThan(fused[1].score);
   });

@@ -79,11 +79,6 @@ export interface IngestionStore {
   getEmbeddingsByChunkIds(
     ids: number[]
   ): EngineEffect<Map<number, Float32Array>>;
-
-  // Transaction
-  transaction?<T, E>(
-    fn: (tx: BrainStoreService) => Eff.Effect<T, E>
-  ): Eff.Effect<T, E>;
 }
 
 export interface HybridSearchBackend {
@@ -116,7 +111,13 @@ export interface LinkService {
       direction?: "in" | "out" | "both";
     }
   ): EngineEffect<GraphPath[]>;
-  getBacklinkCounts?(slugs: string[]): EngineEffect<Map<string, number>>;
+
+  /**
+   * For a list of slugs, return how many inbound links each has.
+   * Used by hybrid search backlink boost. Single SQL query, not N+1.
+   * Slugs with zero inbound links are present in the map with value 0.
+   */
+  getBacklinkCounts(slugs: string[]): EngineEffect<Map<string, number>>;
 }
 export interface TimelineService {
   // Timeline
@@ -159,9 +160,13 @@ export interface ExtService {
   markChunksEmbedded(chunkIds: number[]): EngineEffect<void>;
   getIngestLog(opts?: { limit?: number }): EngineEffect<IngestLogEntry[]>;
 }
-export interface Lifecycle {
+export interface BrainStoreLifecycle {
   init(): EngineEffect<void>;
   dispose(): EngineEffect<void>;
+  // Transaction
+  transaction?<T, E>(
+    fn: (tx: BrainStoreService) => Eff.Effect<T, E>
+  ): Eff.Effect<T, E>;
 }
 
 export interface EmbeddingService {
@@ -176,7 +181,7 @@ export interface BrainStoreService
     HybridSearchBackend,
     TimelineService,
     ExtService,
-    Lifecycle {}
+    BrainStoreLifecycle {}
 
 export declare namespace BrainStore {
   export type Service = BrainStoreService;
@@ -185,6 +190,7 @@ export declare namespace BrainStore {
   export type HybridSearch = HybridSearchBackend;
   export type Timeline = TimelineService;
   export type Ext = ExtService;
+  export type Lifecycle = BrainStoreLifecycle;
   export type Options = {
     vectorUrl?: string;
     authToken?: string;

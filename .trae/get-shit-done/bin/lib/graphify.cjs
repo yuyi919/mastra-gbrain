@@ -57,7 +57,33 @@ function execGraphify(cwd, args, options = {}) {
 
   // ENOENT -- graphify binary not found on PATH
   if (result.error && result.error.code === 'ENOENT') {
-    return { exitCode: 127, stdout: '', stderr: 'graphify not found on PATH' };
+    const uvExe = process.platform === 'win32' ? 'graphify.exe' : 'graphify';
+    const uvResult = childProcess.spawnSync(
+      'uv',
+      ['tool', 'run', '--from', 'graphifyy', uvExe, ...args],
+      {
+        cwd,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        timeout,
+        env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      },
+    );
+    if (uvResult.error && uvResult.error.code === 'ENOENT') {
+      return { exitCode: 127, stdout: '', stderr: 'graphify not found on PATH' };
+    }
+    if (uvResult.signal === 'SIGTERM') {
+      return {
+        exitCode: 124,
+        stdout: (uvResult.stdout ?? '').toString().trim(),
+        stderr: 'graphify timed out after ' + timeout + 'ms',
+      };
+    }
+    return {
+      exitCode: uvResult.status ?? 1,
+      stdout: (uvResult.stdout ?? '').toString().trim(),
+      stderr: (uvResult.stderr ?? '').toString().trim(),
+    };
   }
 
   // Timeout -- subprocess killed via SIGTERM
@@ -92,9 +118,18 @@ function checkGraphifyInstalled() {
   });
 
   if (result.error) {
+    const uvExe = process.platform === 'win32' ? 'graphify.exe' : 'graphify';
+    const uvResult = childProcess.spawnSync('uv', ['tool', 'run', '--from', 'graphifyy', uvExe, '--help'], {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+    if (!uvResult.error && uvResult.status === 0) {
+      return { installed: true };
+    }
     return {
       installed: false,
-      message: 'graphify is not installed.\n\nInstall with:\n  uv pip install graphifyy && graphify install',
+      message: 'graphify is not installed.\n\nInstall with:\n  uv tool install graphifyy && graphify install',
     };
   }
 
@@ -108,14 +143,19 @@ function checkGraphifyInstalled() {
  * @returns {{ version: string|null, compatible: boolean|null, warning: string|null }}
  */
 function checkGraphifyVersion() {
-  const result = childProcess.spawnSync('python3', [
-    '-c',
-    'from importlib.metadata import version; print(version("graphifyy"))',
-  ], {
+  const args = ['-c', 'from importlib.metadata import version; print(version("graphifyy"))'];
+  let result = childProcess.spawnSync('python3', args, {
     stdio: 'pipe',
     encoding: 'utf-8',
     timeout: 5000,
   });
+  if (result.error && result.error.code === 'ENOENT') {
+    result = childProcess.spawnSync('python', args, {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+  }
 
   if (result.status !== 0 || !result.stdout || !result.stdout.trim()) {
     return { version: null, compatible: null, warning: 'Could not determine graphify version' };

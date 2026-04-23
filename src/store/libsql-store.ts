@@ -177,7 +177,7 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       return yield* sql.withTransaction(
         Eff.gen(function* () {
           const record = yield* mappers.upsertPage(slug, page);
-          yield* ingestion.createVersion(slug);
+          yield* ingestion.createVersion(slug).pipe(Eff.asVoid);
           return Page.decode(record[0]);
         })
       );
@@ -227,6 +227,8 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
         yield* mappers.insertFtsChunks(
           chunks.map((chunk) => ({
             page_id,
+            page_title,
+            page_slug: slug,
             chunk_index: chunk.chunk_index,
             chunk_text: chunk.chunk_text,
             chunk_source: chunk.chunk_source,
@@ -380,6 +382,18 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     traversePaths: Eff.fn("traversePaths")(function* (_slug: string, _opts?) {
       return [];
     }, catchStoreError),
+    getBacklinkCounts: Eff.fn("getBacklinkCounts")(function* (slugs) {
+      const result = new Map<string, number>();
+      if (slugs.length === 0) return result;
+      // Initialize all slugs to 0 so callers get a consistent map.
+      for (const s of slugs) result.set(s, 0);
+      // PGLite needs explicit cast for array binding (does not auto-serialize JS arrays).
+      const rows = yield* mappers.getBacklinkCounts(slugs);
+      for (const r of rows) {
+        result.set(r.slug, r.cnt);
+      }
+      return result;
+    }, catchStoreError),
   };
 
   const hybridSearch: BrainStore.HybridSearch = {
@@ -389,21 +403,10 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     ) {
       const segmentedQuery = extractWordsForSearch(query);
       const rows = yield* mappers.searchKeyword(segmentedQuery, opts);
-      return rows.map(
-        (r) =>
-          ({
-            page_id: r.page_id as number,
-            title: r.title as string,
-            type: r.type as any,
-            slug: r.slug as string,
-            chunk_id: r.chunk_id as number,
-            chunk_index: r.chunk_index as number,
-            chunk_text: r.chunk_text as string,
-            chunk_source: r.chunk_source as ChunkSource,
-            score: r.score as number,
-            stale: !!r.stale,
-          }) as SearchResult
-      );
+      return rows.map((row) => {
+        const score = Math.abs(row.score) / (1 + Math.abs(row.score));
+        return { ...row, score };
+      });
     }, catchStoreError),
     searchVector: Eff.fn("searchVector")(function* (
       queryVector: number[],
@@ -431,14 +434,16 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       const chunkIndexes = Array.from(new Set(hits.map((h) => h.chunk_index)));
       if (slugs.length === 0 || chunkIndexes.length === 0) return [];
       const rows = yield* mappers.searchVectorRows(slugs, chunkIndexes, opts);
-      const byKey = new Map<string, (typeof rows)[number]>();
-      for (const r of rows) {
+      const byKey = new Map<string, (typeof hits)[number]>();
+      const out: SearchResult[] = [];
+      for (const r of hits) {
         byKey.set(`${r.slug}::${r.chunk_index}`, r);
       }
-      const out: SearchResult[] = [];
-      for (const h of hits) {
-        const row = byKey.get(`${h.slug}::${h.chunk_index}`);
-        if (!row) continue;
+      for (const r of rows) {
+        const h = byKey.get(`${r.slug}::${r.chunk_index}`);
+        // const row = byKey.get(`${h.slug}::${h.chunk_index}`);
+        const row = r;
+        if (!h) continue;
         out.push({
           page_id: row.page_id,
           title: row.title,
@@ -448,7 +453,7 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
           chunk_index: row.chunk_index,
           chunk_text: row.chunk_text,
           chunk_source: row.chunk_source as ChunkSource,
-          score: h.score,
+          score: h!.score,
           stale: !!row.stale,
         });
         if (out.length >= limit) break;
@@ -818,12 +823,7 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     }, catchStoreError),
   };
 
-  const store: BrainStore.Service = {
-    ...hybridSearch,
-    ...link,
-    ...ingestion,
-    ...timeline,
-    ...ext,
+  const lifecycle: BrainStore.Lifecycle = {
     init: Eff.fn("init")(function* () {
       yield* sql.unsafe(init);
       if (!vectorStore) return;
@@ -839,10 +839,18 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       // 由 Layer/Runtime 管理生命周期，当前无需显式释放。
     }, catchStoreError),
     transaction: <T, E>(fn: (tx: BrainStore.Service) => Eff.Effect<T, E>) => {
-      return sql.withTransaction(fn(store)) as any;
+      return sql.withTransaction(fn(store)) as never;
     },
   };
 
+  const store: BrainStore.Service = {
+    ...hybridSearch,
+    ...link,
+    ...ingestion,
+    ...timeline,
+    ...ext,
+    ...lifecycle,
+  };
   return store;
 });
 
@@ -850,14 +858,18 @@ export function makeLayer(
   options: { url: string; db?: any } & BrainStore.Options
 ) {
   const filename = options.url.replace(/^file:/, "");
-  console.log("makeLayer filename:", filename);
   const SqlLive = SqliteClient.layer({ filename });
   const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
   const DatabaseLive = Layer.mergeAll(SqlLive, DrizzleLive);
   const BrainStoreLayer = Layer.effect(BrainStore, makeStore(options)).pipe(
     Layer.provide(DatabaseLive)
   );
-  return Layer.mergeAll(BrainStoreLayer, DatabaseLive);
+  return Layer.mergeAll(
+    BrainStoreLayer,
+    DatabaseLive,
+    Eff.Logger.minimumLogLevel("Debug"),
+    Eff.Logger.pretty
+  );
 }
 
 export function make(options: { url: string } & BrainStore.Options) {

@@ -56,6 +56,8 @@ export const content_chunks = sqliteTable(
 
 export const chunks_fts = sqliteTable("chunks_fts", {
   page_id: integer(),
+  page_title: text(),
+  page_slug: text(),
   chunk_index: integer(),
   chunk_text: text(),
   chunk_source: text(),

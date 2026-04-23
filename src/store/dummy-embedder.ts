@@ -9,13 +9,11 @@ export class DummyEmbeddingProvider implements EmbeddingProvider {
 
   async embedQuery(text: string): Promise<number[]> {
     // Return a mock vector
-    return new Array(this.dimension).fill(0).map(() => Math.random());
+    return new Array(this.dimension).fill(0).map(() => 0.9);
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
     // Return mock vectors for each text
-    return texts.map(() =>
-      new Array(this.dimension).fill(0).map(() => Math.random())
-    );
+    return texts.map(() => new Array(this.dimension).fill(0).map(() => 0.9));
   }
 }

@@ -1,6 +1,7 @@
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   gte,
@@ -14,7 +15,6 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { pick } from "effect/Struct";
 import type {
@@ -27,6 +27,7 @@ import type {
   TimelineInput,
   TimelineOpts,
 } from "../types.js";
+import { buildFTS5Query } from "./fts5.js";
 import * as table from "./schema.js";
 import { UnsafeSql } from "./UnsafeSql.js";
 
@@ -197,21 +198,27 @@ export function searchKeyword(
   segmentedQuery: string,
   opts?: SearchOpts
 ) {
+  const ftsQueryParam = buildFTS5Query(segmentedQuery);
+  if (!ftsQueryParam) return [] as never; // 避免错误的类型推导
   const limit = opts?.limit ?? 10;
   const offset = opts?.offset ?? 0;
   const dedupe = opts?.dedupe ?? false;
-
   const ftsQuery = drizzleDb
     .select({
+      row: sql`rowid`,
       page_id: table.chunks_fts.page_id,
       chunk_index: table.chunks_fts.chunk_index,
-      score: sql<number>`bm25(${table.chunks_fts})`.as("score"),
+      score:
+        sql<number>`bm25(${table.chunks_fts}, 0, 5.0, 1.5, 0, 1.0, 0, 0, 2.0)`.as(
+          "score"
+        ),
+      // title: sql`highlight(${table.chunks_fts}, 1, '<b>', '</b>')`.as("title"),
+      // text: sql`highlight(${table.chunks_fts}, 4, '<b>', '</b>')`.as("texthighlight")
     })
     .from(table.chunks_fts)
-    .where(sql`${table.chunks_fts} MATCH ${segmentedQuery}`)
-    .orderBy(sql`score ASC`)
-    .limit(10000)
-    .as("r");
+    .where(sql`${table.chunks_fts} MATCH ${ftsQueryParam}`)
+    .orderBy((_) => asc(_.score))
+    .limit(10000);
 
   const conditions = [];
   if (opts?.type) {
@@ -224,7 +231,9 @@ export function searchKeyword(
     conditions.push(notInArray(table.pages.slug, opts.exclude_slugs));
   }
 
+  const bm25 = ftsQuery.as("r");
   const mainQuery = drizzleDb
+    .with(bm25)
     .select({
       page_id: table.pages.id,
       title: table.pages.title,
@@ -235,22 +244,22 @@ export function searchKeyword(
       chunk_text: table.content_chunks.chunk_text,
       chunk_source: table.content_chunks.chunk_source,
       token_count: table.content_chunks.token_count,
-      score: ftsQuery.score,
+      score: bm25.score,
       stale:
         sql<boolean>`(${table.content_chunks.embedded_at} IS NULL OR ${table.pages.updated_at} > ${table.content_chunks.embedded_at})`.as(
           "stale"
         ),
     })
-    .from(ftsQuery)
+    .from(sql`r`)
     .innerJoin(
       table.content_chunks,
       and(
-        eq(table.content_chunks.page_id, ftsQuery.page_id),
-        eq(table.content_chunks.chunk_index, ftsQuery.chunk_index)
+        eq(table.content_chunks.page_id, bm25.page_id),
+        eq(table.content_chunks.chunk_index, bm25.chunk_index)
       )
     )
     .innerJoin(table.pages, eq(table.pages.id, table.content_chunks.page_id))
-    .orderBy(sql`${ftsQuery.score} ASC`);
+    .orderBy(asc(bm25.score));
 
   if (conditions.length > 0) {
     mainQuery.where(and(...conditions));
@@ -575,6 +584,8 @@ export function insertFtsChunks(
   drizzleDb: DrizzleDb,
   values: Array<{
     page_id: number;
+    page_slug: string;
+    page_title: string;
     chunk_index: number;
     chunk_text: string;
     chunk_source: string;
@@ -1012,11 +1023,11 @@ export function getPageTypeCounts(drizzleDb: DrizzleDb) {
   return drizzleDb
     .select({
       type: table.pages.type,
-      count: sql<number>`count(*)`.as("count"),
+      count: count(),
     })
     .from(table.pages)
     .groupBy(table.pages.type)
-    .orderBy(sql`count DESC`);
+    .orderBy((_) => desc(_.count));
 }
 
 export function countStalePages(drizzleDb: DrizzleDb) {
@@ -1210,6 +1221,8 @@ export class SqlBuilder<TResultKind extends "sync" | "async" = "async"> {
   insertFtsChunks(
     values: Array<{
       page_id: number;
+      page_slug: string;
+      page_title: string;
       chunk_index: number;
       chunk_text: string;
       chunk_source: string;
@@ -1350,5 +1363,21 @@ export class SqlBuilder<TResultKind extends "sync" | "async" = "async"> {
   }
   getMostConnectedPages() {
     return getMostConnectedPages(this.drizzleDb);
+  }
+
+  getBacklinkCounts(slugs: string[]) {
+    return this._asAsync()
+      .select({
+        slug: table.pages.slug,
+        cnt: count(table.links),
+      })
+      .from(table.pages)
+      .leftJoin(table.links, eq(table.links.to_page_id, table.pages.id))
+      .where(inArray(table.pages.slug, slugs))
+      .groupBy(table.pages.slug);
+  }
+
+  private _asAsync() {
+    return this.drizzleDb as unknown as DrizzleDb<"async">;
   }
 }

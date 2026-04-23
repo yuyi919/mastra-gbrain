@@ -14,11 +14,14 @@ CREATE TABLE IF NOT EXISTS pages (
 -- Create chunks full-text search table
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
    page_id UNINDEXED,
+   page_title,
+   page_slug,
    chunk_index UNINDEXED,
-   chunk_text UNINDEXED,
+   chunk_text,
    chunk_source UNINDEXED,
    token_count UNINDEXED,
-   chunk_text_segmented
+   chunk_text_segmented,
+   tokenize='porter unicode61'
 );
 
 -- Create content_chunks table (real data)

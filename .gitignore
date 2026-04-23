@@ -11,3 +11,4 @@ tsconfig.tsbuildinfo
 .codex
 tsup.config.bundled_*.mjs
 .pnpm-store/
+graphify-out
