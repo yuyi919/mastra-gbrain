@@ -4,7 +4,10 @@ import { LibSQLStore } from "../src/store/libsql.js";
 let store: LibSQLStore;
 
 beforeAll(async () => {
-  const tempStore = new LibSQLStore({ url: "file:./tmp/test-ext-2.db", dimension: 1536 });
+  const tempStore = new LibSQLStore({
+    url: "file:./tmp/test-ext-2.db",
+    dimension: 1536,
+  });
   await tempStore.cleanDBFile(true);
   store = new LibSQLStore({ url: "file:./tmp/test-ext-2.db", dimension: 1536 });
   await store.init();

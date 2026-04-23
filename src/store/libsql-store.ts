@@ -25,8 +25,8 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
-import { BrainStore } from "./BrainStore.js";
 import type { TimelineBatchInput } from "./BrainStore.js";
+import { BrainStore } from "./BrainStore.js";
 import { StoreError } from "./BrainStoreError.js";
 import { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import init from "./init.sql" with { type: "text" };
@@ -151,30 +151,36 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       slug: string,
       versionId: number
     ) {
-      return yield* sql.withTransaction(Eff.gen(function* () {
-        const versions = yield* mappers.getVersionsBySlug(slug);
-        const targetVersion = versions.find((v: any) => v.id === versionId);
-        if (!targetVersion) return;
-        
-        const existingPage = yield* mappers.getPageBySlug(slug);
-        if (!existingPage) return;
-        
-        yield* mappers.upsertPage(slug, {
-          title: existingPage.title,
-          type: existingPage.type,
-          timeline: existingPage.timeline || "",
-          content_hash: existingPage.content_hash || "",
-          compiled_truth: targetVersion.compiled_truth,
-          frontmatter: targetVersion.frontmatter ? JSON.parse(targetVersion.frontmatter) : {},
-        });
-      }));
+      return yield* sql.withTransaction(
+        Eff.gen(function* () {
+          const versions = yield* mappers.getVersionsBySlug(slug);
+          const targetVersion = versions.find((v: any) => v.id === versionId);
+          if (!targetVersion) return;
+
+          const existingPage = yield* mappers.getPageBySlug(slug);
+          if (!existingPage) return;
+
+          yield* mappers.upsertPage(slug, {
+            title: existingPage.title,
+            type: existingPage.type,
+            timeline: existingPage.timeline || "",
+            content_hash: existingPage.content_hash || "",
+            compiled_truth: targetVersion.compiled_truth,
+            frontmatter: targetVersion.frontmatter
+              ? JSON.parse(targetVersion.frontmatter)
+              : {},
+          });
+        })
+      );
     }, catchStoreError),
     putPage: Eff.fn("putPage")(function* (slug: string, page: PageInput) {
-      return yield* sql.withTransaction(Eff.gen(function* () {
-        const record = yield* mappers.upsertPage(slug, page);
-        yield* ingestion.createVersion(slug);
-        return Page.decode(record[0]);
-      }));
+      return yield* sql.withTransaction(
+        Eff.gen(function* () {
+          const record = yield* mappers.upsertPage(slug, page);
+          yield* ingestion.createVersion(slug);
+          return Page.decode(record[0]);
+        })
+      );
     }, catchStoreError),
     deletePage: Eff.fn("deletePage")(function* (slug: string) {
       yield* Eff.all([
@@ -840,7 +846,9 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
   return store;
 });
 
-export function makeLayer(options: { url: string; db?: any } & BrainStore.Options) {
+export function makeLayer(
+  options: { url: string; db?: any } & BrainStore.Options
+) {
   const filename = options.url.replace(/^file:/, "");
   console.log("makeLayer filename:", filename);
   const SqlLive = SqliteClient.layer({ filename });

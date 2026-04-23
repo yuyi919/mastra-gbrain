@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { embedStale } from "../../src/scripts/embed.js";
 import { LibSQLStore } from "../../src/store/libsql.js";
-
-import { rmSync } from "node:fs";
 
 const dbPath = resolve(__dirname, "../../tmp/embed-stale.db");
 
@@ -23,7 +22,7 @@ beforeAll(async () => {
   });
 
   // Insert two chunks manually without embeddings
-  const db = store["db"];
+  const db = store.db;
   const pageResult = db
     .query("SELECT id FROM pages WHERE slug = ?")
     .get("stale-slug") as { id: number };
@@ -54,7 +53,7 @@ test("embedStale processes un-embedded chunks", async () => {
   expect(processedCount).toBe(2);
 
   // Check if they were embedded by verifying embedded_at is not null
-  const db = store["db"];
+  const db = store.db;
   const chunks = db
     .query("SELECT embedded_at FROM content_chunks WHERE chunk_text LIKE ?")
     .all("%stale chunk%") as { embedded_at: string | null }[];

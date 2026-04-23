@@ -2,15 +2,15 @@ import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { LibSQLVector } from "@mastra/libsql";
+import * as Effect from "@yuyi919/tslibs-effect/effect-next";
 import { type BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite";
-import { extractWordsForSearch } from "../segmenter.js";
+import { ManagedRuntime } from "effect";
 import type {
   AccessToken,
   BrainHealth,
   BrainStats,
   Chunk,
   ChunkInput,
-  ChunkSource,
   DatabaseHealth,
   FileRecord,
   IngestLogEntry,
@@ -29,13 +29,11 @@ import type {
   VectorMetadata,
 } from "../types.js";
 import { BrainStore } from "./BrainStore.js";
-import { makeLayer as makeLibSQLStoreLayer } from "./libsql-store.js";
-import * as Effect from "@yuyi919/tslibs-effect/effect-next";
-import { ManagedRuntime } from "effect";
-import { GraphNode, Page, PageVersion } from "./effect-schema.js";
+import type { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
+import { makeLayer as makeLibSQLStoreLayer } from "./libsql-store.js";
 import { SqlBuilder } from "./SqlBuilder.js";
-import { LATEST_VERSION, Schemas } from "./schema.js";
+import { Schemas } from "./schema.js";
 
 export interface LibSQLStoreOptions {
   url: string;
@@ -47,7 +45,7 @@ export interface LibSQLStoreOptions {
 }
 
 export class LibSQLStore implements StoreProvider {
-  private db: Database;
+  public db: Database;
   private drizzleDb: BunSQLiteDatabase<Schemas>;
   private mappers: SqlBuilder<"sync">;
   public vectorStore: LibSQLVector;
@@ -56,7 +54,7 @@ export class LibSQLStore implements StoreProvider {
   public readonly vectorUrl: string;
   public readonly authToken?: string;
   public readonly dimension: number;
-  public readonly brainStore: ManagedRuntime.ManagedRuntime<BrainStore | any, never>;
+  public readonly brainStore: ManagedRuntime.ManagedRuntime<BrainStore, never>;
 
   constructor(options: LibSQLStoreOptions) {
     this.url = options.url;
@@ -603,7 +601,6 @@ export class LibSQLStore implements StoreProvider {
       })
     );
   }
-
 
   async searchVector(
     queryVector: number[],

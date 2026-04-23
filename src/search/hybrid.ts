@@ -1,9 +1,9 @@
-import { BrainStore, type EngineEffect } from "../store/BrainStore.js";
+import * as Effect from "@yuyi919/tslibs-effect/effect-next";
+import { BrainStore } from "../store/BrainStore.js";
 import type { StoreError } from "../store/BrainStoreError.js";
 import type { StoreProvider } from "../store/interface.js";
 import type { SearchOpts, SearchResult } from "../types.js";
 import { rrfFusion } from "./rrf.js";
-import * as Effect from "@yuyi919/tslibs-effect/effect-next";
 
 export interface HybridSearchOpts extends SearchOpts {
   embed?: (text: string) => Promise<number[]>;
@@ -47,10 +47,15 @@ export function hybridSearchEffect(
     try {
       if (queryVector) {
         vectorLists = [
-          yield* backend.searchVector(queryVector, { ...opts, limit: innerLimit }),
+          yield* backend.searchVector(queryVector, {
+            ...opts,
+            limit: innerLimit,
+          }),
         ];
       } else if (opts?.embed) {
-        const embeddings = yield* Effect.promise(() => Promise.all(queries.map((q) => opts!.embed!(q))));
+        const embeddings = yield* Effect.promise(() =>
+          Promise.all(queries.map((q) => opts!.embed!(q)))
+        );
         vectorLists = yield* Effect.all(
           embeddings.map((e) =>
             backend.searchVector(e, { ...opts, limit: innerLimit })

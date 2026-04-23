@@ -82,9 +82,11 @@ export const makeRemoteCallback = Effect.gen(function* () {
       effect = Effect.map(effect, (rows) => rows[0] ?? undefined);
     }
     return runPromise(
-      Effect.result(Effect.map(effect, (rows) => {
-        return { rows };
-      }))
+      Effect.result(
+        Effect.map(effect, (rows) => {
+          return { rows };
+        })
+      )
     ).then((res) => {
       if (res._tag === "Failure") {
         throw res.failure.cause;

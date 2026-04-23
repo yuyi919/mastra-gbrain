@@ -4,7 +4,10 @@ import { LibSQLStore } from "../src/store/libsql.js";
 let store: LibSQLStore;
 
 beforeAll(async () => {
-  const tempStore = new LibSQLStore({ url: "file:./tmp/test-ext.db", dimension: 1536 });
+  const tempStore = new LibSQLStore({
+    url: "file:./tmp/test-ext.db",
+    dimension: 1536,
+  });
   await tempStore.cleanDBFile(true);
   store = new LibSQLStore({ url: "file:./tmp/test-ext.db", dimension: 1536 });
   await store.init();
@@ -282,7 +285,9 @@ test("Timeline entries advanced management", async () => {
     detail: "",
   });
 
-  const entries = await store.getTimeline("test-timeline-page", { after: "2025-01-15" });
+  const entries = await store.getTimeline("test-timeline-page", {
+    after: "2025-01-15",
+  });
   expect(entries.length).toBe(1);
   expect(entries[0].date).toBe("2025-02-01");
 

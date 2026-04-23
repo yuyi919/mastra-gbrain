@@ -1,4 +1,4 @@
-import { Effect, Schema, Struct } from "effect";
+import { type Effect, Schema, Struct } from "effect";
 import { Model } from "effect/unstable/schema";
 
 export const PageType = Schema.Literals([
@@ -25,9 +25,7 @@ export class GraphNode extends Model.Class<GraphNode>("GraphNodes")({
   depth: Schema.Int,
   links: Schema.Array(
     Schema.Struct({ to_slug: Schema.String, link_type: Schema.String })
-  ).pipe(
-    Schema.fromJsonString,
-  ),
+  ).pipe(Schema.fromJsonString),
 }) {
   static decodeUnsafe(page: (typeof GraphNode)["Encoded"]): GraphNode {
     return Schema.decodeSync(GraphNode)(page);

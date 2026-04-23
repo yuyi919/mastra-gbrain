@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { bulkImport } from "../src/scripts/import.js";
-import { createDefaultEmbedder } from "../src/store/index.js";
 import { DummyEmbeddingProvider } from "../src/store/dummy-embedder.js";
 import { LibSQLStore } from "../src/store/libsql.js";
 import { createLinksTools } from "../src/tools/links.js";

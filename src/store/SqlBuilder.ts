@@ -16,7 +16,6 @@ import {
 } from "drizzle-orm";
 
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
-import { alias } from "drizzle-orm/sqlite-core";
 import { pick } from "effect/Struct";
 import type {
   ChunkInput,
@@ -395,7 +394,10 @@ export function getVersionsBySlug(drizzleDb: DrizzleDb, slug: string) {
     .from(table.page_versions)
     .innerJoin(table.pages, eq(table.page_versions.page_id, table.pages.id))
     .where(eq(table.pages.slug, slug))
-    .orderBy(desc(table.page_versions.snapshot_at), desc(table.page_versions.id));
+    .orderBy(
+      desc(table.page_versions.snapshot_at),
+      desc(table.page_versions.id)
+    );
 }
 
 /**
@@ -408,7 +410,7 @@ export function revertToVersionBySlug(
 ) {
   const pv = table.page_versions;
   const p = table.pages;
-  
+
   // Drizzle SQLite update...from might be buggy, using subquery
   return drizzleDb
     .update(p)
