@@ -1,17 +1,30 @@
-# GBrain: Effect 重构里程碑 (Effect Refactoring Milestone)
+﻿# GBrain: Effect 閲嶆瀯閲岀▼纰?(Effect Refactoring Milestone)
 
-## 1. 项目愿景 (Project Vision)
-将 `LibSQLStore` 内部实现替换为经过 `effect` (Effect-ts) 重构的 `BrainStore` 运行时。通过引入函数式控制流和更优雅的依赖注入机制，彻底重塑数据访问层的稳定性与可测试性，验证核心存储和混合检索功能的正确性，并为整个系统的下一步 Effect 重构（如 Agent 层、工具链层）奠定坚实的运行时基础。
+## 1. 椤圭洰鎰挎櫙 (Project Vision)
+灏?`LibSQLStore` 鍐呴儴瀹炵幇鏇挎崲涓虹粡杩?`effect` (Effect-ts) 閲嶆瀯鐨?`BrainStore` 杩愯鏃躲€傞€氳繃寮曞叆鍑芥暟寮忔帶鍒舵祦鍜屾洿浼橀泤鐨勪緷璧栨敞鍏ユ満鍒讹紝褰诲簳閲嶅鏁版嵁璁块棶灞傜殑绋冲畾鎬т笌鍙祴璇曟€э紝楠岃瘉鏍稿績瀛樺偍鍜屾贩鍚堟绱㈠姛鑳界殑姝ｇ‘鎬э紝骞朵负鏁翠釜绯荤粺鐨勪笅涓€姝?Effect 閲嶆瀯锛堝 Agent 灞傘€佸伐鍏烽摼灞傦級濂犲畾鍧氬疄鐨勮繍琛屾椂鍩虹銆?
 
-## 2. 核心目标 (Core Objectives)
-- **底层运行时替换**：平滑地将现有的 `LibSQLStore` 内部针对 SQLite / Drizzle 的直接调用，迁移至新重构的 `BrainStore` 运行时。
-- **功能等价与正确性验证**：确保原有的 Markdown 摄入 (Ingestion)、混合搜索 (Hybrid Search)、标签 (Tags)、双链 (Backlinks) 等业务功能在底层替换后表现一致，100% 通过现有测试用例。
-- **重构架构演进**：通过验证该层级的 `effect` 改造，为项目后续使用 Effect-ts 全面替代原有 Promise / Async 流程提供范本和路径。
+## 2. 鏍稿績鐩爣 (Core Objectives)
+- **搴曞眰杩愯鏃舵浛鎹?*锛氬钩婊戝湴灏嗙幇鏈夌殑 `LibSQLStore` 鍐呴儴閽堝 SQLite / Drizzle 鐨勭洿鎺ヨ皟鐢紝杩佺Щ鑷虫柊閲嶆瀯鐨?`BrainStore` 杩愯鏃躲€?
+- **鍔熻兘绛変环涓庢纭€ч獙璇?*锛氱‘淇濆師鏈夌殑 Markdown 鎽勫叆 (Ingestion)銆佹贩鍚堟悳绱?(Hybrid Search)銆佹爣绛?(Tags)銆佸弻閾?(Backlinks) 绛変笟鍔″姛鑳藉湪搴曞眰鏇挎崲鍚庤〃鐜颁竴鑷达紝100% 閫氳繃鐜版湁娴嬭瘯鐢ㄤ緥銆?
+- **閲嶆瀯鏋舵瀯婕旇繘**锛氶€氳繃楠岃瘉璇ュ眰绾х殑 `effect` 鏀归€狅紝涓洪」鐩悗缁娇鐢?Effect-ts 鍏ㄩ潰鏇夸唬鍘熸湁 Promise / Async 娴佺▼鎻愪緵鑼冩湰鍜岃矾寰勩€?
 
-## 3. 当前背景 (Current Context)
-在早期的重构中，系统已经引入了 `Drizzle ORM` 移除了硬编码的 SQL，并通过抽象 `GBrainStore` 等接口解耦了业务逻辑与底层实现。同时，基于 `node-llama-cpp` 与 FTS5 的混合检索架构已经稳定。目前的瓶颈在于异步操作的组合、错误处理的统一以及依赖环境（如数据库连接、配置环境）的安全注入，而这正是 Effect-ts 发挥优势的领域。
+## 3. 褰撳墠鑳屾櫙 (Current Context)
+鍦ㄦ棭鏈熺殑閲嶆瀯涓紝绯荤粺宸茬粡寮曞叆浜?`Drizzle ORM` 绉婚櫎浜嗙‖缂栫爜鐨?SQL锛屽苟閫氳繃鎶借薄 `GBrainStore` 绛夋帴鍙ｈВ鑰︿簡涓氬姟閫昏緫涓庡簳灞傚疄鐜般€傚悓鏃讹紝鍩轰簬 `node-llama-cpp` 涓?FTS5 鐨勬贩鍚堟绱㈡灦鏋勫凡缁忕ǔ瀹氥€傜洰鍓嶇殑鐡堕鍦ㄤ簬寮傛鎿嶄綔鐨勭粍鍚堛€侀敊璇鐞嗙殑缁熶竴浠ュ強渚濊禆鐜锛堝鏁版嵁搴撹繛鎺ャ€侀厤缃幆澧冿級鐨勫畨鍏ㄦ敞鍏ワ紝鑰岃繖姝ｆ槸 Effect-ts 鍙戞尌浼樺娍鐨勯鍩熴€?
 
-## 4. 关键指标 (Success Metrics)
-- `bun test` 全量测试用例（包括 `libsql.test.ts` 和各个运维脚本的集成测试）无一失败，达到 0 报错。
-- TypeScript 严格模式 (`tsc --noEmit`) 0 警告，不引入新的 `any` 类型或 `@ts-expect-error`。
-- `LibSQLStore` 对外接口签名保持稳定，外部调用方（如 `src/tools/`、`src/agent/`）感知不到底层的运行时变更。
+## 4. 鍏抽敭鎸囨爣 (Success Metrics)
+- `bun test` 鍏ㄩ噺娴嬭瘯鐢ㄤ緥锛堝寘鎷?`libsql.test.ts` 鍜屽悇涓繍缁磋剼鏈殑闆嗘垚娴嬭瘯锛夋棤涓€澶辫触锛岃揪鍒?0 鎶ラ敊銆?
+- TypeScript 涓ユ牸妯″紡 (`tsc --noEmit`) 0 璀﹀憡锛屼笉寮曞叆鏂扮殑 `any` 绫诲瀷鎴?`@ts-expect-error`銆?
+- `LibSQLStore` 瀵瑰鎺ュ彛绛惧悕淇濇寔绋冲畾锛屽閮ㄨ皟鐢ㄦ柟锛堝 `src/tools/`銆乣src/agent/`锛夋劅鐭ヤ笉鍒板簳灞傜殑杩愯鏃跺彉鏇淬€?
+
+
+## What This Is
+This repository is a local-first knowledge base implementation built with Bun + TypeScript + Mastra, with SQLite/LibSQL (FTS5 + vector search) storage and tool-based agent access.
+
+## Core Value
+Provide reliable ingestion, indexing, and hybrid retrieval for multilingual notes while keeping architecture boundaries clear and testable.
+
+## Requirements
+- Keep store access behind StoreProvider interfaces.
+- Preserve Effect v4 constraints and systematic patterns.
+- Keep tests isolated to ./tmp/ and release resources via dispose().
+

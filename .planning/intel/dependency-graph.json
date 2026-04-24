@@ -1,0 +1,290 @@
+{
+  "_meta": {
+    "updated_at": "2026-04-24T06:35:27.112Z",
+    "version": 1
+  },
+  "entries": {
+    "@mastra/core": {
+      "version": "catalog:",
+      "type": "production",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/index.ts",
+        "src/agent/index.ts",
+        "src/tools/search.ts",
+        "src/ingest/workflow.ts"
+      ]
+    },
+    "@mastra/libsql": {
+      "version": "catalog:",
+      "type": "production",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/store/libsql.ts",
+        "src/store/BrainStore.ts"
+      ]
+    },
+    "@standard-schema/spec": {
+      "version": "^1.1.0",
+      "type": "production",
+      "invocation": "implicit",
+      "used_by": [
+        "build"
+      ],
+      "evidence_files": [
+        "package.json"
+      ]
+    },
+    "@types/unist": {
+      "version": "^3.0.3",
+      "type": "production",
+      "invocation": "pnpm build:dts",
+      "used_by": [
+        "build:dts"
+      ],
+      "evidence_files": [
+        "package.json"
+      ]
+    },
+    "@yuyi919/tslibs-effect": {
+      "version": "catalog:",
+      "type": "production",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/search/hybrid.ts",
+        "src/store/libsql-store.ts",
+        "src/store/BrainStore.ts"
+      ]
+    },
+    "drizzle-orm": {
+      "version": "^0.45.2",
+      "type": "production",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/store/SqlBuilder.ts",
+        "src/store/schema.ts",
+        "src/store/libsql.ts"
+      ]
+    },
+    "gray-matter": {
+      "version": "^4.0.3",
+      "type": "production",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/markdown.ts"
+      ]
+    },
+    "remark": {
+      "version": "^15.0.1",
+      "type": "production",
+      "invocation": "manual cli",
+      "used_by": [
+        "test"
+      ],
+      "evidence_files": [
+        "src/scripts/backlinks.ts"
+      ]
+    },
+    "remark-parse": {
+      "version": "^11.0.0",
+      "type": "production",
+      "invocation": "implicit",
+      "used_by": [
+        "build"
+      ],
+      "evidence_files": [
+        "package.json"
+      ]
+    },
+    "unist-util-visit": {
+      "version": "^5.1.0",
+      "type": "production",
+      "invocation": "manual cli",
+      "used_by": [
+        "test"
+      ],
+      "evidence_files": [
+        "src/scripts/backlinks.ts"
+      ]
+    },
+    "unist-util-visit-parents": {
+      "version": "^6.0.2",
+      "type": "production",
+      "invocation": "implicit",
+      "used_by": [
+        "build"
+      ],
+      "evidence_files": [
+        "package.json"
+      ]
+    },
+    "zod": {
+      "version": "catalog:",
+      "type": "production",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/ingest/workflow.ts",
+        "src/tools/search.ts"
+      ]
+    },
+    "@effect/platform-bun": {
+      "version": "catalog:",
+      "type": "development",
+      "invocation": "pnpm build",
+      "used_by": [
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "package.json"
+      ]
+    },
+    "@effect/sql-sqlite-bun": {
+      "version": "catalog:",
+      "type": "development",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/store/libsql-store.ts",
+        "src/store/page.ts",
+        "src/libs/effect-drizzle/example.ts"
+      ]
+    },
+    "@types/bun": {
+      "version": "catalog:",
+      "type": "development",
+      "invocation": "pnpm build:dts",
+      "used_by": [
+        "build:dts",
+        "test"
+      ],
+      "evidence_files": [
+        "tsconfig.json"
+      ]
+    },
+    "@typia/unplugin": {
+      "version": "^12.0.1",
+      "type": "development",
+      "invocation": "pnpm build",
+      "used_by": [
+        "build"
+      ],
+      "evidence_files": [
+        "package.json"
+      ]
+    },
+    "drizzle-kit": {
+      "version": "^0.31.10",
+      "type": "development",
+      "invocation": "manual cli",
+      "used_by": [
+        "manual"
+      ],
+      "evidence_files": [
+        "package.json"
+      ]
+    },
+    "effect": {
+      "version": "4.0.0-beta.55",
+      "type": "development",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/workflow/index.ts",
+        "src/store/index.ts",
+        "src/search/hybrid.ts"
+      ]
+    },
+    "node-llama-cpp": {
+      "version": "^3.18.1",
+      "type": "development",
+      "invocation": "pnpm test",
+      "used_by": [
+        "test",
+        "dev"
+      ],
+      "evidence_files": [
+        "src/store/index.ts",
+        "src/store/llama-embedder.ts",
+        "src/search/llama-reranker.ts"
+      ]
+    },
+    "tsup": {
+      "version": "^8.5.1",
+      "type": "development",
+      "invocation": "pnpm build",
+      "used_by": [
+        "build",
+        "dev"
+      ],
+      "evidence_files": [
+        "package.json"
+      ]
+    },
+    "typescript": {
+      "version": "^5.6.3",
+      "type": "development",
+      "invocation": "pnpm build:dts",
+      "used_by": [
+        "build:dts",
+        "build"
+      ],
+      "evidence_files": [
+        "tsconfig.json",
+        "package.json"
+      ]
+    },
+    "typia": {
+      "version": "^12.0.1",
+      "type": "development",
+      "invocation": "pnpm dev",
+      "used_by": [
+        "dev",
+        "build",
+        "test"
+      ],
+      "evidence_files": [
+        "src/tools/list.ts",
+        "package.json"
+      ]
+    }
+  }
+}

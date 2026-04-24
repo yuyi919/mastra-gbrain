@@ -1,0 +1,366 @@
+{
+  "_meta": {
+    "updated_at": "2026-04-24T06:35:26.800Z",
+    "version": 1
+  },
+  "entries": {
+    "agent:gbrain": {
+      "kind": "agent",
+      "id": "gbrain",
+      "file": "src/agent/index.ts",
+      "factory": "createGBrainAgent",
+      "registers_tools": [
+        "search",
+        "ingest",
+        "bulk-import",
+        "list-pages",
+        "read-page",
+        "delete-page",
+        "get-page-info",
+        "add-tag",
+        "remove-tag",
+        "get-links",
+        "add-link",
+        "remove-link",
+        "get-timeline",
+        "get-config",
+        "set-config",
+        "get-raw-data",
+        "put-raw-data"
+      ],
+      "invocation": "runtime",
+      "description": "Mastra Agent that exposes the knowledge-base tool surface."
+    },
+    "workflow:gbrain-ingest": {
+      "kind": "workflow",
+      "id": "gbrain-ingest",
+      "file": "src/ingest/workflow.ts",
+      "factory": "createIngestionWorkflow",
+      "steps": [
+        "parse",
+        "chunk",
+        "embed",
+        "persist"
+      ],
+      "input": [
+        "slug?",
+        "relativePath?",
+        "content",
+        "noEmbed?"
+      ],
+      "output": [
+        "slug",
+        "status",
+        "chunks",
+        "error?"
+      ],
+      "invocation": "createIngestTool.execute / createBulkImportTool.execute"
+    },
+    "tool:search": {
+      "kind": "mastra-tool",
+      "id": "search",
+      "file": "src/tools/search.ts",
+      "factory": "createSearchTool",
+      "input": [
+        "query",
+        "limit?"
+      ],
+      "output": [
+        "query",
+        "results"
+      ],
+      "invocation": "agent tool call",
+      "description": "Hybrid keyword + vector retrieval."
+    },
+    "tool:ingest": {
+      "kind": "mastra-tool",
+      "id": "ingest",
+      "file": "src/tools/ingest.ts",
+      "factory": "createIngestTool",
+      "input": [
+        "relativePath",
+        "content"
+      ],
+      "output": [
+        "slug",
+        "status",
+        "chunks",
+        "error?"
+      ],
+      "invocation": "agent tool call",
+      "description": "Ingest one markdown page through gbrain-ingest workflow."
+    },
+    "tool:bulk-import": {
+      "kind": "mastra-tool",
+      "id": "bulk-import",
+      "file": "src/tools/import.ts",
+      "factory": "createBulkImportTool",
+      "input": [
+        "directoryPath"
+      ],
+      "output": [
+        "success",
+        "message",
+        "summary|error"
+      ],
+      "invocation": "agent tool call",
+      "description": "Recursively import markdown files from local directory."
+    },
+    "tool:list-pages": {
+      "kind": "mastra-tool",
+      "id": "list-pages",
+      "file": "src/tools/list.ts",
+      "factory": "createListPagesTool",
+      "input": [
+        "type?",
+        "tag?",
+        "tags?",
+        "limit?",
+        "offset?",
+        "updated_after?"
+      ],
+      "output": [
+        "count",
+        "pages"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:read-page": {
+      "kind": "mastra-tool",
+      "id": "read-page",
+      "file": "src/tools/page.ts",
+      "factory": "createPageTools",
+      "input": [
+        "slug"
+      ],
+      "output": [
+        "slug",
+        "type",
+        "title",
+        "tags",
+        "frontmatter",
+        "compiled_truth",
+        "updated_at|error"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:delete-page": {
+      "kind": "mastra-tool",
+      "id": "delete-page",
+      "file": "src/tools/page.ts",
+      "factory": "createPageTools",
+      "input": [
+        "slug"
+      ],
+      "output": [
+        "success",
+        "message"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:get-page-info": {
+      "kind": "mastra-tool",
+      "id": "get-page-info",
+      "file": "src/tools/page.ts",
+      "factory": "createPageTools",
+      "input": [
+        "slug"
+      ],
+      "output": [
+        "slug",
+        "content_hash",
+        "tags|error"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:add-tag": {
+      "kind": "mastra-tool",
+      "id": "add-tag",
+      "file": "src/tools/page.ts",
+      "factory": "createPageTools",
+      "input": [
+        "slug",
+        "tag"
+      ],
+      "output": [
+        "success",
+        "message"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:remove-tag": {
+      "kind": "mastra-tool",
+      "id": "remove-tag",
+      "file": "src/tools/page.ts",
+      "factory": "createPageTools",
+      "input": [
+        "slug",
+        "tag"
+      ],
+      "output": [
+        "success",
+        "message"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:get-links": {
+      "kind": "mastra-tool",
+      "id": "get-links",
+      "file": "src/tools/links.ts",
+      "factory": "createLinksTools",
+      "input": [
+        "slug"
+      ],
+      "output": [
+        "slug",
+        "outgoing",
+        "backlinks"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:add-link": {
+      "kind": "mastra-tool",
+      "id": "add-link",
+      "file": "src/tools/links.ts",
+      "factory": "createLinksTools",
+      "input": [
+        "fromSlug",
+        "toSlug",
+        "linkType?",
+        "context?"
+      ],
+      "output": [
+        "success",
+        "message"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:remove-link": {
+      "kind": "mastra-tool",
+      "id": "remove-link",
+      "file": "src/tools/links.ts",
+      "factory": "createLinksTools",
+      "input": [
+        "fromSlug",
+        "toSlug"
+      ],
+      "output": [
+        "success",
+        "message"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:get-timeline": {
+      "kind": "mastra-tool",
+      "id": "get-timeline",
+      "file": "src/tools/timeline.ts",
+      "factory": "createTimelineTool",
+      "input": [
+        "slug",
+        "opts.limit?",
+        "opts.after?",
+        "opts.before?",
+        "opts.asc?"
+      ],
+      "output": [
+        "slug",
+        "timeline"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:get-config": {
+      "kind": "mastra-tool",
+      "id": "get-config",
+      "file": "src/tools/config.ts",
+      "factory": "createConfigTools",
+      "input": [
+        "key"
+      ],
+      "output": [
+        "key",
+        "value|error"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:set-config": {
+      "kind": "mastra-tool",
+      "id": "set-config",
+      "file": "src/tools/config.ts",
+      "factory": "createConfigTools",
+      "input": [
+        "key",
+        "value"
+      ],
+      "output": [
+        "success",
+        "message"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:get-raw-data": {
+      "kind": "mastra-tool",
+      "id": "get-raw-data",
+      "file": "src/tools/raw.ts",
+      "factory": "createRawDataTools",
+      "input": [
+        "slug",
+        "source"
+      ],
+      "output": [
+        "slug",
+        "source",
+        "data",
+        "fetched_at|error"
+      ],
+      "invocation": "agent tool call"
+    },
+    "tool:put-raw-data": {
+      "kind": "mastra-tool",
+      "id": "put-raw-data",
+      "file": "src/tools/raw.ts",
+      "factory": "createRawDataTools",
+      "input": [
+        "slug",
+        "source",
+        "data"
+      ],
+      "output": [
+        "success",
+        "message"
+      ],
+      "invocation": "agent tool call"
+    },
+    "script:import": {
+      "kind": "cli-script",
+      "file": "src/scripts/import.ts",
+      "export": "bulkImport",
+      "cli": "bun run src/scripts/import.ts [directory] [--workers N] [--fresh]",
+      "invocation": "manual cli",
+      "description": "Directory-level markdown ingestion utility with checkpoint resume."
+    },
+    "script:embed": {
+      "kind": "cli-script",
+      "file": "src/scripts/embed.ts",
+      "export": "embedStale",
+      "cli": "bun run src/scripts/embed.ts --stale",
+      "invocation": "manual cli",
+      "description": "Backfill embeddings for stale/missing chunks."
+    },
+    "script:doctor": {
+      "kind": "cli-script",
+      "file": "src/scripts/doctor.ts",
+      "export": "runDoctor",
+      "cli": "bun run src/scripts/doctor.ts [--json]",
+      "invocation": "manual cli",
+      "description": "Health checks for schema, FTS, vector coverage, and connection."
+    },
+    "script:backlinks": {
+      "kind": "cli-script",
+      "file": "src/scripts/backlinks.ts",
+      "export": "checkBacklinks",
+      "cli": "bun run src/scripts/backlinks.ts <check|fix> <directory> [--dry-run]",
+      "invocation": "manual cli",
+      "description": "Detect or repair missing backlink timeline entries between markdown files."
+    }
+  }
+}

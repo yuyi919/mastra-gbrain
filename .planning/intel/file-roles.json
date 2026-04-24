@@ -1,0 +1,738 @@
+{
+  "_meta": {
+    "updated_at": "2026-04-24T06:35:27.140Z",
+    "version": 1
+  },
+  "entries": {
+    "src/markdown.ts": {
+      "exports": [
+        "parseMarkdown",
+        "splitBody",
+        "serializeMarkdown"
+      ],
+      "imports": [
+        "gray-matter",
+        "./slug.js",
+        "./types.js"
+      ],
+      "type": "module"
+    },
+    "src/index.ts": {
+      "exports": [
+        "gbrainAgent",
+        "mastra"
+      ],
+      "imports": [
+        "@mastra/core/mastra",
+        "./agent/index.js",
+        "./store/index.js"
+      ],
+      "type": "entry-point"
+    },
+    "src/segmenter.ts": {
+      "exports": [
+        "getSegments",
+        "countWords",
+        "extractWordsForSearch"
+      ],
+      "imports": [],
+      "type": "module"
+    },
+    "src/slug.ts": {
+      "exports": [
+        "slugifySegment",
+        "slugifyPath"
+      ],
+      "imports": [],
+      "type": "module"
+    },
+    "src/types.ts": {
+      "exports": [
+        "GBrainError",
+        "GraphNode",
+        "Page",
+        "PageType",
+        "PageVersion"
+      ],
+      "imports": [
+        "./store/effect-schema.js"
+      ],
+      "type": "type-def"
+    },
+    "src/ingest/workflow.ts": {
+      "exports": [
+        "createIngestionWorkflow"
+      ],
+      "imports": [
+        "node:crypto",
+        "@mastra/core/workflows",
+        "zod",
+        "../chunkers/recursive.js",
+        "../markdown.js",
+        "../slug.js",
+        "../store/interface.js",
+        "../types.js"
+      ],
+      "type": "module"
+    },
+    "src/libs/index.ts": {
+      "exports": [],
+      "imports": [],
+      "type": "module"
+    },
+    "src/agent/index.ts": {
+      "exports": [
+        "createGBrainAgent"
+      ],
+      "imports": [
+        "@mastra/core/agent",
+        "../store/interface.js",
+        "../tools/config.js",
+        "../tools/import.js",
+        "../tools/ingest.js",
+        "../tools/links.js",
+        "../tools/list.js",
+        "../tools/page.js",
+        "../tools/raw.js",
+        "../tools/search.js",
+        "../tools/timeline.js"
+      ],
+      "type": "module"
+    },
+    "src/workflow/index.ts": {
+      "exports": [
+        "Ingest"
+      ],
+      "imports": [
+        "effect",
+        "../ingest/workflow.js",
+        "../store/index.js"
+      ],
+      "type": "module"
+    },
+    "src/chunkers/recursive.ts": {
+      "exports": [
+        "chunkText"
+      ],
+      "imports": [
+        "../segmenter.js"
+      ],
+      "type": "module"
+    },
+    "src/chunkers/smart.ts": {
+      "exports": [
+        "scanBreakPoints",
+        "findCodeFences",
+        "isInsideCodeFence",
+        "findBestCutoff",
+        "mergeBreakPoints",
+        "chunkDocumentWithBreakPoints",
+        "CHUNK_SIZE_TOKENS",
+        "CHUNK_OVERLAP_TOKENS",
+        "CHUNK_SIZE_CHARS",
+        "CHUNK_OVERLAP_CHARS",
+        "CHUNK_WINDOW_TOKENS",
+        "CHUNK_WINDOW_CHARS",
+        "STRONG_SIGNAL_MIN_SCORE",
+        "STRONG_SIGNAL_MIN_GAP",
+        "RERANK_CANDIDATE_LIMIT"
+      ],
+      "imports": [],
+      "type": "module"
+    },
+    "src/store/UnsafeSql.ts": {
+      "exports": [
+        "UnsafeSql"
+      ],
+      "imports": [
+        "drizzle-orm",
+        "effect",
+        "effect/unstable/sql",
+        "./SqlBuilder.js"
+      ],
+      "type": "module"
+    },
+    "src/store/test.ts": {
+      "exports": [],
+      "imports": [
+        "effect",
+        "effect/Cause",
+        "effect/unstable/schema/VariantSchema",
+        "./page.js"
+      ],
+      "type": "module"
+    },
+    "src/store/SqlBuilder.ts": {
+      "exports": [
+        "listPages",
+        "resolveSlugExact",
+        "resolveSlugFuzzy",
+        "getTimeline",
+        "getRawData",
+        "searchKeyword",
+        "searchVectorRows",
+        "getPageBySlug",
+        "deletePageBySlug",
+        "getPageIdBySlug",
+        "getTagsBySlug",
+        "getPageForVersionBySlug",
+        "insertPageVersion",
+        "getVersionsBySlug",
+        "revertToVersionBySlug",
+        "upsertPage",
+        "insertTag",
+        "deleteTag",
+        "getPageBasicBySlug",
+        "deleteContentChunksNotIn",
+        "deleteFtsChunksNotIn",
+        "upsertContentChunk",
+        "deleteFtsByPageId",
+        "insertFtsChunks",
+        "deleteContentChunksByPageId",
+        "insertLink",
+        "deleteLink",
+        "getOutgoingLinksBySlug",
+        "getBacklinksBySlug",
+        "getLinksOutgoingBySlug",
+        "insertTimelineEntry",
+        "insertTimelineEntryReturningId",
+        "upsertRawData",
+        "upsertFile",
+        "getFileByStoragePath",
+        "getConfigByKey",
+        "upsertConfig",
+        "insertIngestLog",
+        "getIngestLog",
+        "updateSlug",
+        "getValidAccessTokenByHash",
+        "updateAccessTokenLastUsedAt",
+        "insertMcpRequestLog",
+        "markChunksEmbeddedByIds",
+        "getStaleChunks",
+        "getChunksBySlug",
+        "countPages",
+        "countLinks",
+        "countTimelineEntries",
+        "countTags",
+        "countChunksFts",
+        "countDistinctTags",
+        "getPageTypeCounts",
+        "countStalePages",
+        "countOrphanPages",
+        "countDeadLinks",
+        "countPagesWithTimeline",
+        "countEntities",
+        "countEntitiesWithLinks",
+        "countEntitiesWithTimeline",
+        "getMostConnectedPages",
+        "SqlBuilder"
+      ],
+      "imports": [
+        "drizzle-orm",
+        "drizzle-orm/sqlite-core",
+        "effect/Struct",
+        "../types.js",
+        "./fts5.js",
+        "./schema.js",
+        "./UnsafeSql.js"
+      ],
+      "type": "module"
+    },
+    "src/store/schema.ts": {
+      "exports": [
+        "LATEST_VERSION",
+        "pages",
+        "pagesRelations",
+        "content_chunks",
+        "chunks_fts",
+        "links",
+        "tags",
+        "tagsRelations",
+        "raw_data",
+        "timeline_entries",
+        "page_versions",
+        "ingest_log",
+        "config",
+        "access_tokens",
+        "mcp_request_log",
+        "files",
+        "Schemas"
+      ],
+      "imports": [
+        "drizzle-orm",
+        "drizzle-orm/sqlite-core",
+        "../types.js",
+        "./relations.js"
+      ],
+      "type": "module"
+    },
+    "src/store/relations.ts": {
+      "exports": [
+        "content_chunksRelations",
+        "pagesRelations",
+        "filesRelations",
+        "linksRelations",
+        "page_versionsRelations",
+        "raw_dataRelations",
+        "tagsRelations",
+        "timeline_entriesRelations"
+      ],
+      "imports": [
+        "drizzle-orm/relations",
+        "./schema.js"
+      ],
+      "type": "module"
+    },
+    "src/store/page.ts": {
+      "exports": [
+        "makeRepository",
+        "PageService"
+      ],
+      "imports": [
+        "@effect/sql-sqlite-bun",
+        "effect",
+        "effect/unstable/schema",
+        "effect/unstable/sql",
+        "./effect-schema",
+        "./init.sql"
+      ],
+      "type": "module"
+    },
+    "src/store/Mappers.ts": {
+      "exports": [
+        "Mappers"
+      ],
+      "imports": [
+        "@yuyi919/tslibs-effect/effect-next",
+        "effect",
+        "effect/unstable/sql/SqlClient",
+        "../libs/effect-drizzle/sqlite.js",
+        "./SqlBuilder.js",
+        "./schema.js"
+      ],
+      "type": "module"
+    },
+    "src/store/llama-embedder.ts": {
+      "exports": [
+        "LlamaEmbeddingProvider"
+      ],
+      "imports": [
+        "node:fs",
+        "node:path",
+        "@effect/sql-sqlite-bun",
+        "@yuyi919/tslibs-effect",
+        "@yuyi919/tslibs-effect/effect-next",
+        "@yuyi919/tslibs-effect/FsUtils",
+        "effect/unstable/persistence",
+        "node-llama-cpp",
+        "./interface.js"
+      ],
+      "type": "module"
+    },
+    "src/store/libsql.ts": {
+      "exports": [
+        "LibSQLStore"
+      ],
+      "imports": [
+        "bun:sqlite",
+        "node:fs",
+        "node:path",
+        "@mastra/libsql",
+        "@yuyi919/tslibs-effect/effect-next",
+        "drizzle-orm/bun-sqlite",
+        "effect",
+        "../types.js",
+        "./BrainStore.js",
+        "./effect-schema.js",
+        "./interface.js",
+        "./libsql-store.js",
+        "./SqlBuilder.js",
+        "./schema.js"
+      ],
+      "type": "module"
+    },
+    "src/store/libsql-store.ts": {
+      "exports": [
+        "makeLayer",
+        "make"
+      ],
+      "imports": [
+        "@effect/sql-sqlite-bun",
+        "@yuyi919/tslibs-effect/effect-next",
+        "effect/unstable/sql",
+        "../segmenter.js",
+        "../types.js",
+        "./BrainStore.js",
+        "./BrainStoreError.js",
+        "./effect-schema.js",
+        "./init.sql",
+        "./Mappers.js",
+        "./schema.js"
+      ],
+      "type": "module"
+    },
+    "src/store/interface.ts": {
+      "exports": [],
+      "imports": [
+        "effect",
+        "../types.js",
+        "./BrainStore.js"
+      ],
+      "type": "module"
+    },
+    "src/store/init.sql.d.ts": {
+      "exports": [
+        "default"
+      ],
+      "imports": [],
+      "type": "type-def"
+    },
+    "src/store/index.ts": {
+      "exports": [
+        "createDefaultStore",
+        "createDefaultEmbedder",
+        "BrainStoreProvider"
+      ],
+      "imports": [
+        "effect",
+        "effect/unstable/ai",
+        "node-llama-cpp",
+        "./interface.js",
+        "./libsql.js",
+        "./llama-embedder.js"
+      ],
+      "type": "module"
+    },
+    "src/store/fts5.ts": {
+      "exports": [
+        "sanitizeFTS5Term",
+        "buildFTS5Query"
+      ],
+      "imports": [],
+      "type": "module"
+    },
+    "src/store/effect-schema.ts": {
+      "exports": [
+        "PageType",
+        "PartialPage",
+        "GraphNode",
+        "PageVersion",
+        "Page"
+      ],
+      "imports": [
+        "effect",
+        "effect/unstable/schema"
+      ],
+      "type": "module"
+    },
+    "src/store/dummy-embedder.ts": {
+      "exports": [
+        "DummyEmbeddingProvider"
+      ],
+      "imports": [
+        "./interface.js"
+      ],
+      "type": "module"
+    },
+    "src/store/BrainStoreError.ts": {
+      "exports": [
+        "StoreErrorReason",
+        "StoreError"
+      ],
+      "imports": [
+        "@yuyi919/tslibs-effect",
+        "effect",
+        "effect/Predicate",
+        "effect/Schema",
+        "effect/unstable/sql"
+      ],
+      "type": "module"
+    },
+    "src/store/BrainStore.ts": {
+      "exports": [
+        "BrainStore"
+      ],
+      "imports": [
+        "@mastra/libsql",
+        "@yuyi919/tslibs-effect/effect-next",
+        "effect",
+        "effect/Schema",
+        "effect/unstable/sql",
+        "../types.js",
+        "./BrainStoreError.js"
+      ],
+      "type": "module"
+    },
+    "src/scripts/doctor.ts": {
+      "exports": [
+        "runDoctor"
+      ],
+      "imports": [
+        "../store/index.js",
+        "../store/interface.js"
+      ],
+      "type": "script"
+    },
+    "src/scripts/backlinks.ts": {
+      "exports": [
+        "checkBacklinks"
+      ],
+      "imports": [
+        "node:fs/promises",
+        "node:path",
+        "remark",
+        "unist-util-visit"
+      ],
+      "type": "script"
+    },
+    "src/scripts/import.ts": {
+      "exports": [
+        "bulkImport"
+      ],
+      "imports": [
+        "node:fs",
+        "node:fs/promises",
+        "node:os",
+        "node:path",
+        "../ingest/workflow.js",
+        "../store/interface.js",
+        "../store/index.js"
+      ],
+      "type": "script"
+    },
+    "src/scripts/embed.ts": {
+      "exports": [
+        "embedStale"
+      ],
+      "imports": [
+        "../store/index.js",
+        "../store/interface.js",
+        "../types.js"
+      ],
+      "type": "script"
+    },
+    "src/libs/effect-drizzle/example.ts": {
+      "exports": [],
+      "imports": [
+        "@effect/sql-sqlite-bun",
+        "drizzle-orm/sqlite-core",
+        "effect",
+        "effect/unstable/sql",
+        "./sqlite.js"
+      ],
+      "type": "module"
+    },
+    "src/libs/effect-drizzle/sqlite.ts": {
+      "exports": [
+        "make",
+        "DB"
+      ],
+      "imports": [
+        "drizzle-orm",
+        "drizzle-orm/query-builders/query-builder",
+        "drizzle-orm/query-promise",
+        "drizzle-orm/sqlite-core",
+        "drizzle-orm/sqlite-core/query-builders/count",
+        "drizzle-orm/sqlite-proxy",
+        "effect",
+        "effect/Context",
+        "effect/Effect",
+        "effect/Layer",
+        "effect/unstable/sql/SqlClient",
+        "effect/unstable/sql/SqlError",
+        "./internal/patch.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/timeline.ts": {
+      "exports": [
+        "createTimelineTool"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "zod",
+        "../store/interface.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/search.ts": {
+      "exports": [
+        "createSearchTool"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "zod",
+        "../search/hybrid.js",
+        "../store/interface.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/raw.ts": {
+      "exports": [
+        "createRawDataTools"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "zod",
+        "../store/interface.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/page.ts": {
+      "exports": [
+        "createPageTools"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "zod",
+        "../store/interface.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/list.ts": {
+      "exports": [
+        "createListPagesTool"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "typia",
+        "zod",
+        "../store/interface.js",
+        "../types.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/links.ts": {
+      "exports": [
+        "createLinksTools"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "zod",
+        "../store/interface.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/ingest.ts": {
+      "exports": [
+        "createIngestTool"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "zod",
+        "../ingest/workflow.js",
+        "../store/interface.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/import.ts": {
+      "exports": [
+        "createBulkImportTool"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "zod",
+        "../scripts/import.js",
+        "../store/interface.js"
+      ],
+      "type": "module"
+    },
+    "src/tools/config.ts": {
+      "exports": [
+        "createConfigTools"
+      ],
+      "imports": [
+        "@mastra/core/tools",
+        "zod",
+        "../store/interface.js"
+      ],
+      "type": "module"
+    },
+    "src/libs/effect-drizzle/internal/patch.ts": {
+      "exports": [
+        "patch",
+        "makeRemoteCallback"
+      ],
+      "imports": [
+        "drizzle-orm/query-promise",
+        "effect/Context",
+        "effect/Effect",
+        "effect/unstable/sql/SqlClient",
+        "effect/unstable/sql/SqlError"
+      ],
+      "type": "module"
+    },
+    "src/search/intent.ts": {
+      "exports": [
+        "classifyQueryIntent",
+        "intentToDetail",
+        "autoDetectDetail"
+      ],
+      "imports": [],
+      "type": "module"
+    },
+    "src/search/llama-reranker.ts": {
+      "exports": [
+        "LlamaReranker"
+      ],
+      "imports": [
+        "node-llama-cpp"
+      ],
+      "type": "module"
+    },
+    "src/search/rrf.ts": {
+      "exports": [
+        "rrfFusion"
+      ],
+      "imports": [
+        "@yuyi919/tslibs-effect/effect-next",
+        "../types.js"
+      ],
+      "type": "module"
+    },
+    "src/search/dedup.ts": {
+      "exports": [
+        "dedupResults"
+      ],
+      "imports": [
+        "../types.js"
+      ],
+      "type": "module"
+    },
+    "src/search/hybrid.ts": {
+      "exports": [
+        "hybridSearchEffect",
+        "hybridSearch",
+        "cosineSimilarity",
+        "applyBacklinkBoost"
+      ],
+      "imports": [
+        "@yuyi919/tslibs-effect/effect-next",
+        "effect",
+        "../store/BrainStore.js",
+        "../store/BrainStoreError.js",
+        "../store/interface.js",
+        "../types.js",
+        "./dedup.js",
+        "./intent.js",
+        "./rrf.js"
+      ],
+      "type": "module"
+    },
+    "package.json": {
+      "exports": [],
+      "imports": [],
+      "type": "config"
+    },
+    "tsconfig.json": {
+      "exports": [],
+      "imports": [],
+      "type": "config"
+    },
+    "tsconfig.type.json": {
+      "exports": [],
+      "imports": [],
+      "type": "config"
+    }
+  }
+}

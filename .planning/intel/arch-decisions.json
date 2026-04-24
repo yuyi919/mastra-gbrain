@@ -1,0 +1,83 @@
+{
+  "_meta": {
+    "updated_at": "2026-04-24T06:35:27.096Z",
+    "version": 1
+  },
+  "entries": {
+    "store-provider-boundary": {
+      "decision": "All higher layers depend on StoreProvider/EmbeddingProvider interfaces instead of direct SQL/ORM calls.",
+      "status": "active",
+      "rationale": "Keeps storage backend replaceable and contains SQL complexity inside src/store.",
+      "evidence_files": [
+        "src/store/interface.ts",
+        "src/tools/search.ts",
+        "src/tools/ingest.ts",
+        "src/ingest/workflow.ts"
+      ],
+      "implications": [
+        "Tools and workflows are DI-friendly.",
+        "Database changes are localized to store implementation files."
+      ]
+    },
+    "effect-v4-service-runtime": {
+      "decision": "Core storage runtime is modeled as Effect v4 services/layers and wrapped by LibSQLStore for Promise-based callers.",
+      "status": "active",
+      "rationale": "Allows typed effects internally while preserving ergonomic async APIs at integration boundaries.",
+      "evidence_files": [
+        "src/store/BrainStore.ts",
+        "src/store/libsql-store.ts",
+        "src/store/index.ts",
+        "src/store/libsql.ts"
+      ],
+      "implications": [
+        "Effect service composition is required for core data path changes.",
+        "External callers can still use async/await against StoreProvider."
+      ]
+    },
+    "workflow-first-ingestion": {
+      "decision": "Markdown ingestion is implemented as a four-step Mastra workflow: parse -> chunk -> embed -> persist.",
+      "status": "active",
+      "rationale": "Step isolation enables validation, idempotency checks, and reusability by both single-page and bulk import paths.",
+      "evidence_files": [
+        "src/ingest/workflow.ts",
+        "src/tools/ingest.ts",
+        "src/tools/import.ts",
+        "src/scripts/import.ts"
+      ],
+      "implications": [
+        "Ingestion behavior changes should be made in workflow steps, not duplicated in tools/scripts.",
+        "Bulk and single ingest share identical persistence semantics."
+      ]
+    },
+    "hybrid-search-ranking": {
+      "decision": "Search ranking combines keyword and vector retrieval with RRF fusion, cosine re-score, backlink boost, and multi-layer dedup.",
+      "status": "active",
+      "rationale": "Balances recall with precision while controlling duplicate chunks and preserving compiled_truth coverage.",
+      "evidence_files": [
+        "src/search/hybrid.ts",
+        "src/search/rrf.ts",
+        "src/search/dedup.ts",
+        "src/store/libsql-store.ts"
+      ],
+      "implications": [
+        "Ranking changes should preserve dedup + boost ordering invariants.",
+        "Store must supply keyword/vector/backlink and optional embedding lookup support."
+      ]
+    },
+    "local-first-sqlite-vector": {
+      "decision": "Primary persistence is local SQLite plus LibSQLVector index, with filesystem-backed DB URLs by default.",
+      "status": "active",
+      "rationale": "Supports offline/local-first operation while keeping vector search integrated with page/chunk metadata.",
+      "evidence_files": [
+        "src/store/libsql.ts",
+        "src/store/init.sql",
+        "src/store/schema.ts",
+        "src/store/index.ts"
+      ],
+      "implications": [
+        "Tests use isolated tmp DB paths and dispose lifecycles.",
+        "Vector metadata backfill remains required for consistent search result shape."
+      ]
+    }
+  }
+}

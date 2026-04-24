@@ -1,0 +1,34 @@
+{
+  "_meta": {
+    "updated_at": "2026-04-24T06:35:26.564Z",
+    "version": 1
+  },
+  "languages": [
+    "TypeScript",
+    "SQL",
+    "Markdown"
+  ],
+  "frameworks": [
+    "Mastra",
+    "Effect v4",
+    "Drizzle ORM",
+    "Zod"
+  ],
+  "tools": [
+    "Bun",
+    "pnpm",
+    "tsup",
+    "Biome",
+    "node-llama-cpp",
+    "drizzle-kit"
+  ],
+  "build_system": "pnpm scripts (build via tsup, dts via tsc)",
+  "test_framework": "Bun test",
+  "package_manager": "pnpm",
+  "content_formats": [
+    "Markdown (.md knowledge docs, references, and specs)",
+    "SQL (src/store/init.sql schema bootstrap)",
+    "JSON (package/config/intel artifacts)",
+    "TOML (.codex agent config)"
+  ]
+}
