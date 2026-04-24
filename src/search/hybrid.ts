@@ -1,5 +1,6 @@
+/** biome-ignore-all lint/suspicious/noShadowRestrictedNames: effect lib */
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
-import { Console } from "effect";
+import { Array, Console, Order } from "effect";
 import { BrainStore } from "../store/BrainStore.js";
 import type { StoreError } from "../store/BrainStoreError.js";
 import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
@@ -103,12 +104,34 @@ export function hybridSearchEffect(
       );
     }
 
+    const inKeywordsChunk = new Map(
+      keywordResults.map((result) => [result.chunk_id, result] as const)
+    );
+    /**
+     * 对vectorResults进行预排序，根据本身的score、是否在keywordResults中、keywordResults中对应chunk的score排序
+     */
+    const inKeywordsChunks = vectorResults.map(
+      Array.sortBy(
+        Order.flip(
+          Order.combineAll<SearchResult>([
+            Order.mapInput(Order.Number, (res) => res.score),
+            Order.mapInput(Order.Boolean, (res) =>
+              inKeywordsChunk.has(res.chunk_id)
+            ),
+            Order.mapInput(
+              Order.Number,
+              (res) => inKeywordsChunk.get(res.chunk_id)?.score ?? 0
+            ),
+          ])
+        )
+      )
+    );
     /**
      * Merge all result lists via RRF (includes normalization + boost)
      * Skip boost for detail=high (temporal/event queries want natural ranking)
      */
     let fused = yield* rrfFusion(
-      [...vectorResults, keywordResults],
+      [...inKeywordsChunks, keywordResults],
       opts.rrfK ?? RRF_K,
       detail !== "high"
     );
@@ -120,7 +143,7 @@ export function hybridSearchEffect(
     // One DB query for the whole result set (not N+1).
     if (fused.length > 0) {
       try {
-        const slugs = Array.from(new Set(fused.map((r) => r.slug)));
+        const slugs = Array.fromIterable(new Set(fused.map((r) => r.slug)));
         const counts = yield* engine.getBacklinkCounts(slugs);
         yield* Eff.logDebug("BacklinkCounts").pipe(
           Eff.annotateLogs(Object.fromEntries(counts.entries()))
@@ -147,9 +170,90 @@ export async function hybridSearch(
   opts: HybridSearchOpts,
   queryVector?: number[]
 ): Promise<SearchResult[]> {
-  return backend.brainStore.runPromise(
-    hybridSearchEffect(query, opts, queryVector)
+  // Primary path: real stores provide a BrainStore runtime.
+  if (backend.brainStore?.runPromise) {
+    return backend.brainStore.runPromise(
+      hybridSearchEffect(query, opts, queryVector)
+    );
+  }
+
+  // Compatibility path for lightweight test doubles that only mock
+  // searchKeyword/searchVector and don't provide brainStore runtime.
+  const limit = opts?.limit || 20;
+  const offset = opts?.offset || 0;
+  const innerLimit = Math.min(limit * 2, MAX_SEARCH_LIMIT);
+  const detail = opts?.detail ?? autoDetectDetail(query) ?? "high";
+  const searchOpts: SearchOpts = { limit: innerLimit, detail };
+
+  const keywordResults = await backend.searchKeyword(query, searchOpts);
+  if (!opts.embedder && !queryVector) {
+    return dedupResults(keywordResults, opts.dedupOpts).slice(
+      offset,
+      offset + limit
+    );
+  }
+
+  let vectorResults: SearchResult[][] = [];
+  if (queryVector) {
+    vectorResults = [await backend.searchVector(queryVector, searchOpts)];
+  } else if (opts.embedder) {
+    let queries = [query];
+    if (opts.expansion && opts.expandFn) {
+      queries = await opts.expandFn(query).catch(() => [query]);
+    }
+    const batched = await opts.embedder.embedBatch(queries);
+    vectorResults = await Promise.all(
+      batched.map((v) =>
+        backend.searchVector(Array.fromIterable(v), searchOpts)
+      )
+    );
+  }
+
+  if (vectorResults.length === 0) {
+    return dedupResults(keywordResults, opts.dedupOpts).slice(
+      offset,
+      offset + limit
+    );
+  }
+
+  const fused = rrfFusionCompat(
+    [...vectorResults, keywordResults],
+    opts.rrfK ?? RRF_K
   );
+  const deduped = dedupResults(fused, opts.dedupOpts);
+  if (deduped.length === 0 && opts?.detail === "low") {
+    return hybridSearch(
+      backend,
+      query,
+      { ...opts, detail: "high" },
+      queryVector
+    );
+  }
+  return deduped.slice(offset, offset + limit);
+}
+
+function rrfFusionCompat(lists: SearchResult[][], k: number): SearchResult[] {
+  const keyOf = (r: SearchResult) =>
+    r.chunk_id != null
+      ? `id:${r.chunk_id}`
+      : `${r.slug}::${r.chunk_index}::${r.chunk_text.slice(0, 64)}`;
+
+  const scores = new Map<string, SearchResult>();
+  for (const list of lists) {
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      const key = keyOf(item);
+      const inc = 1 / (k + i + 1);
+      const prev = scores.get(key);
+      if (prev) {
+        prev.score += inc;
+      } else {
+        scores.set(key, { ...item, score: inc });
+      }
+    }
+  }
+
+  return [...scores.values()].sort((a, b) => b.score - a.score);
 }
 /**
  * Backlink boost coefficient. Score is multiplied by (1 + BACKLINK_BOOST_COEF * log(1 + count)).

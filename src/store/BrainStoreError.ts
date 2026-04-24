@@ -27,12 +27,12 @@ export class StoreError extends Schema.TaggedClass<StoreError>()(
   static failed(reason: StoreErrorReason) {
     return Effect.fail(StoreError.from(reason));
   }
-  static catch<T, E = never>(
-    effect: Effect.Effect<T, E>
+  static catch<T, E = never, R = never>(
+    effect: Effect.Effect<T, E, R>
   ): Effect.Effect<
     T,
     Exclude<E, Schema.SchemaError | SqlError.SqlError> | StoreError,
-    never
+    R
   > {
     return Effect.catchIf(effect, or(SqlError.isSqlError, isSchemaError), (e) =>
       StoreError.failed(e)

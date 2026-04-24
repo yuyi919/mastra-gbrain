@@ -102,6 +102,20 @@ export class LibSQLStore implements StoreProvider {
     return this.db.inTransaction;
   }
 
+  async runFlatten<A, E = never, E2 = never>(
+    fn: (
+      store: BrainStore.Service
+    ) => Effect.Effect<Effect.Effect<A, E2, BrainStore>, E, BrainStore>
+  ): Promise<A> {
+    return this.run(Effect.flow(fn, Effect.flatten));
+  }
+
+  async run<A, E = never>(
+    fn: (store: BrainStore.Service) => Effect.Effect<A, E, BrainStore>
+  ): Promise<A> {
+    return this.brainStore.runPromise(BrainStore.use(fn));
+  }
+
   async init() {
     if (this._inTransaction) return;
 
@@ -123,117 +137,53 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getPage(slug: string): Promise<Page | null> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getPage(slug);
-      })
-    );
+    return this.run((store) => store.getPage(slug));
   }
 
   async listPages(filters: PageFilters = {}): Promise<Page[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.listPages(filters);
-      })
-    );
+    return this.run((store) => store.listPages(filters));
   }
 
   async deletePage(slug: string): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.deletePage(slug);
-      })
-    );
+    return this.run((store) => store.deletePage(slug));
   }
 
   async getTags(slug: string): Promise<string[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getTags(slug);
-      })
-    );
+    return this.run((store) => store.getTags(slug));
   }
 
   async createVersion(slug: string): Promise<PageVersion> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        const effect = yield* store.createVersion(slug);
-        return yield* effect;
-      })
-    );
+    return this.runFlatten((store) => store.createVersion(slug));
   }
 
   async getVersions(slug: string): Promise<PageVersion[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getVersions(slug);
-      })
-    );
+    return this.run((store) => store.getVersions(slug));
   }
 
   async revertToVersion(slug: string, versionId: number): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.revertToVersion(slug, versionId);
-      })
-    );
+    return this.run((store) => store.revertToVersion(slug, versionId));
   }
 
   async putPage(slug: string, page: PageInput): Promise<Page> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        const effect = yield* store.putPage(slug, page);
-        return yield* effect;
-      })
-    );
+    return this.runFlatten((store) => store.putPage(slug, page));
   }
 
   async addTag(slug: string, tag: string): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        yield* store.addTag(slug, tag);
-      })
-    );
+    return this.run((store) => store.addTag(slug, tag));
   }
 
   async removeTag(slug: string, tag: string): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        yield* store.removeTag(slug, tag);
-      })
-    );
+    return this.run((store) => store.removeTag(slug, tag));
   }
 
   async upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        if (store.transaction) {
-          yield* store.transaction((tx) => tx.upsertChunks(slug, chunks));
-        } else {
-          yield* store.upsertChunks(slug, chunks);
-        }
-      })
+    return this.run((store) =>
+      store.transaction(store.upsertChunks(slug, chunks))
     );
   }
 
   async deleteChunks(slug: string): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        yield* store.deleteChunks(slug);
-      })
-    );
+    return this.run((store) => store.deleteChunks(slug));
   }
 
   // --- Links Management ---
@@ -243,21 +193,13 @@ export class LibSQLStore implements StoreProvider {
     linkType: string = "references",
     context: string = ""
   ): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        yield* store.addLink(fromSlug, toSlug, linkType, context);
-      })
+    return this.run((store) =>
+      store.addLink(fromSlug, toSlug, linkType, context)
     );
   }
 
   async removeLink(fromSlug: string, toSlug: string): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        yield* store.removeLink(fromSlug, toSlug);
-      })
-    );
+    return this.run((store) => store.removeLink(fromSlug, toSlug));
   }
 
   async getOutgoingLinks(slug: string): Promise<Link[]> {
@@ -272,21 +214,11 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getBacklinks(slug: string): Promise<Link[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getBacklinks(slug);
-      })
-    );
+    return this.run((store) => store.getBacklinks(slug));
   }
 
   async getLinks(slug: string): Promise<Link[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getLinks(slug);
-      })
-    );
+    return this.run((store) => store.getLinks(slug));
   }
 
   // --- Timeline Management ---
@@ -528,48 +460,23 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async markChunksEmbedded(chunkIds: number[]): Promise<void> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.markChunksEmbedded(chunkIds);
-      })
-    );
+    return this.run((store) => store.markChunksEmbedded(chunkIds));
   }
 
   async getStats(): Promise<BrainStats> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getStats();
-      })
-    );
+    return this.run((store) => store.getStats());
   }
 
   async getHealth(): Promise<BrainHealth> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getHealth();
-      })
-    );
+    return this.run((store) => store.getHealth());
   }
 
   async getHealthReport(): Promise<DatabaseHealth> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getHealthReport();
-      })
-    );
+    return this.run((store) => store.getHealthReport());
   }
 
   async getStaleChunks(): Promise<StaleChunk[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getStaleChunks();
-      })
-    );
+    return this.run((store) => store.getStaleChunks());
   }
 
   async transaction<T>(fn: (tx: StoreProvider) => Promise<T>): Promise<T> {
@@ -577,41 +484,29 @@ export class LibSQLStore implements StoreProvider {
     // causes SQLITE_BUSY_SNAPSHOT. Since we are migrating to BrainStore,
     // we just execute the callback without a wrapper transaction.
     // Individual operations like putPage are transaction-wrapped internally.
+    // return this.run((store) =>
+    //   store.transaction(Effect.promise(() => fn(this)))
+    // );
     return fn(this);
   }
 
   // Expose vector search and keyword search directly on the store
   async resolveSlugs(partial: string): Promise<string[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.resolveSlugs(partial);
-      })
-    );
+    return this.run((store) => store.resolveSlugs(partial));
   }
 
   async searchKeyword(
     query: string,
     opts?: SearchOpts
   ): Promise<SearchResult[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.searchKeyword(query, opts);
-      })
-    );
+    return this.run((store) => store.searchKeyword(query, opts));
   }
 
   async searchVector(
     queryVector: number[],
     opts?: SearchOpts & { slug?: string }
   ): Promise<SearchResult[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.searchVector(queryVector, opts);
-      })
-    );
+    return this.run((store) => store.searchVector(queryVector, opts));
   }
 
   async getEmbeddingsByChunkIds(
@@ -642,30 +537,15 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getChunks(slug: string): Promise<Chunk[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getChunks(slug);
-      })
-    );
+    return this.run((store) => store.getChunks(slug));
   }
 
   async getChunksWithEmbeddings(slug: string): Promise<Chunk[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.getChunksWithEmbeddings(slug);
-      })
-    );
+    return this.run((store) => store.getChunksWithEmbeddings(slug));
   }
 
   async traverseGraph(slug: string, depth: number = 5): Promise<GraphNode[]> {
-    return this.brainStore.runPromise(
-      Effect.gen(function* () {
-        const store = yield* BrainStore;
-        return yield* store.traverseGraph(slug, depth);
-      })
-    );
+    return this.run((store) => store.traverseGraph(slug, depth));
   }
 
   async upsertVectors(

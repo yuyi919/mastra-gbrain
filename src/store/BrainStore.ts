@@ -1,7 +1,9 @@
 import type { LibSQLVector } from "@mastra/libsql";
 import type * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Context } from "@yuyi919/tslibs-effect/effect-next";
+import type { Schema } from "effect";
 import type { SchemaError } from "effect/Schema";
+import type { SqlError } from "effect/unstable/sql";
 import type {
   AccessToken,
   BrainHealth,
@@ -164,9 +166,13 @@ export interface BrainStoreLifecycle {
   init(): EngineEffect<void>;
   dispose(): EngineEffect<void>;
   // Transaction
-  transaction?<T, E>(
-    fn: (tx: BrainStoreService) => Eff.Effect<T, E>
-  ): Eff.Effect<T, E>;
+  transaction<T, E = never, R extends BrainStore = BrainStore>(
+    fn: Eff.Effect<T, E, R>
+  ): Eff.Effect<
+    T,
+    StoreError | Exclude<E, SqlError.SqlError | Schema.SchemaError>,
+    R
+  >;
 }
 
 export interface EmbeddingService {

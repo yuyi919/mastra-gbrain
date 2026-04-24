@@ -205,7 +205,7 @@ export function searchKeyword(
   const dedupe = opts?.dedupe ?? false;
   const ftsQuery = drizzleDb
     .select({
-      row: sql`rowid`,
+      // row: sql`rowid`,
       page_id: table.chunks_fts.page_id,
       chunk_index: table.chunks_fts.chunk_index,
       score:
