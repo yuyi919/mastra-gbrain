@@ -114,13 +114,13 @@ export function hybridSearchEffect(
       Array.sortBy(
         Order.flip(
           Order.combineAll<SearchResult>([
-            Order.mapInput(Order.Number, (res) => res.score),
-            Order.mapInput(Order.Boolean, (res) =>
-              inKeywordsChunk.has(res.chunk_id)
+            Order.mapInput(Order.Number, (_) => _.score),
+            Order.mapInput(Order.Boolean, (_) =>
+              inKeywordsChunk.has(_.chunk_id)
             ),
             Order.mapInput(
               Order.Number,
-              (res) => inKeywordsChunk.get(res.chunk_id)?.score ?? 0
+              (_) => inKeywordsChunk.get(_.chunk_id)?.score ?? 0
             ),
           ])
         )

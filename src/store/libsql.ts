@@ -1,9 +1,7 @@
-import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { LibSQLVector } from "@mastra/libsql";
 import * as Effect from "@yuyi919/tslibs-effect/effect-next";
-import { type BunSQLiteDatabase, drizzle } from "drizzle-orm/bun-sqlite";
 import { ManagedRuntime } from "effect";
 import type {
   AccessToken,
@@ -32,71 +30,83 @@ import { BrainStore } from "./BrainStore.js";
 import type { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
 import { makeLayer as makeLibSQLStoreLayer } from "./libsql-store.js";
-import { Schemas } from "./schema.js";
 
 export interface LibSQLStoreOptions {
   url: string;
   vectorUrl?: string;
   authToken?: string;
   dimension?: number;
-  db?: Database;
+  // db?: Database;
   vectorStore?: LibSQLVector;
 }
 
 export class LibSQLStore implements StoreProvider {
-  public db: Database;
-  private drizzleDb: BunSQLiteDatabase<Schemas>;
-  public vectorStore: LibSQLVector;
+  /**
+   * @deprecated
+   */
+  public db: unknown = void 0;
+  public vectorStore!: LibSQLVector;
   public indexName = "gbrain_chunks";
   public readonly url: string;
   public readonly vectorUrl: string;
   public readonly authToken?: string;
   public readonly dimension: number;
-  public readonly brainStore: ManagedRuntime.ManagedRuntime<BrainStore, never>;
+  public _brainStore:
+    | ManagedRuntime.ManagedRuntime<BrainStore, never>
+    | undefined = undefined;
 
-  constructor(options: LibSQLStoreOptions) {
+  get brainStore() {
+    if (!this._brainStore) {
+      if (this.options.vectorStore) {
+        this.vectorStore = this.options.vectorStore;
+      } else {
+        const filename = this.url.replace(/^file:/, "");
+        if (
+          filename !== ":memory:" &&
+          filename !== "" &&
+          !isAbsolute(filename)
+        ) {
+          const dir = dirname(filename);
+          if (dir !== "." && dir !== "") {
+            mkdirSync(dir, { recursive: true });
+          }
+        }
+        this.vectorStore = new LibSQLVector({
+          id: "gbrain",
+          url: this.vectorUrl,
+          authToken: this.authToken,
+        });
+      }
+
+      const layer = makeLibSQLStoreLayer({
+        url: this.url,
+        vectorUrl: this.vectorUrl,
+        authToken: this.authToken,
+        dimension: this.dimension,
+        vectorStore: this.vectorStore,
+      });
+      this._brainStore = ManagedRuntime.make(layer);
+    }
+    return this._brainStore;
+  }
+
+  constructor(private options: LibSQLStoreOptions) {
     this.url = options.url;
     this.vectorUrl = options.vectorUrl ?? this.url.replace(".db", "-vector.db");
     this.authToken = options.authToken;
     this.dimension = options.dimension ?? 1536; // Default to OpenAI dimension
-
-    if (options.db && options.vectorStore) {
-      this.db = options.db;
-      this.vectorStore = options.vectorStore;
-    } else {
-      const filename = this.url.replace(/^file:/, "");
-      if (filename !== ":memory:" && filename !== "" && !isAbsolute(filename)) {
-        const dir = dirname(filename);
-        if (dir !== "." && dir !== "") {
-          mkdirSync(dir, { recursive: true });
-        }
-      }
-      this.db = new Database(filename);
-      this.vectorStore = new LibSQLVector({
-        id: "gbrain",
-        url: this.vectorUrl,
-        authToken: this.authToken,
-      });
-    }
-
-    // Initialize Drizzle ORM instance wrapping the Bun SQLite Database
-    this.drizzleDb = drizzle(this.db, {
-      // logger: true,
-      schema: Schemas,
-    });
-
-    const layer = makeLibSQLStoreLayer({
-      url: this.url,
-      vectorUrl: this.vectorUrl,
-      authToken: this.authToken,
-      dimension: this.dimension,
-      vectorStore: this.vectorStore,
-    });
-    this.brainStore = ManagedRuntime.make(layer);
   }
 
-  private get _inTransaction() {
-    return this.db.inTransaction;
+  exec(sql: string, ...params: unknown[]) {
+    return this.run((store) => store.run(sql, params));
+  }
+
+  get<A>(sql: string, ...params: unknown[]) {
+    return this.run((store) => store.get<A>(sql, params));
+  }
+
+  query<A>(sql: string, ...params: unknown[]) {
+    return this.run((store) => store.query<A>(sql, params));
   }
 
   async runFlatten<A, E = never, E2 = never>(
@@ -114,23 +124,7 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async init() {
-    if (this._inTransaction) return;
-
-    // Create tables
-    for (const sql of (
-      await import("./init.sql", { with: { type: "text" } })
-    ).default
-      .split(";\n")
-      .filter(Boolean)) {
-      this.drizzleDb.run(sql);
-    }
-
-    // Create vector index using LibSQLVector
-    await this.vectorStore.createIndex({
-      indexName: this.indexName,
-      dimension: this.dimension, // Use configured dimension
-      metric: "cosine",
-    });
+    await this.run((_) => _.init());
   }
 
   async getPage(slug: string): Promise<Page | null> {
@@ -299,16 +293,11 @@ export class LibSQLStore implements StoreProvider {
 
   // --- Lifecycle Management ---
   async dispose(): Promise<void> {
-    if (this.db) {
-      this.db.close();
-      // @ts-expect-error
-      await this.vectorStore.turso.close();
-      await Promise.resolve();
-    }
+    await this._brainStore?.dispose();
   }
 
   async cleanVector() {
-    await this.vectorStore.deleteIndex({ indexName: this.indexName });
+    await this.vectorStore?.deleteIndex({ indexName: this.indexName });
   }
 
   [Symbol.asyncDispose]() {
@@ -324,9 +313,9 @@ export class LibSQLStore implements StoreProvider {
     while (i++ < 100) {
       try {
         try {
-          await Bun.file(this.db.filename).unlink();
+          // await Bun.file(this.db.filename).unlink();
         } catch (error: any) {
-          if (error?.code !== "ENOENT") throw error;
+          // if (error?.code !== "ENOENT") throw error;
         }
         try {
           await Bun.file(this.vectorUrl.replace("file:", "")).unlink();

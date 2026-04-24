@@ -22,18 +22,21 @@ beforeAll(async () => {
   });
 
   // Insert two chunks manually without embeddings
-  const db = store.db;
-  const pageResult = db
-    .query("SELECT id FROM pages WHERE slug = ?")
-    .get("stale-slug") as { id: number };
+  const db = store;
+  const pageResult = await db.get<{ id: number }>(
+    "SELECT id FROM pages WHERE slug = ?",
+    "stale-slug"
+  );
   const pageId = pageResult.id;
 
-  db.query(`INSERT INTO content_chunks (page_id, chunk_index, chunk_text, chunk_source, token_count) 
-            VALUES (?, 0, 'First stale chunk', 'compiled_truth', 3)`).run(
+  db.exec(
+    `INSERT INTO content_chunks (page_id, chunk_index, chunk_text, chunk_source, token_count) 
+            VALUES (?, 0, 'First stale chunk', 'compiled_truth', 3)`,
     pageId
   );
-  db.query(`INSERT INTO content_chunks (page_id, chunk_index, chunk_text, chunk_source, token_count) 
-            VALUES (?, 1, 'Second stale chunk', 'compiled_truth', 3)`).run(
+  db.exec(
+    `INSERT INTO content_chunks (page_id, chunk_index, chunk_text, chunk_source, token_count) 
+            VALUES (?, 1, 'Second stale chunk', 'compiled_truth', 3)`,
     pageId
   );
 
@@ -53,10 +56,11 @@ test("embedStale processes un-embedded chunks", async () => {
   expect(processedCount).toBe(2);
 
   // Check if they were embedded by verifying embedded_at is not null
-  const db = store.db;
-  const chunks = db
-    .query("SELECT embedded_at FROM content_chunks WHERE chunk_text LIKE ?")
-    .all("%stale chunk%") as { embedded_at: string | null }[];
+  const db = store;
+  const chunks = await db.query<{ embedded_at: string | null }>(
+    "SELECT embedded_at FROM content_chunks WHERE chunk_text LIKE ?",
+    "%stale chunk%"
+  );
 
   expect(chunks.length).toBe(2);
   for (const chunk of chunks) {
