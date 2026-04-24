@@ -1,21 +1,20 @@
 ﻿# Project Roadmap
 
-## Milestone Progress
-- [x] Phase 1: Analysis & Preparation (archived in `.planning/milestones/v1.0-ROADMAP.md`)
-- [x] Phase 2: Replace Runtime (archived in `.planning/milestones/v1.0-ROADMAP.md`)
-- [x] Phase 3: Test & Fix (archived in `.planning/milestones/v1.0-ROADMAP.md`)
-- [x] Phase 4: Optimize & Advance (archived in `.planning/milestones/v1.0-ROADMAP.md`)
-- [ ] Phase 5: Route All Promise Methods in libstore.ts to Effect Core
+## Milestones
 
-## Phase 5: Route All Promise Methods in libstore.ts to Effect Core
+- [x] **v1.0 milestone** - Phases 1-8 (shipped 2026-04-24)
 
-**Goal:** Migrate remaining Promise-based methods in `src/store/libstore.ts` to Effect v4 architecture while preserving public behavior.
-**Requirements**
-- Keep `StoreProvider` abstraction boundaries unchanged.
-- Follow Effect v4 systematic guide and banned-pattern constraints.
-- Ensure related tests pass.
-**Depends on:** Phase 4
-**Plans:** 0 plans
+## Active Development
 
-Plans:
-- [ ] TBD (run /gsd-plan-phase 5 to break down)
+No active milestone has been planned yet.
+
+Pending carry-forward work:
+
+- Split BrainStore into layered Context services and `makeLayer` composition.
+- Narrow module dependencies so callers consume feature layers instead of the full BrainStore surface.
+
+## Reference
+
+- Historical roadmap: `.planning/milestones/v1.0-ROADMAP.md`
+- Historical requirements: `.planning/milestones/v1.0-REQUIREMENTS.md`
+- Milestone audit: `.planning/milestones/v1.0-MILESTONE-AUDIT.md`
