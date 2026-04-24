@@ -328,6 +328,55 @@ test("Files management", async () => {
   expect(file?.page_slug).toBe("page-a");
 });
 
+test("Access token verification and MCP request logging", async () => {
+  store.db.exec(`
+    INSERT OR REPLACE INTO access_tokens
+      (id, name, token_hash, scopes, created_at, revoked_at)
+    VALUES
+      ('token-active', 'active-token', 'hash-active', '["search","ingest"]', CURRENT_TIMESTAMP, NULL),
+      ('token-revoked', 'revoked-token', 'hash-revoked', '["search"]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `);
+
+  const active = await store.verifyAccessToken("hash-active");
+  expect(active).not.toBeNull();
+  expect(active?.name).toBe("active-token");
+  expect(active?.scopes).toEqual(["search", "ingest"]);
+
+  const lastUsedAt = store.db
+    .query(
+      "SELECT last_used_at FROM access_tokens WHERE token_hash = 'hash-active'"
+    )
+    .get() as { last_used_at: string | null };
+  expect(lastUsedAt.last_used_at).toBeTruthy();
+
+  const revoked = await store.verifyAccessToken("hash-revoked");
+  expect(revoked).toBeNull();
+
+  await store.logMcpRequest({
+    token_name: "active-token",
+    operation: "search",
+    latency_ms: 12,
+    status: "success",
+  });
+
+  const requestLog = store.db
+    .query(
+      "SELECT token_name, operation, latency_ms, status FROM mcp_request_log ORDER BY id DESC LIMIT 1"
+    )
+    .get() as {
+    token_name: string;
+    operation: string;
+    latency_ms: number;
+    status: string;
+  };
+  expect(requestLog).toEqual({
+    token_name: "active-token",
+    operation: "search",
+    latency_ms: 12,
+    status: "success",
+  });
+});
+
 test("Versions management", async () => {
   // Already has initial version from putPage
   const versionsBefore = await store.getVersions("page-a");
@@ -377,4 +426,78 @@ test("Stats and Health and Logs", async () => {
   const health = await store.getHealth();
   expect(health.page_count).toBe(stats.page_count);
   expect(health.brain_score).toBeGreaterThanOrEqual(0);
+});
+
+test("Maintenance helpers route through runtime-backed services", async () => {
+  await store.upsertChunks("page-b", [
+    {
+      chunk_index: 0,
+      chunk_text: "Page B stale chunk",
+      chunk_source: "compiled_truth",
+    },
+  ]);
+
+  const staleBefore = await store.getStaleChunks();
+  const staleChunk = staleBefore.find(
+    (chunk) => chunk.slug === "page-b" && chunk.chunk_index === 0
+  );
+  expect(staleChunk).toBeTruthy();
+
+  await store.markChunksEmbedded([staleChunk!.id]);
+
+  const staleAfter = await store.getStaleChunks();
+  expect(
+    staleAfter.some(
+      (chunk) => chunk.slug === "page-b" && chunk.chunk_index === 0
+    )
+  ).toBe(false);
+
+  const healthReport = await store.getHealthReport();
+  expect(healthReport.connectionOk).toBe(true);
+  expect(healthReport.tablesOk).toBe(true);
+  expect(healthReport.tableDetails.pages?.ok).toBe(true);
+
+  const originalUpsert = store.vectorStore.upsert.bind(store.vectorStore);
+  const calls: Array<{
+    ids: string[];
+    vectors: number[][];
+    metadata: Array<Record<string, unknown>>;
+  }> = [];
+  store.vectorStore.upsert = async (payload: any) => {
+    calls.push({
+      ids: payload.ids,
+      vectors: payload.vectors,
+      metadata: payload.metadata,
+    });
+    return undefined as never;
+  };
+
+  try {
+    await store.upsertVectors([
+      {
+        id: "page-b::9",
+        vector: new Array(1536).fill(0.25),
+        metadata: {
+          slug: "page-b",
+          chunk_index: 9,
+          title: "Page B Person",
+          type: "person",
+          page_id: 2,
+          chunk_source: "compiled_truth",
+          chunk_text: "vector payload",
+          token_count: 2,
+        },
+      },
+    ]);
+  } finally {
+    store.vectorStore.upsert = originalUpsert;
+  }
+
+  expect(calls).toHaveLength(1);
+  expect(calls[0].ids).toEqual(["page-b::9"]);
+  expect(calls[0].vectors).toHaveLength(1);
+  expect(calls[0].metadata[0]).toMatchObject({
+    slug: "page-b",
+    chunk_index: 9,
+  });
 });

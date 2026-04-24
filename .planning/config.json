@@ -31,10 +31,5 @@
     "enabled": true,
     "build_timeout": 600
   },
-  "preferences": {
-    "testing": "bun test",
-    "linting": "tsc --noEmit && biome check",
-    "strict_mode": true
-  },
   "response_language": "zh"
 }

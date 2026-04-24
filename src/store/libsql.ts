@@ -32,7 +32,6 @@ import { BrainStore } from "./BrainStore.js";
 import type { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
 import { makeLayer as makeLibSQLStoreLayer } from "./libsql-store.js";
-import { SqlBuilder } from "./SqlBuilder.js";
 import { Schemas } from "./schema.js";
 
 export interface LibSQLStoreOptions {
@@ -47,7 +46,6 @@ export interface LibSQLStoreOptions {
 export class LibSQLStore implements StoreProvider {
   public db: Database;
   private drizzleDb: BunSQLiteDatabase<Schemas>;
-  private mappers: SqlBuilder<"sync">;
   public vectorStore: LibSQLVector;
   public indexName = "gbrain_chunks";
   public readonly url: string;
@@ -86,7 +84,6 @@ export class LibSQLStore implements StoreProvider {
       // logger: true,
       schema: Schemas,
     });
-    this.mappers = new SqlBuilder(this.drizzleDb);
 
     const layer = makeLibSQLStoreLayer({
       url: this.url,
@@ -203,14 +200,16 @@ export class LibSQLStore implements StoreProvider {
   }
 
   async getOutgoingLinks(slug: string): Promise<Link[]> {
-    const result = await this.mappers.getOutgoingLinksBySlug(slug);
-
-    return result.map((r) => ({
-      from_slug: slug,
-      to_slug: r.to_slug,
-      link_type: r.link_type || "",
-      context: r.context || "",
-    }));
+    const links = await this.run((store) => store.getLinks(slug));
+    const unique = new Map<string, Link>();
+    for (const link of links) {
+      if (link.from_slug !== slug) continue;
+      unique.set(
+        `${link.from_slug}|${link.to_slug}|${link.link_type}|${link.context}`,
+        link
+      );
+    }
+    return [...unique.values()];
   }
 
   async getBacklinks(slug: string): Promise<Link[]> {
@@ -227,180 +226,75 @@ export class LibSQLStore implements StoreProvider {
     entry: TimelineInput,
     opts?: { skipExistenceCheck?: boolean }
   ): Promise<void> {
-    let page_id: number;
-    if (opts?.skipExistenceCheck) {
-      // In a real implementation we might just do a sub-select directly on insert.
-      // But Drizzle doesn't easily support INSERT ... SELECT returning id for sqlite in a clean way without raw SQL sometimes.
-      const pageResult = await this.mappers.getPageIdBySlug(slug);
-      if (pageResult.length === 0) return;
-      page_id = pageResult[0].id;
-    } else {
-      const pageResult = await this.mappers.getPageIdBySlug(slug);
-      if (pageResult.length === 0)
-        throw new Error(`addTimelineEntry failed: page "${slug}" not found`);
-      page_id = pageResult[0].id;
-    }
-
-    await this.mappers.insertTimelineEntry(page_id, entry);
+    return this.run((store) => store.addTimelineEntry(slug, entry, opts));
   }
 
   async addTimelineEntriesBatch(
     entries: TimelineBatchInput[]
   ): Promise<number> {
-    if (entries.length === 0) return 0;
-    let count = 0;
-    for (const entry of entries) {
-      const pageResult = await this.mappers.getPageIdBySlug(entry.slug);
-      if (pageResult.length === 0) continue;
-
-      const res = await this.mappers.insertTimelineEntryReturningId(
-        pageResult[0].id,
-        entry
-      );
-
-      if (res.length > 0) count++;
-    }
-    return count;
+    return this.run((store) => store.addTimelineEntriesBatch(entries));
   }
 
   async getTimeline(
     slug: string,
     opts?: TimelineOpts
   ): Promise<TimelineEntry[]> {
-    const result = await this.mappers.getTimeline(slug, opts).execute();
-    return result.map((r) => ({
-      ...r,
-      created_at: new Date(r.created_at),
-    }));
+    return this.run((store) => store.getTimeline(slug, opts));
   }
 
   // --- Raw Data Management ---
   async putRawData(slug: string, source: string, data: any): Promise<void> {
-    const pageResult = await this.mappers.getPageIdBySlug(slug);
-    if (pageResult.length === 0) return;
-
-    await this.mappers.upsertRawData(
-      pageResult[0].id,
-      source,
-      JSON.stringify(data)
-    );
+    return this.run((store) => store.putRawData(slug, source, data));
   }
 
   async getRawData(slug: string, source?: string): Promise<RawData[]> {
-    const result = await this.mappers.getRawData(slug, source).execute();
-
-    return result.map((r) => ({
-      source: r.source,
-      data:
-        typeof r.data === "string"
-          ? JSON.parse(r.data)
-          : (r.data as Record<string, unknown>),
-      fetched_at: new Date(r.fetched_at),
-    }));
+    return this.run((store) => store.getRawData(slug, source));
   }
 
   // --- Files Management ---
   async upsertFile(
     file: Omit<FileRecord, "id" | "page_id" | "created_at">
   ): Promise<void> {
-    let page_id = null;
-    if (file.page_slug) {
-      const pageResult = await this.mappers.getPageIdBySlug(file.page_slug);
-      if (pageResult.length === 0) return;
-      page_id = pageResult[0].id;
-    }
-
-    await this.mappers.upsertFile({
-      page_id,
-      filename: file.filename,
-      storage_path: file.storage_path,
-      mime_type: file.mime_type ?? null,
-      size_bytes: file.size_bytes ?? null,
-      content_hash: file.content_hash,
-      metadata: JSON.stringify(file.metadata),
-    });
+    return this.run((store) => store.upsertFile(file));
   }
 
   async getFile(storagePath: string): Promise<FileRecord | null> {
-    const result = await this.mappers.getFileByStoragePath(storagePath);
-
-    if (result.length === 0) return null;
-    return {
-      ...result[0],
-      page_slug: result[0].page_slug ?? undefined,
-      mime_type: result[0].mime_type ?? undefined,
-      size_bytes: result[0].size_bytes ?? undefined,
-      metadata:
-        typeof result[0].metadata === "string"
-          ? JSON.parse(result[0].metadata)
-          : result[0].metadata,
-      page_id: result[0].page_id ?? undefined,
-    };
+    return this.run((store) => store.getFile(storagePath));
   }
 
   // --- Config & Logs Management ---
   async getConfig(key: string): Promise<string | null> {
-    const result = await this.mappers.getConfigByKey(key);
-    return result?.value ?? null;
+    return this.run((store) => store.getConfig(key));
   }
 
   async setConfig(key: string, value: string): Promise<void> {
-    await this.mappers.upsertConfig(key, value);
+    return this.run((store) => store.setConfig(key, value));
   }
 
   async logIngest(log: IngestLogInput): Promise<void> {
-    await this.mappers.insertIngestLog(log);
+    return this.run((store) => store.logIngest(log));
   }
 
   async getIngestLog(opts?: { limit?: number }): Promise<IngestLogEntry[]> {
-    const limit = opts?.limit ?? 50;
-    const result = await this.mappers.getIngestLog(limit);
-
-    return result.map((r) => ({
-      ...r,
-      pages_updated:
-        typeof r.pages_updated === "string"
-          ? JSON.parse(r.pages_updated)
-          : r.pages_updated,
-      created_at: new Date(r.created_at),
-    }));
+    return this.run((store) => store.getIngestLog(opts));
   }
 
   async updateSlug(oldSlug: string, newSlug: string): Promise<void> {
-    await this.mappers.updateSlug(oldSlug, newSlug);
+    return this.run((store) => store.updateSlug(oldSlug, newSlug));
   }
 
   async rewriteLinks(oldSlug: string, newSlug: string): Promise<void> {
-    // SQLite doesn't strictly need to rewrite foreign keys because they use page_id.
-    // But text compiled_truth might contain [[oldSlug]] which could be updated,
-    // though postgres-engine.ts stubs this out and says it's done by maintain skill.
-    // We will just stub it like postgres-engine.ts.
+    return this.run((store) => store.rewriteLinks(oldSlug, newSlug));
   }
 
   async verifyAccessToken(tokenHash: string): Promise<AccessToken | null> {
-    const result = await this.mappers.getValidAccessTokenByHash(tokenHash);
-
-    if (result.length === 0) return null;
-
-    // Update last_used_at
-    await this.mappers.updateAccessTokenLastUsedAt(result[0].id);
-
-    return {
-      ...result[0],
-      created_at: result[0].created_at ?? undefined,
-      last_used_at: result[0].last_used_at ?? undefined,
-      revoked_at: result[0].revoked_at ?? undefined,
-      scopes:
-        typeof result[0].scopes === "string"
-          ? JSON.parse(result[0].scopes)
-          : result[0].scopes || [],
-    };
+    return this.run((store) => store.verifyAccessToken(tokenHash));
   }
 
   async logMcpRequest(
     log: Omit<McpRequestLog, "id" | "created_at">
   ): Promise<void> {
-    await this.mappers.insertMcpRequestLog(log);
+    return this.run((store) => store.logMcpRequest(log));
   }
 
   // --- Lifecycle Management ---
@@ -512,28 +406,7 @@ export class LibSQLStore implements StoreProvider {
   async getEmbeddingsByChunkIds(
     ids: number[]
   ): Promise<Map<number, Float32Array>> {
-    if (ids.length === 0) return new Map();
-    // Since LibSQLVector abstracts embeddings and we don't store raw vectors in SQLite,
-    // we would need to query LibSQLVector. However, LibSQLVector doesn't have a direct "get by ID"
-    // method for multiple IDs returning vectors natively without a workaround or extending the wrapper.
-    // If the vector store is on Turso, we might be able to query it if it's the same DB.
-    // Assuming vectorStore is not easily queryable for raw vectors here without modifying LibSQLVector,
-    // we'll return an empty map for now.
-    // Alternatively, if LibSQLStore options.db has the vector data (e.g. vector_store table):
-    const result = new Map<number, Float32Array>();
-    try {
-      const rows = this.mappers.unsafe.queryVectorStoreByIds(ids);
-      for (const row of rows) {
-        const idStr = row.id as string;
-        // id format is slug::chunk_index, but this function takes chunk_ids...
-        // Wait, in postgres, content_chunks has an id column.
-        // Here, content_chunks has an id column, but the vector id is `${slug}::${chunk_index}`.
-        // We need to join content_chunks to get the slug and chunk_index.
-      }
-    } catch (e) {
-      // Ignore if vector_store table doesn't exist locally
-    }
-    return result;
+    return this.run((store) => store.getEmbeddingsByChunkIds(ids));
   }
 
   async getChunks(slug: string): Promise<Chunk[]> {
@@ -551,13 +424,6 @@ export class LibSQLStore implements StoreProvider {
   async upsertVectors(
     vectors: { id: string; vector: number[]; metadata: VectorMetadata }[]
   ): Promise<void> {
-    if (vectors.length === 0) return;
-    // LibSQLVector internally expects number[] array of arrays (in this specific mastra version)
-    await this.vectorStore.upsert({
-      indexName: this.indexName,
-      vectors: vectors.map((_) => _.vector),
-      ids: vectors.map((_) => _.id),
-      metadata: vectors.map((_) => _.metadata),
-    });
+    return this.run((store) => store.upsertVectors(vectors));
   }
 }
