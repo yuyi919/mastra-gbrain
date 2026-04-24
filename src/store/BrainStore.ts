@@ -164,7 +164,7 @@ export interface ExtService {
 }
 export interface BrainStoreLifecycle {
   init(): EngineEffect<void>;
-  dispose(): EngineEffect<void>;
+  dispose(): Eff.Effect<void>;
   // Transaction
   transaction<T, E = never, R extends BrainStore = BrainStore>(
     fn: Eff.Effect<T, E, R>
@@ -181,13 +181,20 @@ export interface EmbeddingService {
   readonly dimension: number;
 }
 
+export interface UnsafeDBService {
+  query<T>(text: string, params?: ReadonlyArray<unknown>): EngineEffect<T[]>;
+  get<T>(text: string, params?: ReadonlyArray<unknown>): EngineEffect<T>;
+  run(text: string, params?: ReadonlyArray<unknown>): EngineEffect<void>;
+}
+
 export interface BrainStoreService
   extends LinkService,
     IngestionStore,
     HybridSearchBackend,
     TimelineService,
     ExtService,
-    BrainStoreLifecycle {}
+    BrainStoreLifecycle,
+    UnsafeDBService {}
 
 export declare namespace BrainStore {
   export type Service = BrainStoreService;
@@ -197,6 +204,7 @@ export declare namespace BrainStore {
   export type Timeline = TimelineService;
   export type Ext = ExtService;
   export type Lifecycle = BrainStoreLifecycle;
+  export type UnsafeDB = UnsafeDBService;
   export type Options = {
     vectorUrl?: string;
     authToken?: string;

@@ -56,6 +56,30 @@ function parseJsonStringArray(value: unknown): string[] {
   return Array.isArray(value) ? (value as string[]) : [];
 }
 
+/**
+ * 获取可安全关闭的 Turso 客户端。
+ */
+function getClosableTursoClient(
+  value: BrainStore.Options["vectorStore"]
+): { close: () => Promise<void> | void } | undefined {
+  if (!value || typeof value !== "object" || !("turso" in value)) {
+    return undefined;
+  }
+
+  // @ts-expect-error 未公开
+  const turso = value.turso;
+  if (
+    turso &&
+    typeof turso === "object" &&
+    "close" in turso &&
+    typeof turso.close === "function"
+  ) {
+    return turso;
+  }
+
+  return undefined;
+}
+
 const makeStore = Eff.fn(function* (options: BrainStore.Options) {
   const mappers = yield* Mappers;
   const sql = yield* SqlClient.SqlClient;
@@ -64,9 +88,8 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
   const dimension = options.dimension ?? 1536;
 
   const deleteVectorsBySlug = Eff.fn(function* (slug: string) {
-    if (!vectorStore) return;
-    yield* Eff.promise(() =>
-      vectorStore.deleteVectors({
+    yield* Eff.from(() =>
+      vectorStore?.deleteVectors({
         indexName,
         filter: { slug: { $eq: slug } },
       })
@@ -83,7 +106,6 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     queryVector: number[],
     opts?: SearchOpts & { slug?: string }
   ) {
-    if (!vectorStore) return [];
     const limit = opts?.limit ?? 10;
     const filter: Record<string, any> = {};
     if (opts?.type) filter.type = { $eq: opts.type };
@@ -93,13 +115,14 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     } else if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
       filter.slug = { $nin: opts.exclude_slugs };
     }
-    return yield* Eff.promise(() =>
-      vectorStore.query({
-        indexName,
-        queryVector: Array.from(queryVector) as any,
-        topK: limit * 2,
-        filter: Object.keys(filter).length > 0 ? filter : undefined,
-      })
+    return yield* Eff.from(
+      () =>
+        vectorStore?.query({
+          indexName,
+          queryVector: Array.from(queryVector) as any,
+          topK: limit * 2,
+          filter: Object.keys(filter).length > 0 ? filter : undefined,
+        }) ?? []
     );
   });
 
@@ -822,27 +845,65 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       );
     }, catchStoreError),
   };
-
+  const inited = yield* Eff.Ref.make(false);
   const lifecycle: BrainStore.Lifecycle = {
-    init: Eff.fn("init")(function* () {
-      yield* sql.unsafe(init);
-      if (!vectorStore) return;
-      yield* Eff.promise(() =>
-        vectorStore.createIndex({
-          indexName,
-          dimension,
-          metric: "cosine",
-        })
-      );
-    }, catchStoreError),
+    init: Eff.fn("init")(
+      function* () {
+        if (yield* Eff.Ref.get(inited)) return;
+        yield* Eff.log("Initializing database...");
+        yield* Eff.forEach(init.split(";\n").filter(Boolean), (rawSQL) =>
+          sql.unsafe(rawSQL).raw.pipe(Eff.tapError(Eff.logError))
+        ).pipe(
+          Eff.zipRight(
+            Eff.from(() =>
+              vectorStore?.createIndex({
+                indexName,
+                dimension,
+                metric: "cosine",
+              })
+            ),
+            { concurrent: true }
+          )
+        );
+        yield* Eff.Ref.set(inited, true);
+      },
+      catchStoreError,
+      Eff.withLogElapsed("Initialized database")
+    ),
     dispose: Eff.fn("dispose")(function* () {
+      yield* Eff.logDebug("dispose");
+      yield* Eff.from(() => getClosableTursoClient(vectorStore)?.close());
       // 由 Layer/Runtime 管理生命周期，当前无需显式释放。
-    }, catchStoreError),
+    }, Eff.tapDefect(Eff.logError)),
     transaction: (operators) => {
       return sql.withTransaction(operators).pipe(catchStoreError);
     },
   };
-
+  const unsafe: BrainStore.UnsafeDB = {
+    query: (text, params) =>
+      sql
+        .unsafe(text, params)
+        .unprepared.pipe(
+          Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
+          catchStoreError,
+          Eff.unsafeCoerce<any, any>
+        ),
+    get: (text, params) =>
+      sql.unsafe(text, params).unprepared.pipe(
+        Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
+        catchStoreError,
+        Eff.map((_) => _[0]),
+        Eff.unsafeCoerce<any, any>
+      ),
+    run: (text, params) =>
+      sql
+        .unsafe(text, params)
+        .raw.pipe(
+          Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
+          catchStoreError,
+          Eff.unsafeCoerce<any, any>
+        ),
+  };
   const store: BrainStore.Service = {
     ...hybridSearch,
     ...link,
@@ -850,13 +911,15 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     ...timeline,
     ...ext,
     ...lifecycle,
+    ...unsafe,
   };
-  return store;
-});
 
-export function makeLayer(
-  options: { url: string; db?: any } & BrainStore.Options
-) {
+  return yield* Eff.acquireRelease(Eff.succeed(store), (store) =>
+    store.dispose()
+  );
+}, Eff.withLogElapsed("make BrainStore"));
+
+export function makeLayer(options: { url: string } & BrainStore.Options) {
   const filename = options.url.replace(/^file:/, "");
   const SqlLive = SqliteClient.layer({ filename });
   const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
@@ -864,11 +927,8 @@ export function makeLayer(
   const BrainStoreLayer = Layer.effect(BrainStore, makeStore(options)).pipe(
     Layer.provide(DatabaseLive)
   );
-  return Layer.mergeAll(
-    BrainStoreLayer,
-    DatabaseLive,
-    Eff.Logger.minimumLogLevel("Debug"),
-    Eff.Logger.pretty
+  return Layer.mergeAll(BrainStoreLayer, DatabaseLive).pipe(
+    Layer.provideMerge([Eff.Logger.minimumLogLevel("Debug"), Eff.Logger.pretty])
   );
 }
 

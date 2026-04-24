@@ -329,7 +329,7 @@ test("Files management", async () => {
 });
 
 test("Access token verification and MCP request logging", async () => {
-  store.db.exec(`
+  store.exec(`
     INSERT OR REPLACE INTO access_tokens
       (id, name, token_hash, scopes, created_at, revoked_at)
     VALUES
@@ -342,11 +342,9 @@ test("Access token verification and MCP request logging", async () => {
   expect(active?.name).toBe("active-token");
   expect(active?.scopes).toEqual(["search", "ingest"]);
 
-  const lastUsedAt = store.db
-    .query(
-      "SELECT last_used_at FROM access_tokens WHERE token_hash = 'hash-active'"
-    )
-    .get() as { last_used_at: string | null };
+  const lastUsedAt = await store.get<{ last_used_at: string | null }>(
+    "SELECT last_used_at FROM access_tokens WHERE token_hash = 'hash-active'"
+  );
   expect(lastUsedAt.last_used_at).toBeTruthy();
 
   const revoked = await store.verifyAccessToken("hash-revoked");
@@ -359,16 +357,14 @@ test("Access token verification and MCP request logging", async () => {
     status: "success",
   });
 
-  const requestLog = store.db
-    .query(
-      "SELECT token_name, operation, latency_ms, status FROM mcp_request_log ORDER BY id DESC LIMIT 1"
-    )
-    .get() as {
+  const requestLog = await store.get<{
     token_name: string;
     operation: string;
     latency_ms: number;
     status: string;
-  };
+  }>(
+    "SELECT token_name, operation, latency_ms, status FROM mcp_request_log ORDER BY id DESC LIMIT 1"
+  );
   expect(requestLog).toEqual({
     token_name: "active-token",
     operation: "search",

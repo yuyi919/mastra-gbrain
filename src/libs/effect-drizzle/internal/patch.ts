@@ -34,7 +34,12 @@ const Patch: Effect.YieldableClass<any, SqlError> = {
             new SqlError({
               reason: new UnknownError({
                 cause,
-                message: "Failed to execute QueryPromise",
+                message:
+                  "Failed to execute QueryPromise(" +
+                  (cause && typeof cause === "object" && "message" in cause
+                    ? cause.message
+                    : "Unknown Error") +
+                  ")",
               }),
             }),
         })
