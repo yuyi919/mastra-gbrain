@@ -10,12 +10,12 @@
 
 ## Phase 10: Audit LibSQLStore Consumers & Narrow Public Store Boundaries
 
-**Goal:** Consolidate the remaining BrainStore dependency-narrowing and provider/workflow follow-up work into one consumer-boundary refactor that audits every current `LibSQLStore` reference, narrows modules to the smallest stable store contract they need, and keeps `LibSQLStore` as a deliberate Promise facade rather than the default dependency for internal modules.
+**Goal:** Consolidate the remaining BrainStore dependency-narrowing and provider/workflow follow-up work into one consumer-boundary refactor that audits every current `LibSQLStore` reference, migrates internal modules toward direct Effect runtime / branch-service usage, and keeps `LibSQLStore` as a deliberate Promise facade for public and legacy boundaries only.
 
 **Requirements**
 - `P10-01` Inventory every current `LibSQLStore` import/constructor usage across `src/**` and `test/**`, classify each as public facade coverage, provider wiring, workflow/tool consumer, script utility, or replaceable internal dependency.
-- `P10-02` Replace broad `LibSQLStore`/`BrainStore` dependencies with capability-specific contracts wherever the caller does not need the full public Promise facade.
-- `P10-03` Stabilize the provider and ingestion workflow surface from Phase 09 UAT so workflow callers keep the intended `{ store, embedder }` boundary without learning internal branch services.
+- `P10-02` Replace internal broad `LibSQLStore`/`StoreProvider` dependencies with direct Effect runtime / branch-service usage wherever the caller is not a public or legacy Promise boundary.
+- `P10-03` Stabilize the provider and ingestion workflow surface from Phase 09 UAT so public workflow callers keep the intended `{ store, embedder }` boundary while internal workflow paths can run through branch services.
 - `P10-04` Keep public compatibility tests for `LibSQLStore` where they intentionally verify the facade, but convert internal or helper tests to branch/provider-level injection when that better proves the new seams.
 - `P10-05` Preserve all existing public `StoreProvider` and `LibSQLStore` behavior; do not widen the public API while narrowing consumers.
 
@@ -38,9 +38,9 @@ Plans:
 - [x] 10-02-PLAN.md - Narrow ingestion workflow/provider contract while preserving `{ store, embedder }`
 - [x] 10-03-PLAN.md - Introduce typed internal vector provider layer and rewire branch consumers
 - [ ] 10-04-PLAN.md - Move `getChunksWithEmbeddings` ownership into the content chunks branch
-- [ ] 10-05-PLAN.md - Narrow tool and hybrid search consumer contracts
-- [ ] 10-06-PLAN.md - Narrow script utility contracts and helper tests
-- [ ] 10-07-PLAN.md - Close public facade regressions and final boundary guards
+- [ ] 10-05-PLAN.md - Move hybrid search and internal tool paths to Effect runtime services
+- [ ] 10-06-PLAN.md - Move script/import internals to Effect runtime services while preserving CLI facades
+- [ ] 10-07-PLAN.md - Close public facade regressions and direct-Effect boundary guards
 
 ## Phase 9: Layer BrainStore Contexts & Tighten Store Boundaries
 

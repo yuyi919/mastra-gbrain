@@ -56,7 +56,7 @@
 
 **Analog:** `src/search/hybrid.ts`
 
-**Narrow Effect-first plus Promise compatibility pattern** (lines 37-45, 167-181):
+**Direct Effect-first plus Promise compatibility pattern** (lines 37-45, 167-181):
 ```typescript
 export function hybridSearchEffect(
   query: string,
@@ -82,7 +82,7 @@ export async function hybridSearch(
   }
 ```
 
-**Current workflow surface to narrow** (from `src/ingest/workflow.ts`, lines 17-24):
+**Current workflow surface to migrate** (from `src/ingest/workflow.ts`, lines 17-24):
 ```typescript
 export interface IngestionOptions {
   store: StoreProvider;
@@ -118,7 +118,7 @@ if (deps.store.transaction) {
 }
 ```
 
-**Copy target:** define `IngestionWorkflowStore` near this workflow, not in `StoreProvider`, using only `getPage`, `createVersion`, `putPage`, `getTags`, `addTag`, `removeTag`, `upsertChunks`, `deleteChunks`, `addTimelineEntriesBatch`, and optional `transaction<T>(fn: (tx: IngestionWorkflowStore) => Promise<T>)`.
+**Copy target:** keep the already-created `IngestionWorkflowStore` only as compatibility glue for public `{ store, embedder }` callers. New internal workflow paths should acquire Effect services from `brainStore.runPromise(...)` or a provided `ManagedRuntime` and execute against `ContentPages`, `ContentChunks`, `GraphTimeline`, and related branch contracts directly.
 
 ---
 
@@ -194,7 +194,7 @@ tools: {
 }
 ```
 
-**Copy target:** keep each tool factory structurally injectable. Replace `StoreProvider` with local or shared capability interfaces, but keep `createGBrainAgent` allowed to pass a full `LibSQLStore` structurally. Do not make tools import `BrainStoreTree`.
+**Copy target:** keep public tool factories structurally compatible with `LibSQLStore`, but make shared implementation helpers Effect-first where practical. Internal tool/search behavior should call branch services through the store runtime instead of creating more Promise-shaped capability interfaces. Do not make tools depend on raw SQL/vector internals.
 
 ---
 
@@ -260,7 +260,7 @@ const workflow = createIngestionWorkflow({
 });
 ```
 
-**Copy target:** create narrow script contracts such as `DoctorStore`, `EmbeddingMaintenanceStore`, and reuse `IngestionWorkflowStore` for import. Keep default factory fallback and disposal ownership exactly like `doctor.ts`.
+**Copy target:** keep script CLI/default factory fallback and disposal ownership, but move reusable script internals toward Effect branch services or provider services. Narrow Promise script contracts are acceptable only for exported CLI/helper compatibility and must delegate to the Effect path.
 
 ---
 
@@ -491,7 +491,7 @@ return Layer.effect(
 );
 ```
 
-**Copy target:** use `Pick<>` dependency contracts for narrow branch composition. For Promise fallback tests in `hybrid.ts`, introduce a narrow promise backend type instead of casting test doubles to `StoreProvider`.
+**Copy target:** use `Pick<>` dependency contracts for branch composition. For Promise fallback tests in `hybrid.ts`, prefer runtime-backed Effect execution; if a Promise fallback remains for legacy mocks, name it as compatibility glue and keep it out of the internal implementation model.
 
 ---
 

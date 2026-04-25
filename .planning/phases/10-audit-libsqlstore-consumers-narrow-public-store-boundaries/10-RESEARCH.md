@@ -4,6 +4,8 @@
 **Domain:** TypeScript store-boundary refactor, Effect v4 Context/Layer composition, Mastra ingestion/workflow dependency injection [VERIFIED: .planning/ROADMAP.md; VERIFIED: docs/effect/v4-systematic-guide.md; VERIFIED: src/ingest/workflow.ts]
 **Confidence:** HIGH for local consumer inventory and planning order, MEDIUM for external library state because this phase should follow local pinned dependencies rather than npm latest [VERIFIED: rg src test; VERIFIED: pnpm list; VERIFIED: npm registry]
 
+> Correction captured during execution: the original research leaned toward narrower Promise-shaped capability contracts. That direction is superseded by D-23/D-24 in `10-CONTEXT.md`. Use this document only with the correction applied: internal modules should prefer direct Effect runtime / branch-service usage; Promise wrappers are public or legacy compatibility glue.
+
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
@@ -19,15 +21,15 @@ Source for this entire section: [VERIFIED: .planning/phases/10-audit-libsqlstore
 - **D-03:** Preserve all existing `StoreProvider` and `LibSQLStore` behavior; public compatibility tests remain required evidence.
 
 ### Workflow And Provider Surface
-- **D-04:** Keep `createIngestionWorkflow` accepting `{ store, embedder }`.
-- **D-05:** Narrow the workflow's `store` type to the capabilities it actually uses: page lookup, version/page/tag/chunk writes, optional transaction, and timeline batch writes.
-- **D-06:** Do not make workflow callers import or understand internal `BrainStoreTree` branches. The workflow boundary remains dependency-injected and provider-friendly.
+- **D-04:** Keep public/legacy callers able to use `createIngestionWorkflow({ store, embedder })` through compatibility wiring.
+- **D-05:** Internal modules that currently use `LibSQLStore` should be migrated toward direct Effect runtime / branch-service usage instead of creating new Promise-shaped compatibility contracts.
+- **D-06:** Do not create unnecessary Promise compatibility layers merely to make a narrower facade. Promise APIs are acceptable at external/public boundaries; internal workflow/tool/script paths should prefer Effect services, Layers, and runtime-provided branch contracts.
 
 ### Consumer Capability Contracts
 - **D-07:** Inventory every current `LibSQLStore` import and constructor usage across `src/**` and `test/**` before implementation changes.
 - **D-08:** Classify each consumer as public facade coverage, provider wiring, workflow/tool consumer, script utility, or replaceable internal dependency.
-- **D-09:** Tool and script modules should accept narrower capability contracts where practical, while still allowing existing public wiring to pass a `LibSQLStore` / `StoreProvider` instance.
-- **D-10:** Use `src/search/hybrid.ts` as the model pattern: an Effect path can depend on a narrow branch contract while a Promise wrapper remains compatible with `StoreProvider`.
+- **D-09:** Replaceable internal dependencies should move to Effect runtime / branch-service consumption, not simply to narrower Promise interfaces.
+- **D-10:** Use `src/search/hybrid.ts` only as a partial model: its `BrainStoreSearch` Effect path is the desired direction; the Promise wrapper is compatibility glue.
 
 ### Vector And Embedding Ownership
 - **D-11:** Fold the pending vector-boundary todo into this phase.
@@ -38,7 +40,7 @@ Source for this entire section: [VERIFIED: .planning/phases/10-audit-libsqlstore
 ### Test Classification
 - **D-15:** Keep `test/libsql.test.ts` as public facade compatibility coverage.
 - **D-16:** Convert tests that only need workflow, branch, provider, or vector-helper behavior to narrower injection where that better proves the new boundary.
-- **D-17:** Do not convert true public compatibility tests away from `LibSQLStore`; the phase needs both public facade evidence and narrow-contract evidence.
+- **D-17:** Do not convert true public compatibility tests away from `LibSQLStore`; the phase needs both public facade evidence and direct Effect runtime / branch-service evidence.
 
 ### Effect v4 And Store Discipline
 - **D-18:** New or modified Effect store code must follow local Effect v4 rules: `Context.Service`, `Layer` composition, inferred accessor callbacks, and no v3 syntax.
@@ -66,8 +68,8 @@ None. Assumption analysis stayed within Phase 10 scope.
 | ID | Description | Research Support |
 |----|-------------|------------------|
 | P10-01 | Inventory every current `LibSQLStore` import/constructor usage across `src/**` and `test/**`, classify each as public facade coverage, provider wiring, workflow/tool consumer, script utility, or replaceable internal dependency. | Use the Consumer Inventory table and guard grep commands below as Wave 0 evidence. [VERIFIED: rg "LibSQLStore\|StoreProvider\|BrainStore\|vectorStore\|getChunksWithEmbeddings" src test] |
-| P10-02 | Replace broad `LibSQLStore`/`BrainStore` dependencies with capability-specific contracts wherever the caller does not need the full public Promise facade. | Use the Proposed Narrow Contracts table and migrate consumers in the safe order listed under Architecture Patterns. [VERIFIED: src/store/interface.ts; VERIFIED: src/ingest/workflow.ts; VERIFIED: src/tools/*.ts; VERIFIED: src/scripts/*.ts] |
-| P10-03 | Stabilize provider and ingestion workflow surface from Phase 09 UAT so workflow callers keep the intended `{ store, embedder }` boundary without learning internal branch services. | Keep `createIngestionWorkflow({ store, embedder })`, but narrow `store` to `IngestionWorkflowStore`. [VERIFIED: 10-CONTEXT.md; VERIFIED: src/ingest/workflow.ts; VERIFIED: src/workflow/index.ts] |
+| P10-02 | Replace internal broad `LibSQLStore`/`StoreProvider` dependencies with direct Effect runtime / branch-service usage wherever the caller is not a public or legacy Promise boundary. | Use the corrected Direct Effect Runtime Targets table and migrate consumers in the safe order listed under Architecture Patterns. [VERIFIED: src/store/interface.ts; VERIFIED: src/ingest/workflow.ts; VERIFIED: src/tools/*.ts; VERIFIED: src/scripts/*.ts] |
+| P10-03 | Stabilize provider and ingestion workflow surface from Phase 09 UAT so public workflow callers keep the intended `{ store, embedder }` boundary while internal workflow paths can run through branch services. | Keep compatibility wrapper shape, but do not treat a narrow Promise workflow store as the internal target model. [VERIFIED: 10-CONTEXT.md; VERIFIED: src/ingest/workflow.ts; VERIFIED: src/workflow/index.ts] |
 | P10-04 | Keep public compatibility tests for `LibSQLStore` where they intentionally verify facade, but convert internal/helper tests to branch/provider-level injection when better. | Use the Test Classification table and keep `test/libsql.test.ts` facade-focused. [VERIFIED: 10-CONTEXT.md; VERIFIED: test/libsql.test.ts; VERIFIED: test/ext.test.ts; VERIFIED: test/search/hybrid.test.ts] |
 | P10-05 | Preserve existing public `StoreProvider` and `LibSQLStore` behavior; do not widen public API. | Treat `src/store/interface.ts` and `src/store/libsql.ts` as compatibility surfaces and avoid adding methods to `StoreProvider` for internal needs. [VERIFIED: 10-CONTEXT.md; VERIFIED: src/store/interface.ts; VERIFIED: src/store/libsql.ts] |
 </phase_requirements>
@@ -85,13 +87,13 @@ None. Assumption analysis stayed within Phase 10 scope.
 
 ## Summary
 
-Phase 10 should be planned as an audit-first, compatibility-preserving boundary refactor. The current production `LibSQLStore` constructor usage is intentionally limited to public/provider wiring: `src/store/index.ts` creates default stores and `src/store/libsql.ts` implements the Promise facade. Current broad internal consumption is mostly through `StoreProvider` types in workflow, agent/tool factories, scripts, and test doubles rather than many production `new LibSQLStore(...)` calls. [VERIFIED: rg src test; VERIFIED: src/store/index.ts; VERIFIED: src/store/libsql.ts; VERIFIED: src/ingest/workflow.ts; VERIFIED: src/tools/*.ts; VERIFIED: src/scripts/*.ts]
+Phase 10 should be planned as an audit-first, compatibility-preserving boundary refactor. The current production `LibSQLStore` constructor usage is intentionally limited to public/provider wiring: `src/store/index.ts` creates default stores and `src/store/libsql.ts` implements the Promise facade. Current broad internal consumption is mostly through `StoreProvider` types in workflow, agent/tool factories, scripts, and test doubles rather than many production `new LibSQLStore(...)` calls. After the execution-time correction, these internal consumers should move toward Effect runtime / branch-service usage rather than smaller Promise mirrors. [VERIFIED: rg src test; VERIFIED: src/store/index.ts; VERIFIED: src/store/libsql.ts; VERIFIED: src/ingest/workflow.ts; VERIFIED: src/tools/*.ts; VERIFIED: src/scripts/*.ts]
 
-The highest-value first change is to narrow `createIngestionWorkflow` from `StoreProvider` to a local workflow contract while keeping the existing `{ store, embedder }` shape. The workflow actually calls `getPage`, `createVersion`, `putPage`, `getTags`, `addTag`, `removeTag`, `upsertChunks`, `deleteChunks`, `addTimelineEntriesBatch`, and optional `transaction`, so it does not need the full public facade, search, raw data, config, lifecycle, or unsafe DB surface. [VERIFIED: src/ingest/workflow.ts]
+The Plan 10-02 workflow narrowing is now considered compatibility glue only. It remains useful for public `{ store, embedder }` callers, but later plans must not generalize that pattern into more Promise-shaped contracts. The durable internal target is an Effect-returning workflow path that runs against branch services such as content pages, content chunks, graph timeline, and retrieval embedding. [VERIFIED: src/ingest/workflow.ts; VERIFIED: 10-CONTEXT.md D-23/D-24]
 
 The second structural change is vector/chunk ownership. `getChunksWithEmbeddings` currently remains on the transitional flat `BrainStore.Ingestion` interface and is implemented in `libsql-store.ts` by delegating to `tree.content.chunks.getChunks`, while raw `vectorStore` is passed through `libsql-store.ts` into retrieval, ops internal, lifecycle, and facade tests. Planning should move `getChunksWithEmbeddings` to the content chunks branch and introduce a typed internal vector provider/service before converting vector-coupled tests. [VERIFIED: src/store/BrainStore.ts; VERIFIED: src/store/libsql-store.ts; VERIFIED: src/store/brainstore/content/chunks/interface.ts; VERIFIED: src/store/brainstore/retrieval/embedding/factory.ts; VERIFIED: src/store/brainstore/ops/internal/interface.ts; VERIFIED: test/ext.test.ts]
 
-**Primary recommendation:** Plan four waves in this order: inventory freeze, workflow/provider contract narrowing, branch-owned chunk/vector provider cleanup, then tool/script/test contract migration with facade regression gates. [VERIFIED: 10-CONTEXT.md; VERIFIED: local consumer audit]
+**Primary recommendation:** Plan the remaining waves in this order: preserve inventory, complete branch-owned chunk/vector cleanup, move hybrid search/tool internals to Effect runtime where practical, migrate script/workflow internals away from Promise mirrors, then close with facade regression gates. [VERIFIED: 10-CONTEXT.md; VERIFIED: local consumer audit]
 
 ## Architectural Responsibility Map
 
@@ -99,9 +101,9 @@ The second structural change is vector/chunk ownership. `getChunksWithEmbeddings
 |------------|--------------|----------------|-----------|
 | Public `LibSQLStore` Promise facade | Store facade | Provider wiring | `LibSQLStore` implements `StoreProvider` and wraps `BrainStoreCompat` effects in promises. [VERIFIED: src/store/libsql.ts; VERIFIED: src/store/interface.ts] |
 | `BrainStoreProvider` default construction | Provider wiring | Store facade | `BrainStoreProvider.Default` constructs `{ store, embedder }` and initializes a `LibSQLStore`; public caller shape must remain stable. [VERIFIED: src/store/index.ts; VERIFIED: src/workflow/index.ts] |
-| Ingestion workflow dependency | Workflow layer | Store contracts | Workflow steps parse, chunk, embed, and persist through injected `{ store, embedder }`; the store contract can be narrower than `StoreProvider`. [VERIFIED: src/ingest/workflow.ts] |
-| Tool factories | Tool layer | Store contracts | Tool factories call small sets of Promise methods such as page, link, timeline, config, raw data, or search operations. [VERIFIED: src/tools/*.ts] |
-| Script utilities | Script layer | Store contracts | `doctor`, `embed`, and `import` accept optional stores but only need maintenance or workflow-specific method subsets. [VERIFIED: src/scripts/doctor.ts; VERIFIED: src/scripts/embed.ts; VERIFIED: src/scripts/import.ts] |
+| Ingestion workflow dependency | Workflow layer | Store runtime / branch services | Public workflow calls may pass `{ store, embedder }`, but internal workflow execution should prefer branch services instead of a smaller Promise mirror. [VERIFIED: src/ingest/workflow.ts; VERIFIED: 10-CONTEXT.md] |
+| Tool factories | Tool layer | Store runtime / public facade | Public tool factories remain facade-compatible; shared internal behavior, especially search, should run through Effect branch services where practical. [VERIFIED: src/tools/*.ts; VERIFIED: src/search/hybrid.ts] |
+| Script utilities | Script layer | Store runtime / public facade | `doctor`, `embed`, and `import` keep CLI Promise wrappers but should route reusable internals through runtime/branch services. [VERIFIED: src/scripts/doctor.ts; VERIFIED: src/scripts/embed.ts; VERIFIED: src/scripts/import.ts] |
 | Branch-owned chunk APIs | Store branch | Retrieval/vector provider | `ContentChunks` owns chunk/FTS rows today, while embedding/vector writes are delegated through an embedding port. [VERIFIED: src/store/brainstore/content/chunks/factory.ts] |
 | Vector operations | Internal provider/service | Retrieval, lifecycle, chunks | Query/upsert/delete/create/dispose operations currently fan out from raw `vectorStore`; this should become a typed internal service. [VERIFIED: src/store/libsql-store.ts; VERIFIED: src/store/brainstore/retrieval/embedding/factory.ts; VERIFIED: src/store/brainstore/ops/lifecycle/factory.ts] |
 
@@ -114,21 +116,21 @@ Graph note: `.planning/graphs/graph.json` exists but is stale by about 60 hours 
 | `src/store/libsql.ts` | Defines `LibSQLStore`, public `vectorStore`, `brainStore`, Promise methods, raw `exec/get/query`. | Public facade coverage | Keep facade behavior; do not remove public methods in this phase. [VERIFIED: src/store/libsql.ts; VERIFIED: 10-CONTEXT.md] |
 | `src/store/index.ts` | `createDefaultStore`, `BrainStoreProvider.Default`, `BrainStoreProvider.liveWith`. | Provider wiring | Keep default using `LibSQLStore`; narrow only internal types if possible. [VERIFIED: src/store/index.ts] |
 | `src/index.ts` | Calls `createDefaultStore` and `createDefaultEmbedder`. | Public/bootstrap wiring | Leave as public ergonomic bootstrap. [VERIFIED: src/index.ts] |
-| `src/workflow/index.ts` | Uses `BrainStoreProvider.use(({ store, embedder }) => createIngestionWorkflow({ store, embedder }))`. | Provider/workflow boundary | Keep caller shape; workflow store type should be narrow. [VERIFIED: src/workflow/index.ts] |
-| `src/ingest/workflow.ts` | Accepts `StoreProvider`; transaction callback also typed `StoreProvider`. | Replaceable internal dependency | Replace with `IngestionWorkflowStore` and transaction callback of the same narrow type. [VERIFIED: src/ingest/workflow.ts] |
+| `src/workflow/index.ts` | Uses `BrainStoreProvider.use(({ store, embedder }) => createIngestionWorkflow({ store, embedder }))`. | Provider/workflow boundary | Keep public caller shape; allow internal workflow helpers to run through branch services when added. [VERIFIED: src/workflow/index.ts] |
+| `src/ingest/workflow.ts` | Compatibility wrapper now accepts `IngestionWorkflowStore` after Plan 10-02. | Replaceable internal dependency | Treat the wrapper as public compatibility glue and add/direct internal paths toward Effect branch services. [VERIFIED: src/ingest/workflow.ts] |
 | `src/agent/index.ts` | Accepts full `StoreProvider` to assemble all tools. | Tool aggregator | Either keep broad as public aggregate or introduce `GBrainAgentStore` as intersection of tool contracts. [VERIFIED: src/agent/index.ts] |
 | `src/tools/ingest.ts` | Accepts `StoreProvider` and passes to workflow. | Workflow/tool consumer | Narrow to workflow store contract plus `EmbeddingProvider`. [VERIFIED: src/tools/ingest.ts] |
-| `src/tools/search.ts` | Accepts `StoreProvider` for `hybridSearch`. | Tool/search consumer | Prefer `HybridSearchPromiseStore` with `searchKeyword`, `searchVector`, optional `brainStore`. [VERIFIED: src/tools/search.ts; VERIFIED: src/search/hybrid.ts] |
-| `src/tools/page.ts` | Calls page/tag/delete methods. | Tool consumer | Narrow to page read/write/tag contract. [VERIFIED: src/tools/page.ts] |
-| `src/tools/links.ts` | Calls link methods only. | Tool consumer | Narrow to link contract. [VERIFIED: src/tools/links.ts] |
-| `src/tools/timeline.ts` | Calls `getTimeline` only. | Tool consumer | Narrow to timeline read contract. [VERIFIED: src/tools/timeline.ts] |
-| `src/tools/config.ts` | Calls `getConfig` and `setConfig`. | Tool consumer | Narrow to config contract. [VERIFIED: src/tools/config.ts] |
-| `src/tools/raw.ts` | Calls `getRawData` and `putRawData`. | Tool consumer | Narrow to raw data contract. [VERIFIED: src/tools/raw.ts] |
-| `src/tools/list.ts` | Calls `listPages`. | Tool consumer | Narrow to list pages contract. [VERIFIED: src/tools/list.ts] |
-| `src/tools/import.ts` | Calls `bulkImport(store, embedder)`. | Tool/script bridge | Narrow to bulk import workflow contract. [VERIFIED: src/tools/import.ts; VERIFIED: src/scripts/import.ts] |
-| `src/scripts/doctor.ts` | Calls `init`, `getHealthReport`, optional default store, and `dispose` when self-created. | Script utility | Narrow to `DoctorStore`; keep default factory compatibility. [VERIFIED: src/scripts/doctor.ts] |
-| `src/scripts/embed.ts` | Calls `init`, `getStaleChunks`, `upsertVectors`, `markChunksEmbedded`, `dispose`. | Script utility/vector maintenance | Narrow to `EmbeddingMaintenanceStore`; later route vector writes through typed vector provider behind facade. [VERIFIED: src/scripts/embed.ts] |
-| `src/scripts/import.ts` | Calls `createIngestionWorkflow` and initializes default store only in CLI mode. | Script workflow consumer | Narrow `storeInstance` to workflow store; remove local `as any` init cast by including `init` only in the CLI-created path or using a typed local variable. [VERIFIED: src/scripts/import.ts] |
+| `src/tools/search.ts` | Accepts public store for `hybridSearch`. | Tool/search consumer | Ensure `hybridSearch` uses `brainStore.runPromise(hybridSearchEffect(...))` when available; keep Promise fallback as compatibility glue only. [VERIFIED: src/tools/search.ts; VERIFIED: src/search/hybrid.ts] |
+| `src/tools/page.ts` | Calls page/tag/delete methods. | Tool consumer | Keep public facade-compatible factory unless a branch-service helper naturally emerges; do not mint a Promise mirror contract for grep reduction. [VERIFIED: src/tools/page.ts] |
+| `src/tools/links.ts` | Calls link methods only. | Tool consumer | Same as page tools: public compatibility remains, internal helpers should be Effect-first if added. [VERIFIED: src/tools/links.ts] |
+| `src/tools/timeline.ts` | Calls `getTimeline` only. | Tool consumer | Same as page tools. [VERIFIED: src/tools/timeline.ts] |
+| `src/tools/config.ts` | Calls `getConfig` and `setConfig`. | Tool consumer | Same as page tools. [VERIFIED: src/tools/config.ts] |
+| `src/tools/raw.ts` | Calls `getRawData` and `putRawData`. | Tool consumer | Same as page tools; SQL/ORM internals remain hidden. [VERIFIED: src/tools/raw.ts] |
+| `src/tools/list.ts` | Calls `listPages`. | Tool consumer | Same as page tools. [VERIFIED: src/tools/list.ts] |
+| `src/tools/import.ts` | Calls `bulkImport(store, embedder)`. | Tool/script bridge | Preserve public helper behavior while import internals move toward Effect runtime where practical. [VERIFIED: src/tools/import.ts; VERIFIED: src/scripts/import.ts] |
+| `src/scripts/doctor.ts` | Calls `init`, `getHealthReport`, optional default store, and `dispose` when self-created. | Script utility | Keep CLI wrapper; route reusable internals through runtime/branch services where practical. [VERIFIED: src/scripts/doctor.ts] |
+| `src/scripts/embed.ts` | Calls `init`, `getStaleChunks`, `upsertVectors`, `markChunksEmbedded`, `dispose`. | Script utility/vector maintenance | Keep CLI wrapper; use retrieval/vector branch/provider services for internal work where practical. [VERIFIED: src/scripts/embed.ts] |
+| `src/scripts/import.ts` | Calls `createIngestionWorkflow` and initializes default store only in CLI mode. | Script workflow consumer | Treat workflow Promise wrapper as compatibility boundary; avoid further Promise mirror contracts. [VERIFIED: src/scripts/import.ts] |
 | `test/libsql.test.ts` | Constructs `LibSQLStore` and exercises facade methods. | Public facade coverage | Keep as facade compatibility evidence. [VERIFIED: test/libsql.test.ts; VERIFIED: 10-CONTEXT.md] |
 | `test/ext.test.ts` | Constructs `LibSQLStore`, calls `getChunksWithEmbeddings`, mutates `store.vectorStore.query/upsert`. | Mixed facade and replaceable internal seam | Split or convert vector-specific mocking to branch/vector-provider injection; keep only intentional facade behavior. [VERIFIED: test/ext.test.ts] |
 | `test/integration.test.ts` | Constructs `LibSQLStore` and tests tools plus import integration. | Public integration coverage | Keep at least one public integration path through `LibSQLStore`. [VERIFIED: test/integration.test.ts] |
@@ -301,28 +303,25 @@ export interface VectorProviderService {
 
 Names are discretionary, but the provider must be typed and branch-consumed rather than raw option fan-out. [VERIFIED: 10-CONTEXT.md]
 
-### Proposed Narrow Contracts
+### Direct Effect Runtime Targets
 
-| Contract | Suggested Home | Methods |
-|----------|----------------|---------|
-| `IngestionWorkflowStore` | `src/ingest/workflow.ts` or `src/ingest/contracts.ts` | `getPage`, `createVersion`, `putPage`, `getTags`, `addTag`, `removeTag`, `upsertChunks`, `deleteChunks`, `addTimelineEntriesBatch`, optional `transaction`. [VERIFIED: src/ingest/workflow.ts] |
-| `HybridSearchPromiseStore` | `src/search/hybrid.ts` | `searchKeyword`, `searchVector`, optional `brainStore`. [VERIFIED: src/search/hybrid.ts] |
-| `PageToolsStore` | `src/tools/contracts.ts` | `getPage`, `getTags`, `deletePage`, `addTag`, `removeTag`. [VERIFIED: src/tools/page.ts] |
-| `LinksToolsStore` | `src/tools/contracts.ts` | `getLinks`, `getBacklinks`, `addLink`, `removeLink`. [VERIFIED: src/tools/links.ts] |
-| `TimelineToolsStore` | `src/tools/contracts.ts` | `getTimeline`. [VERIFIED: src/tools/timeline.ts] |
-| `ConfigToolsStore` | `src/tools/contracts.ts` | `getConfig`, `setConfig`. [VERIFIED: src/tools/config.ts] |
-| `RawDataToolsStore` | `src/tools/contracts.ts` | `getRawData`, `putRawData`. [VERIFIED: src/tools/raw.ts] |
-| `ListPagesStore` | `src/tools/contracts.ts` | `listPages`. [VERIFIED: src/tools/list.ts] |
-| `DoctorStore` | `src/scripts/doctor.ts` or `src/scripts/contracts.ts` | `init`, `getHealthReport`, `dispose`. [VERIFIED: src/scripts/doctor.ts] |
-| `EmbeddingMaintenanceStore` | `src/scripts/embed.ts` or `src/scripts/contracts.ts` | `init`, `getStaleChunks`, `upsertVectors`, `markChunksEmbedded`, `dispose`. [VERIFIED: src/scripts/embed.ts] |
+The table below supersedes the earlier proposed narrow Promise contracts. Keep public Promise wrappers where they already exist, but use these services as the internal migration targets.
+
+| Consumer Lane | Target Service / Runtime Shape | Notes |
+|---------------|--------------------------------|-------|
+| Workflow persistence | `ContentPages`, `ContentChunks`, `GraphTimeline`, and retrieval/embedding branch services as needed | Existing `IngestionWorkflowStore` remains compatibility glue for public `{ store, embedder }` callers. [VERIFIED: src/ingest/workflow.ts; VERIFIED: src/store/brainstore/**/interface.ts] |
+| Hybrid search | `BrainStoreSearch` through `hybridSearchEffect` and `brainStore.runPromise(...)` | Promise fallback may remain for legacy mocks, but it is not the internal model. [VERIFIED: src/search/hybrid.ts] |
+| Tool execution | Public factory receives facade-compatible store; shared helpers use branch services if added | Do not add a `src/tools/contracts.ts` Promise mirror layer just to narrow types. [VERIFIED: src/tools/*.ts] |
+| Doctor script | `OpsLifecycle` / public health facade through runtime, depending on existing branch coverage | Keep exported CLI Promise wrapper. [VERIFIED: src/scripts/doctor.ts; VERIFIED: src/store/brainstore/ops/lifecycle/interface.ts] |
+| Embed script | `RetrievalEmbedding` and `VectorProvider` services | Keep exported CLI Promise wrapper and public facade integration tests. [VERIFIED: src/scripts/embed.ts; VERIFIED: src/store/brainstore/retrieval/embedding/interface.ts; VERIFIED: src/store/brainstore/ops/vector/interface.ts] |
 
 ### Safe Planning Order
 
 1. Freeze the inventory in a small generated/tested document or test fixture before edits. [VERIFIED: P10-01; VERIFIED: rg inventory]
-2. Narrow `createIngestionWorkflow` and its tests first because it is the Phase 09 UAT follow-up and has behavior-focused mocks already. [VERIFIED: 10-CONTEXT.md; VERIFIED: test/ingest/workflow.test.ts]
+2. Review the already-created `IngestionWorkflowStore` and prevent it from becoming the internal model; add/direct Effect branch-service workflow paths where practical. [VERIFIED: 10-CONTEXT.md; VERIFIED: test/ingest/workflow.test.ts]
 3. Introduce branch-owned `getChunksWithEmbeddings` on `ContentChunksService`, project it through compat/facade, and keep public behavior identical. [VERIFIED: pending todo; VERIFIED: src/store/libsql-store.ts; VERIFIED: src/store/brainstore/content/chunks/interface.ts]
 4. Introduce the typed vector provider layer and rewire retrieval/chunks/lifecycle/internal consumers to it. [VERIFIED: pending todo; VERIFIED: src/store/libsql-store.ts; VERIFIED: src/store/brainstore/retrieval/embedding/factory.ts; VERIFIED: src/store/brainstore/ops/lifecycle/factory.ts]
-5. Narrow tool/script contracts after workflow and vector seams are stable, so public facade tests remain a safety net. [VERIFIED: src/tools/*.ts; VERIFIED: src/scripts/*.ts; VERIFIED: test/libsql.test.ts]
+5. Move tool/search and script internals toward Effect runtime / branch-service execution after workflow and vector seams are stable, so public facade tests remain a safety net. [VERIFIED: src/tools/*.ts; VERIFIED: src/scripts/*.ts; VERIFIED: test/libsql.test.ts]
 6. Convert only internal/helper tests away from `LibSQLStore`; leave facade/integration tests that intentionally prove public behavior. [VERIFIED: 10-CONTEXT.md; VERIFIED: test/libsql.test.ts; VERIFIED: test/integration.test.ts]
 
 ### Anti-Patterns to Avoid
@@ -432,27 +431,37 @@ export interface ContentChunksService {
 
 This is the planned ownership move for the legacy compat method. [VERIFIED: pending todo; VERIFIED: src/store/BrainStore.ts; VERIFIED: src/store/libsql-store.ts]
 
-### Tool Contract Example
+### Tool Effect Helper Example
 
 ```typescript
-// Source: src/tools/page.ts audit.
-export interface PageToolsStore {
-  getPage(slug: string): Promise<Page | null>;
-  getTags(slug: string): Promise<string[]>;
-  deletePage(slug: string): Promise<void>;
-  addTag(slug: string, tag: string): Promise<void>;
-  removeTag(slug: string, tag: string): Promise<void>;
+// Illustrative target shape only. Keep public tool factories facade-compatible,
+// but make reusable internals Effect-first when they are introduced.
+export const readPageInfoEffect = Effect.fn("tools.page.readPageInfo")(
+  function* (slug: string) {
+    const pages = yield* ContentPages;
+    const page = yield* pages.getPage(slug);
+    if (!page) return { error: "Page not found" };
+    return { page };
+  }
+);
+```
+
+Public wrappers can still call through `store.brainStore.runPromise(...)` when a runtime is available:
+
+```typescript
+if (store.brainStore?.runPromise) {
+  return store.brainStore.runPromise(readPageInfoEffect(slug));
 }
 ```
 
-This lets `LibSQLStore` keep working structurally while tool tests can use precise mocks. [VERIFIED: src/tools/page.ts; VERIFIED: src/store/libsql.ts]
+This keeps `LibSQLStore` working structurally while internal tests can use `Layer.succeed(...)` and branch services. [VERIFIED: src/tools/page.ts; VERIFIED: src/store/libsql.ts]
 
 ## State of the Art
 
 | Old Approach | Current/Target Approach | When Changed | Impact |
 |--------------|-------------------------|--------------|--------|
 | Flat `BrainStore` projection as the main internal dependency | `BrainStoreTree` feature branches with compat-over-tree facade | Phase 09, completed 2026-04-25 | Phase 10 should consume branch/narrow contracts internally and keep compat public. [VERIFIED: .planning/STATE.md; VERIFIED: Phase 09 summaries referenced in 10-CONTEXT.md] |
-| Workflow store typed as full `StoreProvider` | Workflow store typed as exact persistence capability set | Phase 10 target | Prevents workflow from depending on search, raw data, config, lifecycle, or unsafe DB methods. [VERIFIED: src/ingest/workflow.ts] |
+| Workflow store typed as full `StoreProvider` | Public compatibility wrapper plus direct Effect branch-service internal path | Phase 10 corrected target | Prevents workflow internals from depending on broad facade methods without inventing more Promise mirrors. [VERIFIED: src/ingest/workflow.ts; VERIFIED: 10-CONTEXT.md] |
 | Raw `vectorStore` passed through `libsql-store.ts` to branches | Typed vector provider layer/service | Phase 10 target | Removes ambient raw vector dependency and enables branch/provider-level tests. [VERIFIED: pending todo; VERIFIED: src/store/libsql-store.ts] |
 | `getChunksWithEmbeddings` as compat-only method | Branch-owned content chunks capability projected through compat/facade | Phase 10 target | Aligns chunk read ownership with `ContentChunksService`. [VERIFIED: pending todo; VERIFIED: src/store/brainstore/content/chunks/interface.ts] |
 
@@ -463,7 +472,7 @@ This lets `LibSQLStore` keep working structurally while tool tests can use preci
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
 | A1 | `getChunksWithEmbeddings` can initially preserve current behavior by delegating to `getChunks` while moving ownership to `ContentChunksService`. [ASSUMED] | Architecture Patterns / Code Examples | If true embedding retrieval is expected now, planner must add vector lookup implementation rather than a pure ownership move. |
-| A2 | Tool capability contracts can live in `src/tools/contracts.ts` without creating an unwanted public API commitment. [ASSUMED] | Recommended Project Structure | If exports are treated as public package API, keep contracts local to each tool file instead. |
+| A2 | New tool capability contracts should not be added merely to mirror `StoreProvider` in Promise form. [CORRECTED] | Direct Effect Runtime Targets | If a tool needs reusable internals, prefer Effect helpers and branch services; keep Promise wrappers at public boundaries. |
 
 ## Open Questions (RESOLVED)
 
@@ -474,8 +483,8 @@ This lets `LibSQLStore` keep working structurally while tool tests can use preci
 
 2. **Should `src/agent/index.ts` stay broad?**
    - What we know: the agent constructs every tool, so its required store is effectively the intersection of all tool stores. [VERIFIED: src/agent/index.ts]
-   - **Resolution:** Phase 10 should narrow individual tools and keep `src/agent/index.ts` as the public aggregate wiring point for now. Do not introduce `GBrainAgentStore` in this phase unless it becomes a purely local non-exported helper after tool contracts settle. [RESOLVED: P10-05 public behavior preservation; RESOLVED: 10-CONTEXT.md D-01/D-09]
-   - Planning implication: Plan 05 should focus on tool-level contracts and ensure `createGBrainAgent(store, embedder)` remains structurally compatible with a full `LibSQLStore` / `StoreProvider`.
+   - **Resolution:** Phase 10 should keep `src/agent/index.ts` as the public aggregate wiring point for now. Do not introduce a new Promise aggregate; internal helpers should move toward Effect services where practical. [RESOLVED: P10-05 public behavior preservation; RESOLVED: 10-CONTEXT.md D-01/D-09/D-23]
+   - Planning implication: Plan 05 should keep `createGBrainAgent(store, embedder)` structurally compatible with a full `LibSQLStore` / `StoreProvider` while preventing new Promise mirror contracts.
 
 ## Environment Availability
 

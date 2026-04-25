@@ -186,12 +186,14 @@ The later plans may change internals underneath these files, but public construc
 
 ## Migration Order
 
-1. Workflow/provider: narrow `createIngestionWorkflow({ store, embedder })` to a workflow-specific store contract while keeping the caller shape stable.
+This order was corrected during execution after the user clarified that internal modules should move to direct Effect runtime / branch services, not continue accumulating Promise-shaped compatibility contracts. Existing Promise compatibility remains valid only at public or legacy boundaries.
+
+1. Workflow/provider: review the already-created `IngestionWorkflowStore` Promise compatibility layer. Keep it only for public `{ store, embedder }` compatibility, and add/direct internal workflow execution paths toward Effect branch services before relying on it as the internal model.
 2. Vector provider: introduce or apply a typed internal vector provider layer so raw `vectorStore` stops fanning out through store branches.
 3. Chunks ownership: move `getChunksWithEmbeddings` ownership into the content chunks branch and keep facade compatibility projection.
-4. Tools/search: narrow tool factories and hybrid search Promise wrappers to capability-specific contracts.
-5. Scripts/helper tests: narrow `doctor`, `embed`, `import`, workflow helper tests, and search helper mocks where they do not need the full facade.
-6. Facade closure: rerun public facade regressions and final boundary guards without widening `StoreProvider`.
+4. Tools/search: make Effect runtime / branch-service paths the primary implementation for internal search and tool execution. Any Promise wrapper should delegate to the Effect path and be documented as public/legacy glue.
+5. Scripts/helper tests: move doctor/embed/import internals and helper tests toward Effect runtime or branch/provider service injection. Keep CLI defaults and externally exported helpers Promise-shaped only at their boundary.
+6. Facade closure: rerun public facade regressions and final boundary guards without widening `StoreProvider`, and prove remaining Promise contracts are classified compatibility boundaries.
 
 ## Notes for Later Plans
 
