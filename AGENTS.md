@@ -69,7 +69,11 @@ When executing tasks related to Effect, you MUST apply the rules and prompt temp
 After generating your code, ensure it passes the local check script.
 You can run the script locally to verify your output:
 ```bash
-./scripts/check-effect-v4.sh
+sh ./scripts/check-effect-v4.sh
+```
+or
+```powershell
+pwsh ./scripts/check-effect-v4.ps1
 ```
 If the script fails, you MUST correct your code before submitting.
 
