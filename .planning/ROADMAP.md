@@ -3,7 +3,7 @@
 ## Milestones
 
 - [x] **v1.0 milestone** - Phases 1-8 (shipped 2026-04-24)
-- [ ] **Post-v1.0 store refactor** - Phase 9 (reopened 2026-04-25)
+- [x] **Post-v1.0 store refactor** - Phase 9 (reopened 2026-04-25, completed 2026-04-25)
 
 ## Active Development
 
@@ -16,7 +16,7 @@
 - `P09-03` Keep low-level SQL, vector/runtime access, and lifecycle behavior behind internal branches only; do not widen `StoreProvider`, `LibSQLStore`, or provider boundaries.
 - `P09-04` Narrow internal consumers to the minimum feature branch they actually need and verify both independent capability injection and compatibility behavior.
 **Depends on:** Phase 8
-**Plans:** 10 plans
+**Plans:** 10/10 plans complete
 
 Plans:
 - [x] 09-01-PLAN.md - Freeze `content.pages` and `content.chunks` folder skeletons
@@ -27,12 +27,12 @@ Plans:
 - [x] 09-06-PLAN.md - Implement content and graph branch factories
 - [x] 09-07-PLAN.md - Implement ops and retrieval branches with branch-only regression coverage
 - [x] 09-08-PLAN.md - Assemble `BrainStoreTree` and remove flat-root projection from `libsql-store.ts`
-- [ ] 09-09-PLAN.md - Rebuild compat/runtime/provider wiring over `BrainStoreTree`
-- [ ] 09-10-PLAN.md - Narrow remaining consumers and close the phase with focused regressions
+- [x] 09-09-PLAN.md - Rebuild compat/runtime/provider wiring over `BrainStoreTree`
+- [x] 09-10-PLAN.md - Narrow remaining consumers and close the phase with focused regressions
 
 ## Completed Phases
 
-No completed post-v1.0 phases at the moment. Phase 9 was reopened on 2026-04-25.
+- [x] Phase 9: Layer BrainStore Contexts & Tighten Store Boundaries - completed 2026-04-25 with 10/10 plans verified.
 
 ## Carry-Forward Inputs
 

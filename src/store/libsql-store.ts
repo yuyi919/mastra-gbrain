@@ -42,13 +42,20 @@ import {
   ContentPages,
 } from "./BrainStore.js";
 import { StoreError } from "./BrainStoreError.js";
+import type { ContentPagesService } from "./brainstore/content/pages/index.js";
+import type { OpsInternalService } from "./brainstore/ops/internal/index.js";
 import { OpsInternal } from "./brainstore/ops/internal/index.js";
+import type { OpsLifecycleService } from "./brainstore/ops/lifecycle/index.js";
 import { OpsLifecycle } from "./brainstore/ops/lifecycle/index.js";
 import {
   BrainStoreTree,
   type BrainStoreTreeService,
   makeBrainStoreTree,
 } from "./brainstore/tree/index.js";
+import {
+  BrainStoreCompat,
+  makeCompatBrainStore,
+} from "./brainstore/compat/index.js";
 import { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import init from "./init.sql" with { type: "text" };
 import { Mappers } from "./Mappers.js";
@@ -56,6 +63,22 @@ import { LATEST_VERSION } from "./schema.js";
 
 const catchStoreError = StoreError.catch;
 const DEFAULT_INDEX_NAME = "gbrain_chunks";
+type VectorQueryFilter = NonNullable<
+  NonNullable<
+    Parameters<NonNullable<BrainStore.Options["vectorStore"]>["query"]>[0][
+      "filter"
+    ]
+  >
+>;
+
+function requireBrainStoreTree(
+  store: BrainStore.Service
+): BrainStoreTreeService {
+  if (!store.tree) {
+    throw new Error("BrainStore runtime is missing BrainStoreTree");
+  }
+  return store.tree;
+}
 
 /**
  * 将 JSON 字段安全转为对象。
@@ -128,7 +151,7 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     opts?: SearchOpts & { slug?: string }
   ) {
     const limit = opts?.limit ?? 10;
-    const filter: Record<string, any> = {};
+    const filter: VectorQueryFilter = {};
     if (opts?.type) filter.type = { $eq: opts.type };
     if (opts?.detail === "low") filter.chunk_source = { $eq: "compiled_truth" };
     if (opts?.slug) {
@@ -140,7 +163,7 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       () =>
         vectorStore?.query({
           indexName,
-          queryVector: Array.from(queryVector) as any,
+          queryVector: Array.from(queryVector),
           topK: limit * 2,
           filter: Object.keys(filter).length > 0 ? filter : undefined,
         }) ?? []
@@ -491,7 +514,7 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
         out.push({
           page_id: row.page_id,
           title: row.title,
-          type: row.type as any,
+          type: row.type,
           slug: row.slug,
           chunk_id: row.chunk_id,
           chunk_index: row.chunk_index,
@@ -939,9 +962,43 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     lifecycle,
     unsafe,
   };
+  const contentPages: ContentPagesService = {
+    getPage: ingestion.getPage,
+    listPages: ingestion.listPages,
+    resolveSlugs: ingestion.resolveSlugs,
+    getTags: ingestion.getTags,
+    getVersions: ingestion.getVersions,
+    revertToVersion: ingestion.revertToVersion,
+    updateSlug: ingestion.updateSlug,
+    deletePage: ingestion.deletePage,
+    addTag: ingestion.addTag,
+    removeTag: ingestion.removeTag,
+    createVersion: Eff.fn("content.pages.compat.createVersion")(function* (
+      slug: string
+    ) {
+      return yield* ingestion.createVersion(slug).pipe(Eff.flatten);
+    }, catchStoreError),
+    putPage: Eff.fn("content.pages.compat.putPage")(function* (
+      slug: string,
+      page: PageInput
+    ) {
+      return yield* ingestion.putPage(slug, page).pipe(Eff.flatten);
+    }, catchStoreError),
+  };
+  const opsLifecycle: OpsLifecycleService = {
+    init: lifecycle.init,
+    dispose: lifecycle.dispose,
+    transaction: (effect) => sql.withTransaction(effect).pipe(catchStoreError),
+  };
+  const opsInternal: OpsInternalService = {
+    ...unsafe,
+    sql,
+    mappers,
+    vectorStore,
+  };
   const tree = makeBrainStoreTree({
     content: {
-      pages: ingestion,
+      pages: contentPages,
       chunks: ingestion,
     },
     graph: {
@@ -959,15 +1016,10 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       },
     },
     ops: {
-      lifecycle,
-      internal: {
-        ...unsafe,
-        sql,
-        mappers,
-        vectorStore,
-      },
+      lifecycle: opsLifecycle,
+      internal: opsInternal,
     },
-  } as unknown as BrainStoreTreeService);
+  });
   const store: BrainStore.Service = {
     ...search,
     ...link,
@@ -976,7 +1028,7 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     ...ext,
     ...lifecycle,
     ...unsafe,
-    tree: tree as unknown as BrainStore.Tree,
+    tree,
     features,
   };
 
@@ -998,22 +1050,45 @@ export function makeLayer(
   const TreeLayer = Layer.effect(
     BrainStoreTree,
     BrainStore.use((store) =>
-      Eff.succeed(store.tree! as unknown as BrainStoreTreeService)
+      Eff.sync(() => requireBrainStoreTree(store))
     )
-  ).pipe(Layer.provide(BrainStoreLayer)) as any;
+  ).pipe(Layer.provide(BrainStoreLayer));
+  const CompatLayer = Layer.effect(
+    BrainStoreCompat,
+    Eff.gen(function* () {
+      const tree = yield* BrainStoreTree;
+      const store = yield* BrainStore;
+      return makeCompatBrainStore(tree, store);
+    })
+  ).pipe(Layer.provide(Layer.mergeAll(TreeLayer, BrainStoreLayer)));
   const FeatureLayers = Layer.mergeAll(
     Layer.effect(
       BrainStoreIngestion,
-      BrainStoreTree.use((tree: BrainStoreTreeService) =>
-        Eff.succeed({
-          ...tree.content.pages,
-          ...tree.content.chunks,
-          getChunksWithEmbeddings: (tree.content.chunks as any)
-            .getChunksWithEmbeddings,
+      Eff.gen(function* () {
+        const tree = yield* BrainStoreTree;
+        const compat = yield* BrainStoreCompat;
+        const ingestionService: BrainStore.Ingestion = {
+          getPage: tree.content.pages.getPage,
+          listPages: tree.content.pages.listPages,
+          resolveSlugs: tree.content.pages.resolveSlugs,
+          getTags: tree.content.pages.getTags,
+          createVersion: compat.createVersion,
+          getVersions: tree.content.pages.getVersions,
+          revertToVersion: tree.content.pages.revertToVersion,
+          putPage: compat.putPage,
+          updateSlug: tree.content.pages.updateSlug,
+          deletePage: tree.content.pages.deletePage,
+          addTag: tree.content.pages.addTag,
+          removeTag: tree.content.pages.removeTag,
+          upsertChunks: tree.content.chunks.upsertChunks,
+          deleteChunks: tree.content.chunks.deleteChunks,
+          getChunks: tree.content.chunks.getChunks,
+          getChunksWithEmbeddings: compat.getChunksWithEmbeddings,
           getEmbeddingsByChunkIds:
             tree.retrieval.embedding.getEmbeddingsByChunkIds,
-        } as unknown as BrainStore.Ingestion)
-      )
+        };
+        return ingestionService;
+      })
     ),
     Layer.effect(
       BrainStoreLinks,
@@ -1035,7 +1110,7 @@ export function makeLayer(
     ),
     Layer.effect(
       BrainStoreExt,
-      BrainStore.use((store) => Eff.succeed(store as BrainStore.Ext))
+      BrainStoreCompat.use((store) => Eff.succeed(store))
     ),
     Layer.effect(
       BrainStoreLifecycleService,
@@ -1091,15 +1166,16 @@ export function makeLayer(
         Eff.succeed(tree.ops.internal)
       )
     )
-  ).pipe(Layer.provide(TreeLayer));
+  ).pipe(Layer.provide(Layer.mergeAll(TreeLayer, CompatLayer)));
   return Layer.mergeAll(
     BrainStoreLayer,
     TreeLayer,
+    CompatLayer,
     FeatureLayers,
     DatabaseLive
   ).pipe(
     Layer.provideMerge([Eff.Logger.minimumLogLevel("Debug"), Eff.Logger.pretty])
-  ) as unknown as Eff.Layer<BrainStoreRuntime, never, never>;
+  );
 }
 
 export function make(options: { url: string } & BrainStore.Options) {

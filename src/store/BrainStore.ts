@@ -4,6 +4,7 @@ import { Context } from "@yuyi919/tslibs-effect/effect-next";
 import type { Schema } from "effect";
 import type { SchemaError } from "effect/Schema";
 import type { SqlError } from "effect/unstable/sql";
+import type { SqlClient } from "effect/unstable/sql/SqlClient";
 import type {
   AccessToken,
   BrainHealth,
@@ -31,6 +32,7 @@ import type {
   TimelineOpts,
 } from "../types.js";
 import type { StoreError } from "./BrainStoreError.js";
+import type { SqlBuilder } from "./SqlBuilder.js";
 import {
   ContentChunks,
   type ContentChunksService,
@@ -58,6 +60,7 @@ import {
   RetrievalSearch as BrainStoreSearch,
   type RetrievalSearchService,
 } from "./brainstore/retrieval/search/index.js";
+import { BrainStoreCompat } from "./brainstore/compat/interface.js";
 
 /**
  * `Eff.Effect<T, StoreError>` 的别名。
@@ -177,7 +180,7 @@ export interface ExtService {
 export interface BrainStoreLifecycle {
   init(): EngineEffect<void>;
   dispose(): Eff.Effect<void>;
-  transaction<T, E = never, R extends BrainStore = BrainStore>(
+  transaction<T, E = never, R = never>(
     fn: Eff.Effect<T, E, R>
   ): Eff.Effect<
     T,
@@ -215,7 +218,11 @@ export interface BrainStoreRetrievalTree {
 
 export interface BrainStoreOpsTree {
   lifecycle: BrainStoreLifecycle;
-  internal: UnsafeDBService;
+  internal: UnsafeDBService & {
+    readonly sql: SqlClient;
+    readonly mappers: SqlBuilder;
+    readonly vectorStore?: LibSQLVector;
+  };
 }
 
 export interface BrainStoreTree {
@@ -286,6 +293,7 @@ export class BrainStore extends Context.Service<
 
 export type BrainStoreRuntime =
   | BrainStore
+  | BrainStoreCompat
   | BrainStoreIngestion
   | BrainStoreLinks
   | BrainStoreSearch

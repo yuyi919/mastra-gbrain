@@ -26,10 +26,18 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
-import { BrainStore, type BrainStoreRuntime } from "./BrainStore.js";
+import type { BrainStoreRuntime } from "./BrainStore.js";
+import { BrainStoreCompat } from "./brainstore/compat/index.js";
+import type { BrainStoreCompatService } from "./brainstore/compat/interface.js";
 import type { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
 import { makeLayer as makeLibSQLStoreLayer } from "./libsql-store.js";
+
+function getErrorCode(error: unknown): unknown {
+  return error && typeof error === "object" && "code" in error
+    ? error.code
+    : undefined;
+}
 
 export interface LibSQLStoreOptions {
   url: string;
@@ -116,18 +124,20 @@ export class LibSQLStore implements StoreProvider {
     R extends BrainStoreRuntime = never,
   >(
     fn: (
-      store: BrainStore.Service
-    ) => Effect.Effect<Effect.Effect<A, E2, R>, E, BrainStore>
+      store: BrainStoreCompatService
+    ) => Effect.Effect<Effect.Effect<A, E2, R>, E, BrainStoreCompat>
   ): Promise<A> {
     return this.brainStore.runPromise(
-      BrainStore.use((store) => fn(store).pipe(Effect.flatten))
+      BrainStoreCompat.use((store) => fn(store).pipe(Effect.flatten))
     );
   }
 
   async run<A, E = never>(
-    fn: (store: BrainStore.Service) => Effect.Effect<A, E, BrainStore>
+    fn: (
+      store: BrainStoreCompatService
+    ) => Effect.Effect<A, E, BrainStoreCompat>
   ): Promise<A> {
-    return this.brainStore.runPromise(BrainStore.use(fn));
+    return this.brainStore.runPromise(BrainStoreCompat.use(fn));
   }
 
   async init() {
@@ -319,22 +329,19 @@ export class LibSQLStore implements StoreProvider {
     let i = 0;
     while (i++ < 100) {
       try {
-        try {
+      try {
           // await Bun.file(this.db.filename).unlink();
-        } catch (error: any) {
+        } catch (error) {
           // if (error?.code !== "ENOENT") throw error;
         }
         try {
           await Bun.file(this.vectorUrl.replace("file:", "")).unlink();
-        } catch (error: any) {
-          if (error?.code !== "ENOENT") throw error;
+        } catch (error) {
+          if (getErrorCode(error) !== "ENOENT") throw error;
         }
         break;
       } catch (error) {
-        const code =
-          error && typeof error === "object" && "code" in error
-            ? (error as any).code
-            : undefined;
+        const code = getErrorCode(error);
         if (i < 100) await Bun.sleep(20);
         else if (code === "EBUSY" || code === "EPERM") break;
         else console.warn(error instanceof Error ? error.message : error);

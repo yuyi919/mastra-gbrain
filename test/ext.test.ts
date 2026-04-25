@@ -1,15 +1,21 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
 import { LibSQLStore } from "../src/store/libsql.js";
 
 let store: LibSQLStore;
+const DB_PATH = "./tmp/test-ext.db";
+const VECTOR_DB_PATH = "./tmp/test-ext-vector.db";
+
+function removeSqliteFiles(path: string) {
+  for (const suffix of ["", "-shm", "-wal"]) {
+    rmSync(`${path}${suffix}`, { force: true });
+  }
+}
 
 beforeAll(async () => {
-  const tempStore = new LibSQLStore({
-    url: "file:./tmp/test-ext.db",
-    dimension: 1536,
-  });
-  await tempStore.cleanDBFile(true);
-  store = new LibSQLStore({ url: "file:./tmp/test-ext.db", dimension: 1536 });
+  removeSqliteFiles(DB_PATH);
+  removeSqliteFiles(VECTOR_DB_PATH);
+  store = new LibSQLStore({ url: `file:${DB_PATH}`, dimension: 1536 });
   await store.init();
 
   // Create base pages for testing
