@@ -10,7 +10,7 @@ export type EngineEffect<T> = Eff.Effect<T, StoreError>;
 // on init/dispose/transaction through this single lifecycle contract.
 export interface OpsLifecycleService {
   init(): EngineEffect<void>;
-  dispose(): Eff.Effect<void>;
+  dispose(): EngineEffect<void>;
   transaction<T, E = never, R = never>(
     effect: Eff.Effect<T, E, R>
   ): Eff.Effect<

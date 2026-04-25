@@ -1,4 +1,3 @@
-import type { LibSQLVector } from "@mastra/libsql";
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "@yuyi919/tslibs-effect/effect-next";
 import { SqlClient as SqlClientTag } from "effect/unstable/sql";
@@ -6,24 +5,23 @@ import type { SqlClient } from "effect/unstable/sql/SqlClient";
 import { StoreError } from "../../../BrainStoreError.js";
 import { Mappers } from "../../../Mappers.js";
 import type { SqlBuilder } from "../../../SqlBuilder.js";
+import { VectorProvider, type VectorProviderService } from "../vector/index.js";
 import { OpsInternal, type OpsInternalService } from "./interface.js";
 
 export interface OpsInternalDependencies {
   sql: SqlClient;
   mappers: SqlBuilder;
-  vectorStore?: LibSQLVector;
+  vectors: VectorProviderService;
 }
 
-export interface OpsInternalLayerOptions {
-  vectorStore?: LibSQLVector;
-}
+export type OpsInternalLayerOptions = {};
 
 export const makeOpsInternal = (
   deps: OpsInternalDependencies
 ): OpsInternalService => ({
   sql: deps.sql,
   mappers: deps.mappers,
-  vectorStore: deps.vectorStore,
+  vectors: deps.vectors,
   query: <T>(text: string, params?: ReadonlyArray<unknown>) =>
     deps.sql.unsafe(text, params).unprepared.pipe(
       Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
@@ -68,7 +66,7 @@ export const makeLayer = (
   service:
     | OpsInternalService
     | OpsInternalDependencies
-    | OpsInternalLayerOptions
+    | OpsInternalLayerOptions = {}
 ) => {
   if (isService(service)) {
     return Layer.succeed(OpsInternal, service);
@@ -81,10 +79,11 @@ export const makeLayer = (
     Eff.gen(function* () {
       const sql = yield* SqlClientTag.SqlClient;
       const mappers = yield* Mappers;
+      const vectors = yield* VectorProvider;
       return makeOpsInternal({
         sql,
         mappers,
-        vectorStore: service.vectorStore,
+        vectors,
       });
     })
   );

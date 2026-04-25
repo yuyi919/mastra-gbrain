@@ -1,14 +1,14 @@
-import type { LibSQLVector } from "@mastra/libsql";
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "@yuyi919/tslibs-effect/effect-next";
 import { StoreError } from "../../../BrainStoreError.js";
-import { VectorProvider, type VectorProviderService } from "./interface.js";
+import {
+  VectorProvider,
+  type VectorProviderClient,
+  type VectorProviderService,
+} from "./interface.js";
 
 export interface VectorProviderDependencies {
-  vectorStore?: Pick<
-    LibSQLVector,
-    "query" | "upsert" | "deleteVectors" | "createIndex"
-  >;
+  vectorStore?: VectorProviderClient;
   disposeVector?: () => Promise<void> | void;
 }
 
@@ -25,24 +25,25 @@ export const makeVectorProvider = (
   deps: VectorProviderDependencies = {}
 ): VectorProviderService => {
   const catchStoreError = StoreError.catch;
-  if (!deps.vectorStore) return makeNoopVectorProvider();
+  const { vectorStore, disposeVector } = deps;
+  if (!vectorStore) return makeNoopVectorProvider();
 
   return VectorProvider.of({
     query: Eff.fn("ops.vector.query")(function* (input) {
-      return yield* Eff.promise(() => deps.vectorStore.query(input));
+      return yield* Eff.promise(() => vectorStore.query(input));
     }, catchStoreError),
     upsert: Eff.fn("ops.vector.upsert")(function* (input) {
       if (input.vectors.length === 0) return;
-      yield* Eff.promise(() => deps.vectorStore.upsert(input));
+      yield* Eff.promise(() => vectorStore.upsert(input));
     }, catchStoreError),
     deleteVectors: Eff.fn("ops.vector.deleteVectors")(function* (input) {
-      yield* Eff.promise(() => deps.vectorStore.deleteVectors(input));
+      yield* Eff.promise(() => vectorStore.deleteVectors(input));
     }, catchStoreError),
     createIndex: Eff.fn("ops.vector.createIndex")(function* (input) {
-      yield* Eff.promise(() => deps.vectorStore.createIndex(input));
+      yield* Eff.promise(() => vectorStore.createIndex(input));
     }, catchStoreError),
     dispose: Eff.fn("ops.vector.dispose")(function* () {
-      yield* Eff.from(() => deps.disposeVector?.());
+      yield* Eff.from(() => disposeVector?.());
     }, catchStoreError),
   });
 };

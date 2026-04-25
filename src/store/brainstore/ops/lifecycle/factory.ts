@@ -2,7 +2,13 @@ import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "@yuyi919/tslibs-effect/effect-next";
 import { SqlClient, type SqlError } from "effect/unstable/sql";
 import { StoreError } from "../../../BrainStoreError.js";
+import { VectorProvider, type VectorProviderService } from "../vector/index.js";
 import { OpsLifecycle, type OpsLifecycleService } from "./interface.js";
+
+export type OpsLifecycleVectorProvider = Pick<
+  VectorProviderService,
+  "createIndex" | "dispose"
+>;
 
 export interface OpsLifecycleDependencies {
   sql: {
@@ -13,14 +19,15 @@ export interface OpsLifecycleDependencies {
   };
   initSql: string;
   initialized: Eff.Ref.Ref<boolean>;
-  createIndex?: () => Promise<void> | void;
-  disposeVector?: () => Promise<void> | void;
+  vectors: OpsLifecycleVectorProvider;
+  indexName: string;
+  dimension: number;
 }
 
 export interface OpsLifecycleLayerOptions {
   initSql: string;
-  createIndex?: () => Promise<void> | void;
-  disposeVector?: () => Promise<void> | void;
+  indexName: string;
+  dimension: number;
 }
 
 export const makeOpsLifecycle = (
@@ -34,14 +41,18 @@ export const makeOpsLifecycle = (
         deps.sql.unsafe(rawSQL).raw.pipe(Eff.tapError(Eff.logError))
       ).pipe(
         Eff.zipRight(
-          Eff.from(() => deps.createIndex?.()),
+          deps.vectors.createIndex({
+            indexName: deps.indexName,
+            dimension: deps.dimension,
+            metric: "cosine",
+          }),
           { concurrent: true }
         )
       );
       yield* Eff.Ref.set(deps.initialized, true);
     }, catchStoreError),
     dispose: Eff.fn("ops.lifecycle.dispose")(function* () {
-      yield* Eff.from(() => deps.disposeVector?.());
+      yield* deps.vectors.dispose();
     }, Eff.tapDefect(Eff.logError)),
     transaction: (effect) =>
       deps.sql.withTransaction(effect).pipe(catchStoreError),
@@ -82,13 +93,15 @@ export const makeLayer = (
     OpsLifecycle,
     Eff.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+      const vectors = yield* VectorProvider;
       const initialized = yield* Eff.Ref.make(false);
       return makeOpsLifecycle({
         sql,
+        vectors,
         initialized,
         initSql: service.initSql,
-        createIndex: service.createIndex,
-        disposeVector: service.disposeVector,
+        indexName: service.indexName,
+        dimension: service.dimension,
       });
     })
   );

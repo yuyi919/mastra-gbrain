@@ -14,6 +14,11 @@ import { makeLayer as makeGraphLinksLayer } from "./brainstore/graph/links/facto
 import { makeLayer as makeGraphTimelineLayer } from "./brainstore/graph/timeline/factory.js";
 import { makeLayer as makeOpsInternalLayer } from "./brainstore/ops/internal/index.js";
 import { makeLayer as makeOpsLifecycleLayer } from "./brainstore/ops/lifecycle/index.js";
+import {
+  makeVectorProvider,
+  makeLayer as makeVectorProviderLayer,
+  type VectorProviderService,
+} from "./brainstore/ops/vector/index.js";
 import { makeLayer as makeRetrievalEmbeddingLayer } from "./brainstore/retrieval/embedding/factory.js";
 import { makeLayer as makeRetrievalSearchLayer } from "./brainstore/retrieval/search/factory.js";
 import {
@@ -52,16 +57,14 @@ function getClosableTursoClient(
 }
 
 function makeDeleteVectorsBySlug(
-  vectorStore: BrainStore.Options["vectorStore"],
+  vectors: VectorProviderService,
   indexName: string
 ) {
   return Eff.fn("brainstore.vectors.deleteBySlug")(function* (slug: string) {
-    yield* Eff.from(() =>
-      vectorStore?.deleteVectors({
-        indexName,
-        filter: { slug: { $eq: slug } },
-      })
-    );
+    yield* vectors.deleteVectors({
+      indexName,
+      filter: { slug: { $eq: slug } },
+    });
   }, catchStoreError);
 }
 
@@ -126,16 +129,23 @@ export function makeLayer(options: { url: string } & BrainStore.Options) {
   const indexName = DEFAULT_INDEX_NAME;
   const dimension = options.dimension ?? 1536;
   const vectorStore = options.vectorStore;
-  const deleteVectorsBySlug = makeDeleteVectorsBySlug(vectorStore, indexName);
+  const vectorProvider = makeVectorProvider({
+    vectorStore,
+    disposeVector: () => getClosableTursoClient(vectorStore)?.close(),
+  });
+  const deleteVectorsBySlug = makeDeleteVectorsBySlug(
+    vectorProvider,
+    indexName
+  );
 
   const SqlLive = SqliteClient.layer({ filename });
   const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
   const DatabaseLive = Layer.mergeAll(SqlLive, DrizzleLive);
+  const VectorLayer = makeVectorProviderLayer(vectorProvider);
 
   const EmbeddingLayer = makeRetrievalEmbeddingLayer({
-    vectorStore,
     indexName,
-  }).pipe(Layer.provide(DatabaseLive));
+  }).pipe(Layer.provide(Layer.mergeAll(DatabaseLive, VectorLayer)));
 
   const ContentPagesLayer = makeContentPagesLayer({
     vectors: { deleteVectorsBySlug },
@@ -161,20 +171,16 @@ export function makeLayer(options: { url: string } & BrainStore.Options) {
 
   const LifecycleLayer = makeOpsLifecycleLayer({
     initSql: init,
-    createIndex: () =>
-      vectorStore?.createIndex({
-        indexName,
-        dimension,
-        metric: "cosine",
-      }),
-    disposeVector: () => getClosableTursoClient(vectorStore)?.close(),
-  }).pipe(Layer.provide(SqlLive));
+    indexName,
+    dimension,
+  }).pipe(Layer.provide(Layer.mergeAll(SqlLive, VectorLayer)));
 
-  const InternalLayer = makeOpsInternalLayer({ vectorStore }).pipe(
-    Layer.provide(DatabaseLive)
+  const InternalLayer = makeOpsInternalLayer().pipe(
+    Layer.provide(Layer.mergeAll(DatabaseLive, VectorLayer))
   );
 
   const BranchLayers = Layer.mergeAll(
+    VectorLayer,
     ContentPagesLayer,
     ContentChunksLayer,
     GraphLinksLayer,

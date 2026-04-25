@@ -1,5 +1,7 @@
-import type { QueryResult } from "@mastra/core/vector";
-import type { LibSQLVectorFilter } from "@mastra/libsql/dist/vector/filter.js";
+import type {
+  VectorFilter as MastraVectorFilter,
+  QueryResult,
+} from "@mastra/core/vector";
 import type * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Context } from "@yuyi919/tslibs-effect/effect-next";
 import type { VectorMetadata } from "../../../../types.js";
@@ -7,7 +9,7 @@ import type { StoreError } from "../../../BrainStoreError.js";
 
 export type EngineEffect<T> = Eff.Effect<T, StoreError>;
 export type VectorQueryResult = QueryResult;
-export type VectorFilter = LibSQLVectorFilter;
+export type VectorFilter = MastraVectorFilter;
 
 export interface VectorQueryInput {
   indexName: string;
@@ -41,6 +43,13 @@ export interface VectorProviderService {
   deleteVectors(input: VectorDeleteInput): EngineEffect<void>;
   createIndex(input: VectorCreateIndexInput): EngineEffect<void>;
   dispose(): EngineEffect<void>;
+}
+
+export interface VectorProviderClient {
+  query(input: VectorQueryInput): Promise<VectorQueryResult[]>;
+  upsert(input: VectorUpsertInput): Promise<unknown>;
+  deleteVectors(input: VectorDeleteInput): Promise<void>;
+  createIndex(input: VectorCreateIndexInput): Promise<void>;
 }
 
 export class VectorProvider extends Context.Service<

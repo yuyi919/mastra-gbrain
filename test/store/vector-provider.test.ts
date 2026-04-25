@@ -6,8 +6,12 @@ import {
   makeNoopVectorProvider,
   makeVectorProvider,
   makeLayer as makeVectorProviderLayer,
+  type VectorCreateIndexInput,
+  type VectorDeleteInput,
   VectorProvider,
   type VectorProviderService,
+  type VectorQueryInput,
+  type VectorUpsertInput,
 } from "../../src/store/brainstore/ops/vector/index.js";
 
 function makeFakeVectorClient() {
@@ -15,12 +19,7 @@ function makeFakeVectorClient() {
   return {
     calls,
     client: {
-      query: (input: {
-        indexName: string;
-        queryVector: number[];
-        topK: number;
-        filter?: Record<string, unknown>;
-      }) => {
+      query: (input: VectorQueryInput) => {
         calls.push({ method: "query", input });
         return Promise.resolve([
           {
@@ -30,24 +29,15 @@ function makeFakeVectorClient() {
           },
         ]);
       },
-      upsert: (input: {
-        indexName: string;
-        vectors: number[][];
-        ids: string[];
-        metadata: Record<string, unknown>[];
-      }) => {
+      upsert: (input: VectorUpsertInput) => {
         calls.push({ method: "upsert", input });
         return Promise.resolve(input.ids);
       },
-      deleteVectors: (input: {
-        indexName: string;
-        ids?: string[];
-        filter?: Record<string, unknown>;
-      }) => {
+      deleteVectors: (input: VectorDeleteInput) => {
         calls.push({ method: "deleteVectors", input });
         return Promise.resolve();
       },
-      createIndex: (input: { indexName: string; dimension: number }) => {
+      createIndex: (input: VectorCreateIndexInput) => {
         calls.push({ method: "createIndex", input });
         return Promise.resolve();
       },
