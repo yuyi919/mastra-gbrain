@@ -6,7 +6,7 @@ current_phase: 9
 current_phase_name: brainstore-layered-contexts-and-boundaries
 status: completed
 stopped_at: Phase 09 completed with verification passed; next autonomous step is milestone lifecycle audit.
-last_updated: "2026-04-25T22:41:31.8455453+08:00"
+last_updated: "2026-04-25T22:54:26.9816634+08:00"
 last_activity: 2026-04-25
 progress:
   total_phases: 1
@@ -30,8 +30,9 @@ progress:
 
 ### Pending Todos
 
-- 1 pending todo in `.planning/todos/pending/`
+- 2 pending todos in `.planning/todos/pending/`
 - 2026-04-24 `narrow-brainstore-dependencies-by-feature-layer` - audit modules and narrow dependencies to feature layers
+- 2026-04-25 `stabilize-provider-ingestion-workflow-surface` - follow up on Phase 09 UAT provider/workflow surface gap
 
 ### Roadmap Evolution
 
@@ -57,6 +58,7 @@ Resume file: .planning/phases/09-brainstore-layered-contexts-and-boundaries/09-V
 - The repaired plan supersedes the earlier flat-first implementation direction.
 - The completed todo `2026-04-24-split-brainstore-into-layered-contexts` is now considered absorbed into Phase 9 planning.
 - Phase 9 learnings were extracted to `.planning/phases/09-brainstore-layered-contexts-and-boundaries/09-LEARNINGS.md` on 2026-04-25.
+- Phase 9 UAT completed with one follow-up provider/workflow surface todo recorded.
 
 ### Quick Tasks Completed
 
