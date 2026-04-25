@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import {
   createIngestionWorkflow,
   type IngestionWorkflowStore,
 } from "../../src/ingest/workflow.js";
 import { parseMarkdown } from "../../src/markdown.js";
+import { ContentChunks } from "../../src/store/brainstore/content/chunks/index.js";
+import { ContentPages } from "../../src/store/brainstore/content/pages/index.js";
+import { GraphTimeline } from "../../src/store/brainstore/graph/timeline/index.js";
 import type { EmbeddingProvider } from "../../src/store/interface.js";
-import { Page } from "../../src/types.js";
+import { Page, type PageInput } from "../../src/types.js";
 
 type MockStore = IngestionWorkflowStore & {
   _calls: { method: string; args: unknown[] }[];
@@ -133,6 +137,119 @@ This is the compiled truth.
     expect(calls.some((c) => c.method === "putPage")).toBe(true);
     expect(calls.filter((c) => c.method === "addTag")).toHaveLength(2);
     expect(calls.some((c) => c.method === "upsertChunks")).toBe(true);
+  });
+
+  test("uses branch services through brainStore runtime when available", async () => {
+    const calls: { method: string; args: unknown[] }[] = [];
+    const pages = ContentPages.of({
+      getPage: (slug) => {
+        calls.push({ method: "getPage", args: [slug] });
+        return Effect.succeed(null);
+      },
+      listPages: () => Effect.succeed([]),
+      resolveSlugs: () => Effect.succeed([]),
+      getTags: (slug) => {
+        calls.push({ method: "getTags", args: [slug] });
+        return Effect.succeed(["old"]);
+      },
+      createVersion: (slug) => {
+        calls.push({ method: "createVersion", args: [slug] });
+        return Effect.succeed(Effect.succeed({} as never));
+      },
+      getVersions: () => Effect.succeed([]),
+      revertToVersion: () => Effect.succeed(undefined),
+      putPage: (slug: string, page: PageInput) => {
+        calls.push({ method: "putPage", args: [slug, page] });
+        return Effect.succeed(Effect.succeed({} as never));
+      },
+      updateSlug: () => Effect.succeed(undefined),
+      deletePage: () => Effect.succeed(undefined),
+      addTag: (slug, tag) => {
+        calls.push({ method: "addTag", args: [slug, tag] });
+        return Effect.succeed(undefined);
+      },
+      removeTag: (slug, tag) => {
+        calls.push({ method: "removeTag", args: [slug, tag] });
+        return Effect.succeed(undefined);
+      },
+    });
+    const chunks = ContentChunks.of({
+      upsertChunks: (slug, chunkInputs) => {
+        calls.push({ method: "upsertChunks", args: [slug, chunkInputs] });
+        return Effect.succeed(undefined);
+      },
+      deleteChunks: (slug) => {
+        calls.push({ method: "deleteChunks", args: [slug] });
+        return Effect.succeed(undefined);
+      },
+      getChunks: () => Effect.succeed([]),
+      getChunksWithEmbeddings: () => Effect.succeed([]),
+    });
+    const timeline = GraphTimeline.of({
+      addTimelineEntry: () => Effect.succeed(undefined),
+      addTimelineEntriesBatch: (entries) => {
+        calls.push({ method: "addTimelineEntriesBatch", args: [entries] });
+        return Effect.succeed(entries.length);
+      },
+      getTimeline: () => Effect.succeed([]),
+    });
+    const brainStore = ManagedRuntime.make(
+      Layer.mergeAll(
+        Layer.succeed(ContentPages, pages),
+        Layer.succeed(ContentChunks, chunks),
+        Layer.succeed(GraphTimeline, timeline)
+      )
+    );
+    const fail = async () => {
+      throw new Error("Promise compatibility method should not be used");
+    };
+    const store = {
+      brainStore,
+      getPage: fail,
+      createVersion: fail,
+      putPage: fail,
+      getTags: fail,
+      addTag: fail,
+      removeTag: fail,
+      upsertChunks: fail,
+      deleteChunks: fail,
+      addTimelineEntriesBatch: fail,
+    } satisfies IngestionWorkflowStore;
+
+    const workflow = createIngestionWorkflow({
+      store,
+      embedder: mockEmbedder(),
+    });
+    const run = await workflow.createRun();
+    const res = await run.start({
+      inputData: {
+        relativePath: "concepts/runtime.md",
+        content: `---
+type: concept
+title: Runtime
+tags: [new]
+---
+Runtime compiled truth.
+---
+- 2024-02-03: Runtime event.
+`,
+        noEmbed: true,
+      },
+    });
+
+    expect(res.status).toBe("success");
+    if (res.status === "success" && "result" in res) {
+      expect((res.result as any).status).toBe("imported");
+    }
+    expect(calls.map((c) => c.method)).toEqual([
+      "getPage",
+      "putPage",
+      "getTags",
+      "removeTag",
+      "addTag",
+      "upsertChunks",
+      "addTimelineEntriesBatch",
+    ]);
   });
 
   test("skips when content hash matches", async () => {
