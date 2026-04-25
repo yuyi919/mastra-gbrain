@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
+import * as Eff from "@yuyi919/tslibs-effect/effect-next";
+import {
+  makeRetrievalEmbedding,
+  type RetrievalEmbeddingDependencies,
+} from "../src/store/brainstore/retrieval/embedding/factory.js";
 import { LibSQLStore } from "../src/store/libsql.js";
 
 let store: LibSQLStore;
@@ -139,56 +144,78 @@ test("getEmbeddingsByChunkIds handles gracefully", async () => {
   expect(result instanceof Map).toBe(true);
 });
 
-test("searchVector supports metadata filters", async () => {
-  // First, make sure we have vector coverage for tests
-  await store.upsertChunks("page-c", [
-    {
-      chunk_index: 0,
-      chunk_text: "Vector search test",
-      chunk_source: "compiled_truth",
-      embedding: new Float32Array(1536).fill(0.5),
-    },
-  ]);
-
-  // Note: searchVector depends on LibSQLVector under the hood. Since we are testing LibSQLStore's query logic,
-  // we can at least ensure it doesn't throw. Full E2E with local vectors needs the LibSQLVector to respond.
-  // We'll mock the vectorStore.query response to test the DB join and filter logic.
-
-  const originalQuery = store.vectorStore.query.bind(store.vectorStore);
-  store.vectorStore.query = async () => [
-    {
-      id: "page-a::0",
-      score: 0.9,
-      metadata: { slug: "page-a", chunk_index: 0 },
-    },
-    {
-      id: "page-c::0",
-      score: 0.8,
-      metadata: { slug: "page-c", chunk_index: 0 },
-    },
-  ];
-
-  try {
-    // 1. Without filters
-    const results = await store.searchVector(new Array(1536).fill(0.5));
-    expect(results.length).toBe(2);
-
-    // 2. With type filter
-    const conceptResults = await store.searchVector(new Array(1536).fill(0.5), {
-      type: "concept",
-    });
-    expect(conceptResults.length).toBe(2); // both are concept
-
-    // 3. With exclude_slugs
-    const excludedResults = await store.searchVector(
-      new Array(1536).fill(0.5),
-      { exclude_slugs: ["page-a"] }
-    );
-    expect(excludedResults.length).toBe(1);
-    expect(excludedResults[0].slug).toBe("page-c");
-  } finally {
-    store.vectorStore.query = originalQuery;
+test("retrieval embedding vector seam supports metadata filters", async () => {
+  const queries: RetrievalEmbeddingDependencies["vectors"] extends {
+    query(input: infer Input): unknown;
   }
+    ? Input[]
+    : never = [];
+  const embedding = makeRetrievalEmbedding({
+    indexName: "chunks",
+    vectors: {
+      query: (input) => {
+        queries.push(input);
+        return Eff.succeed([
+          {
+            id: "page-a::0",
+            score: 0.9,
+            metadata: { slug: "page-a", chunk_index: 0 },
+          },
+          {
+            id: "page-c::0",
+            score: 0.8,
+            metadata: { slug: "page-c", chunk_index: 0 },
+          },
+        ]);
+      },
+      upsert: () => Eff.void,
+    },
+    mappers: {
+      searchVectorRows: () =>
+        Eff.succeed([
+          {
+            page_id: 1,
+            title: "Page A",
+            type: "concept",
+            slug: "page-a",
+            chunk_id: 10,
+            chunk_index: 0,
+            chunk_text: "Vector search A",
+            chunk_source: "compiled_truth",
+            stale: false,
+          },
+          {
+            page_id: 3,
+            title: "Page C",
+            type: "concept",
+            slug: "page-c",
+            chunk_id: 30,
+            chunk_index: 0,
+            chunk_text: "Vector search C",
+            chunk_source: "compiled_truth",
+            stale: false,
+          },
+        ]),
+    } as RetrievalEmbeddingDependencies["mappers"],
+  });
+
+  const results = await Eff.runPromise(
+    embedding.searchVector(new Array(1536).fill(0.5))
+  );
+  expect(results.length).toBe(2);
+
+  await Eff.runPromise(
+    embedding.searchVector(new Array(1536).fill(0.5), { type: "concept" })
+  );
+  await Eff.runPromise(
+    embedding.searchVector(new Array(1536).fill(0.5), {
+      exclude_slugs: ["page-a"],
+    })
+  );
+
+  expect(queries[0].filter).toBeUndefined();
+  expect(queries[1].filter).toEqual({ type: { $eq: "concept" } });
+  expect(queries[2].filter).toEqual({ slug: { $nin: ["page-a"] } });
 });
 
 test("Graph traversal and Links", async () => {
@@ -459,23 +486,29 @@ test("Maintenance helpers route through runtime-backed services", async () => {
   expect(healthReport.tablesOk).toBe(true);
   expect(healthReport.tableDetails.pages?.ok).toBe(true);
 
-  const originalUpsert = store.vectorStore.upsert.bind(store.vectorStore);
   const calls: Array<{
     ids: string[];
     vectors: number[][];
     metadata: Array<Record<string, unknown>>;
   }> = [];
-  store.vectorStore.upsert = async (payload: any) => {
-    calls.push({
-      ids: payload.ids,
-      vectors: payload.vectors,
-      metadata: payload.metadata,
-    });
-    return undefined as never;
-  };
+  const embedding = makeRetrievalEmbedding({
+    indexName: "chunks",
+    vectors: {
+      query: () => Eff.succeed([]),
+      upsert: (payload) => {
+        calls.push({
+          ids: payload.ids,
+          vectors: payload.vectors,
+          metadata: payload.metadata,
+        });
+        return Eff.void;
+      },
+    },
+    mappers: {} as RetrievalEmbeddingDependencies["mappers"],
+  });
 
-  try {
-    await store.upsertVectors([
+  await Eff.runPromise(
+    embedding.upsertVectors([
       {
         id: "page-b::9",
         vector: new Array(1536).fill(0.25),
@@ -490,10 +523,8 @@ test("Maintenance helpers route through runtime-backed services", async () => {
           token_count: 2,
         },
       },
-    ]);
-  } finally {
-    store.vectorStore.upsert = originalUpsert;
-  }
+    ])
+  );
 
   expect(calls).toHaveLength(1);
   expect(calls[0].ids).toEqual(["page-b::9"]);
