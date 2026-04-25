@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 10
 current_phase_name: audit-libsqlstore-consumers-narrow-public-store-boundaries
 status: executing
-stopped_at: "Phase 10 execution paused after user correction: internal LibSQLStore consumers should move to direct Effect runtime/branch services, not new Promise compatibility layers"
-last_updated: "2026-04-25T19:24:54.417Z"
+stopped_at: Completed 10-04-PLAN.md; next is corrected 10-05 direct Effect runtime tool/search work
+last_updated: "2026-04-25T19:36:05.761Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 17
-  completed_plans: 13
-  percent: 76
+  completed_plans: 14
+  percent: 82
 ---
 
 # Project State
@@ -21,11 +21,11 @@ progress:
 ## Current Position
 
 Phase: 10 (audit-libsqlstore-consumers-narrow-public-store-boundaries) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 **Current Phase:** 10
 **Current Phase Name:** audit-libsqlstore-consumers-narrow-public-store-boundaries
 **Status:** Ready to execute
-**Plan:** 4 of 7
+**Plan:** 5 of 7
 **Last activity:** 2026-04-25
 
 ## Accumulated Context
@@ -53,6 +53,7 @@ Plan: 4 of 7
 - [Phase 10]: Plan 10-02 used Promise<unknown> for timeline batch return compatibility because the workflow ignores the value and public StoreProvider returns a count.
 - [Phase 10]: Plan 10-03 introduced VectorProvider under ops/vector as the branch-level wrapper around raw vector client operations.
 - [Phase 10]: Plan 10-03 kept LibSQLStore.vectorStore facade compatibility while routing retrieval, lifecycle, and ops internal branches through typed provider contracts.
+- [Phase 10]: Plan 10-04 moved getChunksWithEmbeddings ownership into ContentChunksService and kept LibSQLStore as facade compatibility. — Direct Effect branch ownership matches D-23/D-24 while preserving public Promise behavior.
 
 ### Performance Metrics
 
@@ -61,12 +62,13 @@ Plan: 4 of 7
 | 10 | 01 | 3min | 1 | 2 | 2026-04-25 |
 | 10 | 02 | 9min | 2 | 6 | 2026-04-25 |
 | 10 | 03 | 7min | 2 | 10 | 2026-04-25 |
+| 10 | 04 | 16min | 2 | 6 | 2026-04-26 |
 
 ## Session Continuity
 
-Last session: 2026-04-25T19:24:54.410Z
-Stopped at: Phase 10 execution paused after user correction: internal LibSQLStore consumers should move to direct Effect runtime/branch services, not new Promise compatibility layers
-Resume file: .planning/phases/10-audit-libsqlstore-consumers-narrow-public-store-boundaries/10-CONTEXT.md
+Last session: 2026-04-25T19:36:05.755Z
+Stopped at: Completed 10-04-PLAN.md; next is corrected 10-05 direct Effect runtime tool/search work
+Resume file: .planning/phases/10-audit-libsqlstore-consumers-narrow-public-store-boundaries/10-05-PLAN.md
 
 ## Notes
 
