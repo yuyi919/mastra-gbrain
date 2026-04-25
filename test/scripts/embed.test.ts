@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { resolve } from "node:path";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { embedStale } from "../../src/scripts/embed.js";
+import { RetrievalEmbedding } from "../../src/store/brainstore/retrieval/embedding/index.js";
 import { LibSQLStore } from "../../src/store/libsql.js";
+import type { VectorMetadata } from "../../src/types.js";
 
 const dbPath = resolve(__dirname, "../../tmp/embed-stale.db");
 
@@ -72,4 +75,68 @@ test("embedStale processes un-embedded chunks", async () => {
   expect(processedAgain).toBe(0);
 
   await store.cleanDBFile();
+});
+
+test("embedStale uses RetrievalEmbedding runtime when available", async () => {
+  const calls: string[] = [];
+  const records: { id: string; vector: number[]; metadata: VectorMetadata }[] =
+    [];
+  const marked: number[] = [];
+  const service = RetrievalEmbedding.of({
+    getEmbeddingsByChunkIds: () => Effect.succeed(new Map()),
+    searchVector: () => Effect.succeed([]),
+    getStaleChunks: () => {
+      calls.push("runtime.getStaleChunks");
+      return Effect.succeed([
+        {
+          id: 10,
+          slug: "runtime-slug",
+          chunk_index: 0,
+          chunk_text: "Runtime stale chunk",
+          chunk_source: "compiled_truth" as const,
+        },
+      ]);
+    },
+    upsertVectors: (input) => {
+      calls.push("runtime.upsertVectors");
+      records.push(...input);
+      return Effect.succeed(undefined);
+    },
+    markChunksEmbedded: (ids) => {
+      calls.push("runtime.markChunksEmbedded");
+      marked.push(...ids);
+      return Effect.succeed(undefined);
+    },
+  });
+  const runtime = ManagedRuntime.make(
+    Layer.succeed(RetrievalEmbedding, service)
+  );
+  const fail = async () => {
+    throw new Error("Promise compatibility method should not be used");
+  };
+  const store = {
+    brainStore: runtime,
+    init: async () => {
+      calls.push("init");
+    },
+    dispose: async () => {
+      calls.push("dispose");
+    },
+    getStaleChunks: fail,
+    upsertVectors: fail,
+    markChunksEmbedded: fail,
+  };
+
+  const processed = await embedStale(10, store);
+
+  expect(processed).toBe(1);
+  expect(calls).toEqual([
+    "init",
+    "runtime.getStaleChunks",
+    "runtime.upsertVectors",
+    "runtime.markChunksEmbedded",
+  ]);
+  expect(records).toHaveLength(1);
+  expect(records[0].metadata.slug).toBe("runtime-slug");
+  expect(marked).toEqual([10]);
 });

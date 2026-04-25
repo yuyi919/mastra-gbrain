@@ -1,5 +1,8 @@
+import * as Eff from "@yuyi919/tslibs-effect/effect-next";
+import type { ManagedRuntime } from "effect";
+import { BrainStoreExt } from "../store/brainstore/ext/index.js";
 import { createDefaultStore } from "../store/index.js";
-import type { StoreProvider } from "../store/interface.js";
+import type { DatabaseHealth } from "../types.js";
 
 interface Check {
   name: string;
@@ -7,8 +10,27 @@ interface Check {
   message: string;
 }
 
+type DoctorRuntime = BrainStoreExt;
+
+interface RuntimeBackedHealthFacade {
+  readonly brainStore?: Pick<
+    ManagedRuntime.ManagedRuntime<DoctorRuntime, never>,
+    "runPromise"
+  >;
+  init(): Promise<void>;
+  dispose(): Promise<void>;
+  getHealthReport(): Promise<DatabaseHealth>;
+}
+
+export const getDoctorHealthReportEffect = Eff.fn(
+  "scripts.doctor.getHealthReport"
+)(function* () {
+  const ext = yield* BrainStoreExt;
+  return yield* ext.getHealthReport();
+});
+
 export async function runDoctor(
-  storeInstance?: StoreProvider,
+  storeInstance?: RuntimeBackedHealthFacade,
   isJson = false
 ): Promise<boolean> {
   if (!isJson) {
@@ -20,7 +42,9 @@ export async function runDoctor(
 
   try {
     await store.init();
-    const report = await store.getHealthReport();
+    const report = store.brainStore
+      ? await store.brainStore.runPromise(getDoctorHealthReportEffect())
+      : await store.getHealthReport();
 
     // 1. Connection Check
     if (report.connectionOk) {
