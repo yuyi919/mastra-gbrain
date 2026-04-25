@@ -3,4 +3,5 @@ export {
   type EngineEffect,
   OpsInternal,
   type OpsInternalService,
+  type UnsafeDBService,
 } from "./interface.js";

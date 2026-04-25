@@ -1,15 +1,16 @@
 import type * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Context } from "@yuyi919/tslibs-effect/effect-next";
+import type { SchemaError } from "effect/Schema";
 import type {
   Page,
   PageFilters,
   PageInput,
   PageVersion,
 } from "../../../../types.js";
-import type { PutReturning } from "../../../BrainStore.js";
 import type { StoreError } from "../../../BrainStoreError.js";
 
 export type EngineEffect<T> = Eff.Effect<T, StoreError>;
+export type PutReturning<T> = Eff.Effect<T, SchemaError>;
 
 export interface ContentPagesService {
   getPage(slug: string): EngineEffect<Page | null>;

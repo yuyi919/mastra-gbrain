@@ -3,4 +3,5 @@ export {
   type EngineEffect,
   GraphTimeline,
   type GraphTimelineService,
+  type TimelineBatchInput,
 } from "./interface.js";

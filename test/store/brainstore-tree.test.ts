@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Layer, ManagedRuntime } from "effect";
 import {
   BrainStoreEmbedding,
   BrainStoreSearch,
@@ -39,7 +39,9 @@ const createTreeRuntime = () =>
 describe("brainstore tree scaffolding", () => {
   test("defines BrainStoreTree before compat projection", async () => {
     const runtime = createTreeRuntime();
-    const tree = await runtime.runPromise(BrainStoreTree.use(Effect.succeed));
+    const tree = await runtime.runPromise(
+      BrainStoreTree.useSync((tree) => tree)
+    );
     const compat = makeCompatBrainStore(tree, {} as any);
     expect(tree).toHaveProperty("content");
     expect(tree).toHaveProperty("retrieval");

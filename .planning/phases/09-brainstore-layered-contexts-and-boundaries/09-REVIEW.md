@@ -1,6 +1,6 @@
 ---
 phase: 09-brainstore-layered-contexts-and-boundaries
-reviewed: "2026-04-25T14:13:00.000Z"
+reviewed: "2026-04-25T14:24:00.000Z"
 status: clean
 depth: standard
 files_reviewed: 9
@@ -41,6 +41,9 @@ No remaining blocking issues found.
 - Follow-up cleanup moved `BrainStore.Ext` into the `brainstore/ext` module shape used by other branches, with `interface.ts`, `factory.ts`, and `index.ts`.
 - `createVersion` and `putPage` now preserve the delayed `PutReturning` decode effect expected by `BrainStore.Ingestion` and the Promise bridge's `runFlatten`.
 - Redundant `XXX.use((xxx: XXX) => ...)` callback annotations were removed and left to TypeScript inference.
+- `BrainStore.ts` now defines only the root `BrainStore` Context; all branch Context services are imported from their layered modules.
+- Duplicated service contracts were collapsed into aliases/compositions over branch module types (`GraphLinksService`, `GraphTimelineService`, `OpsLifecycleService`, `UnsafeDBService`, and `BrainStoreTreeService`).
+- Redundant synchronous reads now use `useSync`, including branch scaffolding tests.
 
 ## Verification
 
@@ -48,6 +51,8 @@ No remaining blocking issues found.
 - `rg -n "makeContentPages\\(|makeContentChunks\\(|makeGraphLinks\\(|makeGraphTimeline\\(|makeRetrievalEmbedding\\(|makeRetrievalSearch\\(|makeOpsLifecycle\\(|makeOpsInternal\\(" src/store/libsql-store.ts` - no matches.
 - `rg -n "as unknown|as any|: any|<any" src/store/libsql-store.ts src/store/brainstore/content src/store/brainstore/graph src/store/brainstore/retrieval src/store/brainstore/ops` - no matches.
 - `rg -n "use\\(\\([^)]*:" src/store src/search src/tools test` - no matches.
+- `rg -n "Context\\.Service|export class BrainStore" src/store/BrainStore.ts` - only the root `BrainStore` Context remains.
+- `rg -n "\\.use\\(\\([^)]*=>\\s*(Eff|Effect)\\.succeed|\\.use\\((Eff|Effect)\\.succeed\\)" src test` - no matches.
 - `tsc --noEmit`
 - `bun test test/libsql.test.ts test/ext.test.ts`
 - `bun test test/libsql.test.ts test/ext.test.ts test/store/brainstore-tree.test.ts test/store/brainstore-layers.test.ts`

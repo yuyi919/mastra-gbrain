@@ -1,6 +1,6 @@
 ---
 phase: 09-brainstore-layered-contexts-and-boundaries
-verified: "2026-04-25T14:13:00.000Z"
+verified: "2026-04-25T14:24:00.000Z"
 status: passed
 score: 4/4 must-haves verified
 ---
@@ -17,6 +17,7 @@ score: 4/4 must-haves verified
 | 4 | Store assembly no longer depends on flat `store.features.*` projection. | passed | Forbidden projection grep across `src/store` returned no matches. |
 | 5 | `libsql-store.ts` delegates branch behavior to branch factory `makeLayer` boundaries and uses `Layer` for dependency flow. | passed | Content, graph, retrieval, and ops `makeLayer` exports now acquire branch dependencies internally; `libsql-store.ts` only composes returned Layers and passes external options/ports. |
 | 6 | Extension feature behavior is branch-owned rather than embedded in runtime assembly. | passed | `src/store/brainstore/ext/{interface,factory,index}.ts` owns `ExtService`, `BrainStoreExt`, and `makeLayer`; `libsql-store.ts` composes `makeExtLayer()`. |
+| 7 | `BrainStore.ts` only owns the root Context and no longer redeclares branch service contracts. | passed | Non-root feature Contexts were removed; branch contracts are imported from their modules and exposed as aliases/compositions. |
 
 ## Required Artifacts
 
@@ -25,6 +26,8 @@ score: 4/4 must-haves verified
 | `src/store/brainstore/tree/factory.ts` | Root tree assembly | passed | Tree factory assembles domain branches before compat projection. |
 | `src/store/brainstore/compat/factory.ts` | Flat compatibility adapter over `BrainStoreTree` | passed | Adapter derives branch surfaces from `tree` and preserves legacy-only helpers. |
 | `src/store/brainstore/ext/factory.ts` | Extension branch implementation and Layer | passed | Ext implementation moved out of `libsql-store.ts` and acquires `Mappers` plus `RetrievalEmbedding` internally. |
+| `src/store/brainstore/ops/internal/interface.ts` | Unsafe DB branch contract | passed | `UnsafeDBService` now lives with `OpsInternalService`, not in `BrainStore.ts`. |
+| `src/store/brainstore/graph/timeline/interface.ts` | Timeline branch contract | passed | `TimelineBatchInput` now lives with the timeline branch contract. |
 | `src/store/libsql-store.ts` | Runtime layer wiring for tree + compat + feature tags | passed | Adds `CompatLayer`, derives feature layers from tree/compat, and delegates branch construction to branch `makeLayer` exports. |
 | `src/store/libsql.ts` | Public Promise bridge over compatibility runtime | passed | Runtime helper methods use `BrainStoreCompat`. |
 | `test/search/hybrid.test.ts` | Branch-only search injection regression | passed | Existing regression passed. |
@@ -65,6 +68,8 @@ Automated verification completed with:
 - `rg -n "makeContentPages\\(|makeContentChunks\\(|makeGraphLinks\\(|makeGraphTimeline\\(|makeRetrievalEmbedding\\(|makeRetrievalSearch\\(|makeOpsLifecycle\\(|makeOpsInternal\\(" src/store/libsql-store.ts`
 - `rg -n "as unknown|as any|: any|<any" src/store/libsql-store.ts src/store/brainstore/content src/store/brainstore/graph src/store/brainstore/retrieval src/store/brainstore/ops`
 - `rg -n "use\\(\\([^)]*:" src/store src/search src/tools test`
+- `rg -n "Context\\.Service|export class BrainStore" src/store/BrainStore.ts`
+- `rg -n "\\.use\\(\\([^)]*=>\\s*(Eff|Effect)\\.succeed|\\.use\\((Eff|Effect)\\.succeed\\)" src test`
 
 Notes:
 

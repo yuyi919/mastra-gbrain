@@ -9,21 +9,21 @@ import type { StoreError } from "../../../BrainStoreError.js";
 
 export type EngineEffect<T> = Eff.Effect<T, StoreError>;
 
+export interface TimelineBatchInput {
+  slug: string;
+  date: string;
+  source?: string;
+  summary: string;
+  detail?: string;
+}
+
 export interface GraphTimelineService {
   addTimelineEntry(
     slug: string,
     entry: TimelineInput,
     opts?: { skipExistenceCheck?: boolean }
   ): EngineEffect<void>;
-  addTimelineEntriesBatch(
-    entries: Array<{
-      slug: string;
-      date: string;
-      source?: string;
-      summary: string;
-      detail?: string;
-    }>
-  ): EngineEffect<number>;
+  addTimelineEntriesBatch(entries: TimelineBatchInput[]): EngineEffect<number>;
   getTimeline(slug: string, opts?: TimelineOpts): EngineEffect<TimelineEntry[]>;
 }
 

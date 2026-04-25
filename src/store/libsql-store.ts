@@ -5,12 +5,6 @@ import type { BrainStoreRuntime } from "./BrainStore.js";
 import {
   BrainStore,
   BrainStoreExt,
-  BrainStoreIngestion,
-  BrainStoreLifecycleService,
-  BrainStoreLinks,
-  BrainStoreSearch,
-  BrainStoreTimeline,
-  BrainStoreUnsafeDB,
 } from "./BrainStore.js";
 import { StoreError } from "./BrainStoreError.js";
 import { makeLayer as makeContentChunksLayer } from "./brainstore/content/chunks/factory.js";
@@ -219,48 +213,20 @@ export function makeLayer(options: { url: string } & BrainStore.Options) {
     })
   ).pipe(Layer.provide(Layer.mergeAll(TreeLayer, BrainStoreLayer)));
 
-  const FeatureLayers = Layer.mergeAll(
-    Layer.effect(
-      BrainStoreIngestion,
-      BrainStoreCompat.use((store) => Eff.succeed(store.features.ingestion))
-    ),
-    Layer.effect(
-      BrainStoreLinks,
-      BrainStoreTree.use((tree) => Eff.succeed(tree.graph.links))
-    ),
-    Layer.effect(
-      BrainStoreSearch,
-      BrainStoreTree.use((tree) => Eff.succeed(tree.retrieval.search))
-    ),
-    Layer.effect(
-      BrainStoreTimeline,
-      BrainStoreTree.use((tree) => Eff.succeed(tree.graph.timeline))
-    ),
-    Layer.effect(
-      BrainStoreLifecycleService,
-      BrainStoreTree.use((tree) => Eff.succeed(tree.ops.lifecycle))
-    ),
-    Layer.effect(
-      BrainStoreUnsafeDB,
-      BrainStoreTree.use((tree) => Eff.succeed(tree.ops.internal))
-    )
-  ).pipe(Layer.provide(Layer.mergeAll(TreeLayer, CompatLayer, ExtLayer)));
-
   return Layer.mergeAll(
     DatabaseLive,
     BranchLayers,
     TreeLayer,
     ExtLayer,
     BrainStoreLayer,
-    CompatLayer,
-    FeatureLayers
+    CompatLayer
   ).pipe(
     Layer.provideMerge([Eff.Logger.minimumLogLevel("Debug"), Eff.Logger.pretty])
   );
 }
 
 export function make(options: { url: string } & BrainStore.Options) {
-  return BrainStore.use((store) => Eff.succeed(store)).pipe(
+  return BrainStore.useSync((store) => store).pipe(
     Eff.provide(makeLayer(options))
   );
 }
