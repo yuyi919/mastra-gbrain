@@ -226,7 +226,5 @@ export function makeLayer(options: { url: string } & BrainStore.Options) {
 }
 
 export function make(options: { url: string } & BrainStore.Options) {
-  return BrainStore.useSync((store) => store).pipe(
-    Eff.provide(makeLayer(options))
-  );
+  return BrainStore.asEffect().pipe(Eff.provide(makeLayer(options)));
 }

@@ -22,6 +22,15 @@
 - 测试隔离：测试数据库必须落在 `./tmp/`，并通过 `dispose()` 释放资源（[libsql.ts](./src/store/libsql.ts)）。
 - 多语言：分词与检索依赖 `Intl.Segmenter`（[segmenter.ts](./src/segmenter.ts)），避免只按空格处理。
 
+## Store / Effect 近期经验（必须延续）
+- `BrainStore.ts` 只保留根 `BrainStore` Context；分层模块自己的 Context、service contract、输入类型应定义在 `src/store/brainstore/**/interface.ts`，`BrainStore.ts` 只做组合、别名或兼容投影，避免重复定义。
+- `libsql-store.ts` 负责装配 database、branch factory、tree、compat、ext 与 root layer；具体能力实现应拆到各分层 factory / `makeLayer`，不要在 `libsql-store.ts` 里重复实现同一类方法或重新投影已存在的分层 Context。
+- 依赖传递优先用 `Layer` 组合解决。新增 store 分支时同时提供 factory 与 `makeLayer`，并让 runtime wiring 真实消费这些 layer。
+- Store 实现文件中不要使用 `as unknown` / `as any` 绕开类型问题。遇到类型不齐，优先调整分层 contract，使源头类型正确。
+- `Context.Service` accessor 选择：取完整 service 时用 `XXX.asEffect()`；取同步字段时用 `XXX.useSync((xxx) => xxx.field)`；调用返回 Effect 的方法时用 `XXX.use((xxx) => xxx.method())`。避免 `XXX.useSync((xxx) => xxx)`、`XXX.use((xxx) => Eff.succeed(xxx.field))`、`XXX.use(Effect.succeed)` 这类冗余模式。
+- `XXX.use(...)` / `XXX.useSync(...)` 回调参数不要显式标注类型，让 TypeScript 从 service 自动推导。
+- `createVersion`、`putPage` 等写入 API 需要保留延迟解析返回类型语义；不要为了压平类型而提前解析，接口应与分层 ingestion/content contract 对齐。
+
 ## 搜索相关现状（近期关键改动）
 - `searchKeyword` 只负责从 FTS5 获取候选并做过滤/limit，不再做复杂去重；SQL 已改为 drizzle-orm QueryBuilder 方式构建（[libsql.ts](./src/store/libsql.ts)）。
 - 去重与结果规整统一在混合检索层进行：`dedupResults` 已融合至 [hybrid.ts](./src/search/hybrid.ts)，用于对关键词结果与 RRF 融合后的结果做全局去重与质量控制。

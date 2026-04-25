@@ -39,9 +39,7 @@ const createTreeRuntime = () =>
 describe("brainstore tree scaffolding", () => {
   test("defines BrainStoreTree before compat projection", async () => {
     const runtime = createTreeRuntime();
-    const tree = await runtime.runPromise(
-      BrainStoreTree.useSync((tree) => tree)
-    );
+    const tree = await runtime.runPromise(BrainStoreTree.asEffect());
     const compat = makeCompatBrainStore(tree, {} as any);
     expect(tree).toHaveProperty("content");
     expect(tree).toHaveProperty("retrieval");

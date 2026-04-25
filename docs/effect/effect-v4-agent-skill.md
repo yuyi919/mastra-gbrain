@@ -17,6 +17,9 @@ When you are asked to write, modify, or migrate Effect TypeScript code, you MUST
    - 必须使用类语法声明服务：`class MyService extends Context.Service<MyService, { ... }>()("MyService") {}`
    - 使用服务时，在 `Effect.gen` 中 `const svc = yield* MyService`。
    - 提供服务实现时，使用 `Layer.succeed` 或 `Layer.effect`。
+   - 取完整 service 时优先用 `MyService.asEffect()`，不要写 `MyService.useSync((svc) => svc)`。
+   - 取同步字段时用 `MyService.useSync((svc) => svc.field)`；调用返回 Effect 的方法时用 `MyService.use((svc) => svc.method())`。
+   - 不要写 `MyService.use((svc) => Effect.succeed(svc.field))` 或 `MyService.use(Effect.succeed)`；`use` / `useSync` 回调参数类型应由 service 自动推导。
 
 3. **错误处理 (Schema.TaggedErrorClass)：**
    - 不推荐使用普通的 `Error`，应定义具有强类型的自定义错误：`class MyError extends Schema.TaggedErrorClass<MyError>()("MyError", { message: Schema.String }) {}`。

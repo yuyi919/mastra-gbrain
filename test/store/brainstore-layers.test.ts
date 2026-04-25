@@ -26,9 +26,7 @@ describe("brainstore branch-only scaffolding", () => {
       Layer.succeed(BrainStoreSearch, BrainStoreSearch.of(search as any))
     );
 
-    const resolved = await runtime.runPromise(
-      BrainStoreSearch.useSync((search) => search)
-    );
+    const resolved = await runtime.runPromise(BrainStoreSearch.asEffect());
     expect(resolved).toHaveProperty("searchKeyword");
     expect(resolved).toHaveProperty("getEmbeddingsByChunkIds");
   });
