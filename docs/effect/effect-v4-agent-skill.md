@@ -35,7 +35,7 @@ When you are asked to write, modify, or migrate Effect TypeScript code, you MUST
 6. **测试 (Testing & BunTester)：**
    - 所有的 Effect 测试用例必须使用对应的 `it.effect`。
    - **对于 Bun 环境**：强烈约束必须使用 `@yuyi919/tslibs-effect/BunTester`，并优先推荐使用 `it.gen("name", function*() { ... })` 语法糖来编写测试。
-   - **对于非 Bun 环境**：必须导入并使用 `@effect/vitest` 的 `assert` 模块，禁止在 Effect 测试中使用 vitest 的 `expect`。
+   - **对于 Vitest 环境**：测试运行器可使用 `@effect/vitest` 的 `describe` / `it.effect`，断言统一使用 `node:assert`，禁止在 Effect 测试中使用 vitest 的 `expect`。
 
 ---
 

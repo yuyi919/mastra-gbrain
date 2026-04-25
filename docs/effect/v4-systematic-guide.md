@@ -123,8 +123,8 @@ const resource = Effect.acquireRelease(
 ## 5. 测试 (Testing)
 
 Effect v4 的测试有明确的范式要求。在普通的 Node/Vitest 环境下：
-- 导入专门的断言方法：`import { assert, describe, it } from "@effect/vitest"` 或使用 Node 原生 `assert`。
-- **强烈推荐使用 Node 的原生断言 `import assert from "node:assert"`**，如 `assert.ok`, `assert.strictEqual`, `assert.deepEqual`。
+- 使用 `@effect/vitest` 的 `describe` / `it.effect` 组织测试。
+- **断言统一使用 Node 的原生断言 `import assert from "node:assert"`**，如 `assert.ok`, `assert.strictEqual`, `assert.deepEqual`。
 - **避免使用各种测试框架原生的 `expect`**，这可以避免复杂的类型断言问题以及测试文件报类型错误。
 - **必须使用 `it.effect`** 编写测试用例，并在内部使用 `Effect.gen`：
 
@@ -177,7 +177,7 @@ describe("基于 BunTester 的 Effect 测试", () => {
   // 3. 虚拟时间快进 (内置 TestClock)
   it.gen("时间控制测试", function* () {
     let executed = false;
-    yield* Effect.fork(Effect.sleep("10 seconds").pipe(Effect.tap(() => { executed = true })));
+    yield* Effect.forkChild(Effect.sleep("10 seconds").pipe(Effect.tap(() => { executed = true })));
     yield* TestClock.adjust("10 seconds");
     assert.ok(executed === true, "executed should be true");
   });
@@ -207,7 +207,7 @@ import assert from "node:assert";
 
 it.gen("测试并发状态更新", function* () {
   const counter = yield* TxRef.make(0);
-  yield* Effect.fork(Effect.sleep("10 millis").pipe(Effect.andThen(TxRef.update(counter, n => n + 1))));
+  yield* Effect.forkChild(Effect.sleep("10 millis").pipe(Effect.andThen(TxRef.update(counter, n => n + 1))));
   
   // 优雅等待值变为 1
   yield* waitFor(counter, (val) => {

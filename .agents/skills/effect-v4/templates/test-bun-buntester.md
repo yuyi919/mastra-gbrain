@@ -30,7 +30,7 @@ describe("BunTester + Effect", () => {
 
   it.gen("testclock", function* () {
     let ran = false
-    yield* Effect.fork(Effect.sleep("10 seconds").pipe(Effect.tap(() => { ran = true })))
+    yield* Effect.forkChild(Effect.sleep("10 seconds").pipe(Effect.tap(() => { ran = true })))
     yield* TestClock.adjust("10 seconds")
     assert.strictEqual(ran, true)
   })
@@ -45,7 +45,7 @@ describe("BunTester + Effect", () => {
 
   it.gen("waitFor stm", function* () {
     const ref = yield* TxRef.make(0)
-    yield* Effect.fork(Effect.sleep("10 millis").pipe(Effect.andThen(TxRef.update(ref, (n) => n + 1))))
+    yield* Effect.forkChild(Effect.sleep("10 millis").pipe(Effect.andThen(TxRef.update(ref, (n) => n + 1))))
     yield* waitFor(ref, (val) => {
       if (val !== 1) throw new Error("not ready")
     })
