@@ -465,17 +465,17 @@ This lets `LibSQLStore` keep working structurally while tool tests can use preci
 | A1 | `getChunksWithEmbeddings` can initially preserve current behavior by delegating to `getChunks` while moving ownership to `ContentChunksService`. [ASSUMED] | Architecture Patterns / Code Examples | If true embedding retrieval is expected now, planner must add vector lookup implementation rather than a pure ownership move. |
 | A2 | Tool capability contracts can live in `src/tools/contracts.ts` without creating an unwanted public API commitment. [ASSUMED] | Recommended Project Structure | If exports are treated as public package API, keep contracts local to each tool file instead. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `getChunksWithEmbeddings` return actual vector payloads now or preserve current chunk-only behavior?**
    - What we know: current compat implementation delegates to `getChunks`, and `getEmbeddingsByChunkIds` currently returns an empty map. [VERIFIED: src/store/libsql-store.ts; VERIFIED: src/store/brainstore/retrieval/embedding/factory.ts]
-   - What's unclear: whether Phase 10 should implement actual vector retrieval or only move ownership. [ASSUMED]
-   - Recommendation: Plan ownership move first and add a test preserving current public behavior; add actual vector retrieval only if a requirement or failing test demands it. [VERIFIED: P10-05; ASSUMED]
+   - **Resolution:** Phase 10 should move ownership into `ContentChunksService` while preserving current public chunk-only behavior. It should add/keep tests that prove the facade still returns the same chunk shape. Actual vector payload retrieval is not required unless an existing test or explicit requirement fails because of its absence. [RESOLVED: P10-05 preserves behavior; RESOLVED: 10-CONTEXT.md D-12/D-14]
+   - Planning implication: Plan 04 should be an ownership and projection move, not a new vector-payload feature.
 
 2. **Should `src/agent/index.ts` stay broad?**
    - What we know: the agent constructs every tool, so its required store is effectively the intersection of all tool stores. [VERIFIED: src/agent/index.ts]
-   - What's unclear: whether a named `GBrainAgentStore` improves clarity enough to justify another aggregate type. [ASSUMED]
-   - Recommendation: Narrow individual tools first; keep agent broad or introduce an aggregate only after tool contracts settle. [VERIFIED: safe planning order; ASSUMED]
+   - **Resolution:** Phase 10 should narrow individual tools and keep `src/agent/index.ts` as the public aggregate wiring point for now. Do not introduce `GBrainAgentStore` in this phase unless it becomes a purely local non-exported helper after tool contracts settle. [RESOLVED: P10-05 public behavior preservation; RESOLVED: 10-CONTEXT.md D-01/D-09]
+   - Planning implication: Plan 05 should focus on tool-level contracts and ensure `createGBrainAgent(store, embedder)` remains structurally compatible with a full `LibSQLStore` / `StoreProvider`.
 
 ## Environment Availability
 
