@@ -46,6 +46,7 @@
 
 ## 近期工作流纪律
 - 每次 spec/任务落地后：更新文档（如 CLAUDE.md/Spec checklist）+ 运行测试 + 语义化 git commit（不提交任何 secret）。
+- GSD CLI fallback：如果当前环境找不到 `gsd-sdk`，优先使用 `node .codex/get-shit-done/bin/gsd-tools.cjs <command>` 作为本地替代，不要直接手改 `.planning/STATE.md` / `.planning/ROADMAP.md`。
 
 # Agent Guidelines & Skill Index
 
