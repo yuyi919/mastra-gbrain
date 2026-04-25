@@ -2,30 +2,19 @@ import { SqliteClient } from "@effect/sql-sqlite-bun";
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer, pipe } from "@yuyi919/tslibs-effect/effect-next";
 import { SqlClient } from "effect/unstable/sql";
-import { extractWordsForSearch } from "../segmenter.js";
 import type {
   AccessToken,
   BrainHealth,
   BrainStats,
-  Chunk,
-  ChunkInput,
-  ChunkSource,
   DatabaseHealth,
   FileRecord,
   IngestLogEntry,
   IngestLogInput,
-  Link,
   PageInput,
   RawData,
-  SearchOpts,
-  SearchResult,
-  StaleChunk,
-  TimelineEntry,
-  TimelineInput,
-  TimelineOpts,
   VectorMetadata,
 } from "../types.js";
-import type { BrainStoreRuntime, TimelineBatchInput } from "./BrainStore.js";
+import type { BrainStoreRuntime } from "./BrainStore.js";
 import {
   BrainStore,
   BrainStoreEmbedding,
@@ -42,43 +31,35 @@ import {
   ContentPages,
 } from "./BrainStore.js";
 import { StoreError } from "./BrainStoreError.js";
-import type { ContentPagesService } from "./brainstore/content/pages/index.js";
-import type { OpsInternalService } from "./brainstore/ops/internal/index.js";
-import { OpsInternal } from "./brainstore/ops/internal/index.js";
-import type { OpsLifecycleService } from "./brainstore/ops/lifecycle/index.js";
-import { OpsLifecycle } from "./brainstore/ops/lifecycle/index.js";
+import { makeContentChunks } from "./brainstore/content/chunks/factory.js";
+import { makeContentPages } from "./brainstore/content/pages/factory.js";
+import { makeGraphLinks } from "./brainstore/graph/links/factory.js";
+import { makeGraphTimeline } from "./brainstore/graph/timeline/factory.js";
+import {
+  OpsInternal,
+  makeOpsInternal,
+} from "./brainstore/ops/internal/index.js";
+import {
+  OpsLifecycle,
+  makeOpsLifecycle,
+} from "./brainstore/ops/lifecycle/index.js";
+import { makeRetrievalEmbedding } from "./brainstore/retrieval/embedding/factory.js";
+import { makeRetrievalSearch } from "./brainstore/retrieval/search/factory.js";
 import {
   BrainStoreTree,
   type BrainStoreTreeService,
-  makeBrainStoreTree,
+  makeComposedLayer,
 } from "./brainstore/tree/index.js";
 import {
   BrainStoreCompat,
   makeCompatBrainStore,
 } from "./brainstore/compat/index.js";
-import { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import init from "./init.sql" with { type: "text" };
 import { Mappers } from "./Mappers.js";
 import { LATEST_VERSION } from "./schema.js";
 
 const catchStoreError = StoreError.catch;
 const DEFAULT_INDEX_NAME = "gbrain_chunks";
-type VectorQueryFilter = NonNullable<
-  NonNullable<
-    Parameters<NonNullable<BrainStore.Options["vectorStore"]>["query"]>[0][
-      "filter"
-    ]
-  >
->;
-
-function requireBrainStoreTree(
-  store: BrainStore.Service
-): BrainStoreTreeService {
-  if (!store.tree) {
-    throw new Error("BrainStore runtime is missing BrainStoreTree");
-  }
-  return store.tree;
-}
 
 /**
  * 将 JSON 字段安全转为对象。
@@ -124,468 +105,68 @@ function getClosableTursoClient(
   return undefined;
 }
 
-const makeStore = Eff.fn(function* (options: BrainStore.Options) {
-  const mappers = yield* Mappers;
-  const sql = yield* SqlClient.SqlClient;
-  const vectorStore = options.vectorStore;
-  const indexName = DEFAULT_INDEX_NAME;
-  const dimension = options.dimension ?? 1536;
-
-  const deleteVectorsBySlug = Eff.fn(function* (slug: string) {
+function makeDeleteVectorsBySlug(
+  vectorStore: BrainStore.Options["vectorStore"],
+  indexName: string
+) {
+  return Eff.fn("brainstore.vectors.deleteBySlug")(function* (slug: string) {
     yield* Eff.from(() =>
       vectorStore?.deleteVectors({
         indexName,
         filter: { slug: { $eq: slug } },
       })
     );
-  });
-
-  const deleteChunksByPageId = Eff.fn("deleteChunksByPageId")(function* (
-    page_id: number
-  ) {
-    yield* mappers.deleteFtsByPageId(page_id);
-    yield* mappers.deleteContentChunksByPageId(page_id);
   }, catchStoreError);
-  const queryVectors = Eff.fn(function* (
-    queryVector: number[],
-    opts?: SearchOpts & { slug?: string }
-  ) {
-    const limit = opts?.limit ?? 10;
-    const filter: VectorQueryFilter = {};
-    if (opts?.type) filter.type = { $eq: opts.type };
-    if (opts?.detail === "low") filter.chunk_source = { $eq: "compiled_truth" };
-    if (opts?.slug) {
-      filter.slug = { $eq: opts.slug };
-    } else if (opts?.exclude_slugs && opts.exclude_slugs.length > 0) {
-      filter.slug = { $nin: opts.exclude_slugs };
-    }
-    return yield* Eff.from(
-      () =>
-        vectorStore?.query({
-          indexName,
-          queryVector: Array.from(queryVector),
-          topK: limit * 2,
-          filter: Object.keys(filter).length > 0 ? filter : undefined,
-        }) ?? []
-    );
-  });
+}
 
-  const ingestion: BrainStore.Ingestion = {
-    listPages: Eff.fn("listPages")(function* (filters = {}) {
-      return yield* pipe(
-        mappers.listPages(filters).asEffect(),
-        Eff.flatMap((rows) => Eff.all(rows.map(Page.decode)))
-      );
-    }, catchStoreError),
-    getPage: Eff.fn("getPage")(function* (slug: string) {
-      const result = yield* mappers.getPageBySlug(slug);
-      if (!result) return null;
-      return yield* Page.decode(result);
-    }, catchStoreError),
-    updateSlug: Eff.fn("updateSlug")(function* (
-      oldSlug: string,
-      newSlug: string
-    ) {
-      yield* mappers.updateSlug(oldSlug, newSlug);
-    }, catchStoreError),
-    resolveSlugs: Eff.fn("resolveSlugs")(function* (partial: string) {
-      const exact = yield* mappers.resolveSlugExact(partial);
-      if (exact) return [exact.slug];
-      const fuzzy = yield* mappers.resolveSlugFuzzy(partial);
-      return fuzzy.map((r) => r.slug);
-    }, catchStoreError),
-    getTags: Eff.fn("getTags")(function* (slug: string) {
-      const result = yield* mappers.getTagsBySlug(slug);
-      return result.map((r) => r.tag);
-    }, catchStoreError),
-    createVersion: Eff.fn("createVersion")(function* (slug: string) {
-      const pageResult = yield* mappers.getPageForVersionBySlug(slug);
-      if (!pageResult) {
-        throw new Error(`Page ${slug} not found`);
-      }
-      const res = yield* mappers.insertPageVersion({
-        page_id: pageResult.id,
-        compiled_truth: pageResult.compiled_truth || "",
-        frontmatter: pageResult.frontmatter || "{}",
-      });
-      return PageVersion.decode(res[0]);
-    }, catchStoreError),
-    getVersions: Eff.fn("getVersions")(function* (slug: string) {
-      const rows = yield* mappers.getVersionsBySlug(slug);
-      return yield* Eff.all(rows.map(PageVersion.decode));
-    }, catchStoreError),
-    revertToVersion: Eff.fn("revertToVersion")(function* (
-      slug: string,
-      versionId: number
-    ) {
-      return yield* sql.withTransaction(
-        Eff.gen(function* () {
-          const versions = yield* mappers.getVersionsBySlug(slug);
-          const targetVersion = versions.find((v: any) => v.id === versionId);
-          if (!targetVersion) return;
-
-          const existingPage = yield* mappers.getPageBySlug(slug);
-          if (!existingPage) return;
-
-          yield* mappers.upsertPage(slug, {
-            title: existingPage.title,
-            type: existingPage.type,
-            timeline: existingPage.timeline || "",
-            content_hash: existingPage.content_hash || "",
-            compiled_truth: targetVersion.compiled_truth,
-            frontmatter: targetVersion.frontmatter
-              ? JSON.parse(targetVersion.frontmatter)
-              : {},
-          });
-        })
-      );
-    }, catchStoreError),
-    putPage: Eff.fn("putPage")(function* (slug: string, page: PageInput) {
-      return yield* sql.withTransaction(
-        Eff.gen(function* () {
-          const record = yield* mappers.upsertPage(slug, page);
-          yield* ingestion.createVersion(slug).pipe(Eff.asVoid);
-          return Page.decode(record[0]);
-        })
-      );
-    }, catchStoreError),
-    deletePage: Eff.fn("deletePage")(function* (slug: string) {
-      yield* Eff.all([
-        mappers.deletePageBySlug(slug).asEffect(),
-        deleteVectorsBySlug(slug),
-      ]);
-    }, catchStoreError),
-    addTag: Eff.fn("addTag")(function* (slug: string, tag: string) {
-      const result = yield* mappers.getPageIdBySlug(slug);
-      const pageResult = Array.isArray(result) ? result[0] : result;
-      if (!pageResult) return;
-      yield* mappers.insertTag(pageResult.id, tag);
-    }, catchStoreError),
-    removeTag: Eff.fn("removeTag")(function* (slug: string, tag: string) {
-      const result = yield* mappers.getPageIdBySlug(slug);
-      const pageResult = Array.isArray(result) ? result[0] : result;
-      if (!pageResult) return;
-      yield* mappers.deleteTag(pageResult.id, tag);
-    }, catchStoreError),
-    upsertChunks: Eff.fn("upsertChunks")(function* (
-      slug: string,
-      chunks: ChunkInput[]
-    ) {
-      const pageResult = yield* mappers.getPageBasicBySlug(slug);
-      if (pageResult.length === 0) return;
-      const page_id = pageResult[0].id;
-      const page_title = pageResult[0].title;
-      const page_type = pageResult[0].type;
-      const newIndices = chunks.map((c) => c.chunk_index);
-
-      if (newIndices.length > 0) {
-        yield* mappers.deleteContentChunksNotIn(page_id, newIndices);
-        yield* mappers.deleteFtsChunksNotIn(page_id, newIndices);
-      } else {
-        yield* ingestion.deleteChunks(slug);
-        return;
-      }
-
-      if (chunks.length > 0) {
-        for (const chunk of chunks) {
-          yield* mappers.upsertContentChunk(page_id, chunk);
-        }
-        yield* mappers.deleteFtsByPageId(page_id);
-        yield* mappers.insertFtsChunks(
-          chunks.map((chunk) => ({
-            page_id,
-            page_title,
-            page_slug: slug,
-            chunk_index: chunk.chunk_index,
-            chunk_text: chunk.chunk_text,
-            chunk_source: chunk.chunk_source,
-            token_count: chunk.token_count ?? 0,
-            chunk_text_segmented: extractWordsForSearch(chunk.chunk_text),
-          }))
-        );
-      }
-
-      const vectorData = chunks
-        .filter((c) => c.embedding)
-        .map((c) => ({
-          id: `${slug}::${c.chunk_index}`,
-          vector: Array.from(c.embedding!),
-          metadata: {
-            page_id,
-            slug,
-            title: page_title,
-            type: page_type,
-            chunk_index: c.chunk_index,
-            chunk_source: c.chunk_source,
-            chunk_text: c.chunk_text,
-            token_count: c.token_count ?? 0,
-          } satisfies VectorMetadata,
-        }));
-      if (vectorStore && vectorData.length > 0) {
-        yield* Eff.promise(() =>
-          vectorStore.upsert({
-            indexName,
-            vectors: vectorData.map((v) => v.vector),
-            ids: vectorData.map((v) => v.id),
-            metadata: vectorData.map((v) => v.metadata),
-            deleteFilter: { slug: { $eq: slug } },
-          })
-        );
-      }
-    }, catchStoreError),
-    deleteChunks: Eff.fn("deleteChunks")(
-      function* (slug: string) {
-        const result = yield* mappers.getPageIdBySlug(slug);
-        const pageResult = Array.isArray(result) ? result[0] : result;
-        if (!pageResult) return;
-        const page_id = pageResult.id;
-        yield* Eff.all([
-          deleteChunksByPageId(page_id).asEffect(),
-          deleteVectorsBySlug(slug).asEffect(),
-        ]);
-      },
-      catchStoreError,
-      Eff.withConcurrency(2)
-    ),
-    getChunks: Eff.fn("getChunks")(function* (slug: string) {
-      const rows = yield* mappers.getChunksBySlug(slug);
-      return rows.map(
-        (r) =>
-          ({
-            ...r,
-            embedding: null,
-            model: r.model,
-            embedded_at: r.embedded_at ? new Date(r.embedded_at) : null,
-          }) satisfies Chunk
-      );
-    }, catchStoreError),
-    getChunksWithEmbeddings: Eff.fn("getChunksWithEmbeddings")(function* (
+function makeLegacyIngestion(
+  tree: BrainStoreTreeService
+): BrainStore.Ingestion {
+  return {
+    getPage: tree.content.pages.getPage,
+    listPages: tree.content.pages.listPages,
+    resolveSlugs: tree.content.pages.resolveSlugs,
+    getTags: tree.content.pages.getTags,
+    createVersion: Eff.fn("brainstore.compat.createVersion")(function* (
       slug: string
     ) {
-      return yield* ingestion.getChunks(slug);
+      const version = yield* tree.content.pages.createVersion(slug);
+      return Eff.succeed(version);
     }, catchStoreError),
-    getEmbeddingsByChunkIds: Eff.fn("getEmbeddingsByChunkIds")(function* (
-      _ids: number[]
-    ) {
-      // NOTE: 依赖原始 vector_store 的 Unsafe 查询，按需求暂不迁移。
-      return new Map<number, Float32Array>();
-    }, catchStoreError),
-  };
-
-  const link: BrainStore.Link = {
-    addLink: Eff.fn("addLink")(function* (
-      fromSlug: string,
-      toSlug: string,
-      linkType = "references",
-      context = ""
-    ) {
-      const fromResult = yield* mappers.getPageIdBySlug(fromSlug);
-      const toResult = yield* mappers.getPageIdBySlug(toSlug);
-      const fromPage = Array.isArray(fromResult) ? fromResult[0] : fromResult;
-      const toPage = Array.isArray(toResult) ? toResult[0] : toResult;
-      if (!fromPage || !toPage) return;
-      yield* mappers.insertLink({
-        from_page_id: fromPage.id,
-        to_page_id: toPage.id,
-        link_type: linkType,
-        context,
-      });
-    }, catchStoreError),
-    removeLink: Eff.fn("removeLink")(function* (
-      fromSlug: string,
-      toSlug: string
-    ) {
-      const fromResult = yield* mappers.getPageIdBySlug(fromSlug);
-      const toResult = yield* mappers.getPageIdBySlug(toSlug);
-      const fromPage = Array.isArray(fromResult) ? fromResult[0] : fromResult;
-      const toPage = Array.isArray(toResult) ? toResult[0] : toResult;
-      if (!fromPage || !toPage) return;
-      yield* mappers.deleteLink(fromPage.id, toPage.id);
-    }, catchStoreError),
-    getLinks: Eff.fn("getLinks")(function* (slug: string) {
-      const outgoing = yield* mappers.getLinksOutgoingBySlug(slug);
-      const incomingRows = yield* mappers.getBacklinksBySlug(slug);
-      const incoming = incomingRows.map(
-        (r) =>
-          ({
-            from_slug: r.from_slug,
-            to_slug: r.to_slug,
-            link_type: r.link_type || "",
-            context: r.context || "",
-          }) satisfies Link
-      );
-      return [
-        ...outgoing.map((r) => ({
-          from_slug: r.from_slug,
-          to_slug: r.to_slug,
-          link_type: r.link_type || "",
-          context: r.context || "",
-        })),
-        ...incoming,
-      ] satisfies Link[];
-    }, catchStoreError),
-    getBacklinks: Eff.fn("getBacklinks")(function* (slug: string) {
-      const rows = yield* mappers.getBacklinksBySlug(slug);
-      return rows.map(
-        (r) =>
-          ({
-            from_slug: r.from_slug,
-            to_slug: r.to_slug,
-            link_type: r.link_type || "",
-            context: r.context || "",
-          }) satisfies Link
-      );
-    }, catchStoreError),
-    rewriteLinks: Eff.fn("rewriteLinks")(function* (
-      _oldSlug: string,
-      _newSlug: string
-    ) {
-      // 保持与 libsql.ts 一致：暂不处理文本重写
-    }, catchStoreError),
-    traverseGraph: Eff.fn("traverseGraph")(function* (slug, depth = 5) {
-      const rows = yield* mappers.unsafe.traverseGraph(slug, depth).asEffect();
-      return yield* Eff.all(rows.map(GraphNode.decode));
-    }, catchStoreError),
-    traversePaths: Eff.fn("traversePaths")(function* (_slug: string, _opts?) {
-      return [];
-    }, catchStoreError),
-    getBacklinkCounts: Eff.fn("getBacklinkCounts")(function* (slugs) {
-      const result = new Map<string, number>();
-      if (slugs.length === 0) return result;
-      // Initialize all slugs to 0 so callers get a consistent map.
-      for (const s of slugs) result.set(s, 0);
-      // PGLite needs explicit cast for array binding (does not auto-serialize JS arrays).
-      const rows = yield* mappers.getBacklinkCounts(slugs);
-      for (const r of rows) {
-        result.set(r.slug, r.cnt);
-      }
-      return result;
-    }, catchStoreError),
-  };
-
-  const hybridSearch: BrainStore.HybridSearch = {
-    searchKeyword: Eff.fn("searchKeyword")(function* (
-      query: string,
-      opts?: SearchOpts
-    ) {
-      const segmentedQuery = extractWordsForSearch(query);
-      const rows = yield* mappers.searchKeyword(segmentedQuery, opts);
-      return rows.map((row) => {
-        const score = Math.abs(row.score) / (1 + Math.abs(row.score));
-        return { ...row, score };
-      });
-    }, catchStoreError),
-    searchVector: Eff.fn("searchVector")(function* (
-      queryVector: number[],
-      opts?: SearchOpts & { slug?: string }
-    ) {
-      const limit = opts?.limit ?? 10;
-      const vectorResults = yield* queryVectors(queryVector, opts);
-      const hits = vectorResults
-        .map((match: any) => ({
-          score: match.score as number,
-          slug: (match.metadata?.slug ??
-            (typeof match.id === "string"
-              ? match.id.split("::")[0]
-              : undefined)) as string | undefined,
-          chunk_index: (match.metadata?.chunk_index ??
-            (typeof match.id === "string"
-              ? Number(match.id.split("::")[1])
-              : undefined)) as number | undefined,
-        }))
-        .filter(
-          (h): h is { score: number; slug: string; chunk_index: number } =>
-            !!h.slug && Number.isFinite(h.chunk_index)
-        );
-      const slugs = Array.from(new Set(hits.map((h) => h.slug)));
-      const chunkIndexes = Array.from(new Set(hits.map((h) => h.chunk_index)));
-      if (slugs.length === 0 || chunkIndexes.length === 0) return [];
-      const rows = yield* mappers.searchVectorRows(slugs, chunkIndexes, opts);
-      const byKey = new Map<string, (typeof hits)[number]>();
-      const out: SearchResult[] = [];
-      for (const r of hits) {
-        byKey.set(`${r.slug}::${r.chunk_index}`, r);
-      }
-      for (const r of rows) {
-        const h = byKey.get(`${r.slug}::${r.chunk_index}`);
-        // const row = byKey.get(`${h.slug}::${h.chunk_index}`);
-        const row = r;
-        if (!h) continue;
-        out.push({
-          page_id: row.page_id,
-          title: row.title,
-          type: row.type,
-          slug: row.slug,
-          chunk_id: row.chunk_id,
-          chunk_index: row.chunk_index,
-          chunk_text: row.chunk_text,
-          chunk_source: row.chunk_source as ChunkSource,
-          score: h!.score,
-          stale: !!row.stale,
-        });
-        if (out.length >= limit) break;
-      }
-      return out;
-    }, catchStoreError),
-  };
-  const search: BrainStore.Search = {
-    ...hybridSearch,
-    getBacklinkCounts: link.getBacklinkCounts,
-    getEmbeddingsByChunkIds: ingestion.getEmbeddingsByChunkIds,
-  };
-
-  const timeline: BrainStore.Timeline = {
-    addTimelineEntry: Eff.fn("addTimelineEntry")(function* (
+    getVersions: tree.content.pages.getVersions,
+    revertToVersion: tree.content.pages.revertToVersion,
+    putPage: Eff.fn("brainstore.compat.putPage")(function* (
       slug: string,
-      entry: TimelineInput,
-      opts?: { skipExistenceCheck?: boolean }
+      page: PageInput
     ) {
-      const result = yield* mappers.getPageIdBySlug(slug);
-      const pageResult = Array.isArray(result) ? result[0] : result;
-      if (!pageResult) {
-        if (opts?.skipExistenceCheck) return;
-        throw new Error(`addTimelineEntry failed: page "${slug}" not found`);
-      }
-      const page_id = pageResult.id;
-      yield* mappers.insertTimelineEntry(page_id, entry);
+      const record = yield* tree.content.pages.putPage(slug, page);
+      return Eff.succeed(record);
     }, catchStoreError),
-    addTimelineEntriesBatch: Eff.fn("addTimelineEntriesBatch")(function* (
-      entries: TimelineBatchInput[]
-    ) {
-      if (entries.length === 0) return 0;
-      let count = 0;
-      for (const entry of entries) {
-        const result = yield* mappers.getPageIdBySlug(entry.slug);
-        const pageResult = Array.isArray(result) ? result[0] : result;
-        if (!pageResult) continue;
-        const res = yield* mappers.insertTimelineEntryReturningId(
-          pageResult.id,
-          entry
-        );
-        if (res.length > 0) count++;
-      }
-      return count;
+    updateSlug: tree.content.pages.updateSlug,
+    deletePage: tree.content.pages.deletePage,
+    addTag: tree.content.pages.addTag,
+    removeTag: tree.content.pages.removeTag,
+    upsertChunks: tree.content.chunks.upsertChunks,
+    deleteChunks: tree.content.chunks.deleteChunks,
+    getChunks: tree.content.chunks.getChunks,
+    getChunksWithEmbeddings: Eff.fn(
+      "brainstore.compat.getChunksWithEmbeddings"
+    )(function* (slug: string) {
+      return yield* tree.content.chunks.getChunks(slug);
     }, catchStoreError),
-    getTimeline: Eff.fn("getTimeline")(function* (
-      slug: string,
-      opts?: TimelineOpts
-    ) {
-      const result = yield* mappers.getTimeline(slug, opts);
-      return result.map(
-        (r) =>
-          ({
-            ...r,
-            created_at: new Date(r.created_at),
-          }) satisfies TimelineEntry
-      );
-    }, catchStoreError),
+    getEmbeddingsByChunkIds: tree.retrieval.embedding.getEmbeddingsByChunkIds,
   };
+}
+
+const makeExtService = Eff.fn("makeBrainStoreExt")(function* () {
+  const mappers = yield* Mappers;
+  const embedding = yield* BrainStoreEmbedding;
 
   const ext: BrainStore.Ext = {
     putRawData: Eff.fn("putRawData")(function* (
       slug: string,
       source: string,
-      data: any
+      data: unknown
     ) {
       const result = yield* mappers.getPageIdBySlug(slug);
       const pageResult = Array.isArray(result) ? result[0] : result;
@@ -595,11 +176,11 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
     getRawData: Eff.fn("getRawData")(function* (slug: string, source?: string) {
       const rows = yield* mappers.getRawData(slug, source);
       return rows.map(
-        (r) =>
+        (row) =>
           ({
-            source: r.source,
-            data: parseJsonObject(r.data),
-            fetched_at: new Date(r.fetched_at),
+            source: row.source,
+            data: parseJsonObject(row.data),
+            fetched_at: new Date(row.fetched_at),
           }) satisfies RawData
       );
     }, catchStoreError),
@@ -719,7 +300,6 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
           { concurrency: "unbounded" }
         );
 
-        // NOTE: integrity-check 依赖 Unsafe SQL，当前仅做基础可用性检查。
         report.ftsOk = yield* pipe(
           Eff.all([
             mappers.countChunksFts().asEffect(),
@@ -778,8 +358,8 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
         mappers.getPageTypeCounts().asEffect(),
       ]);
       const pages_by_type: Record<string, number> = {};
-      for (const t of types) {
-        pages_by_type[t.type] = t.count;
+      for (const typeRow of types) {
+        pages_by_type[typeRow.type] = typeRow.count;
       }
       return {
         page_count,
@@ -858,201 +438,204 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
         most_connected: mostConnectedRows,
       } satisfies BrainHealth;
     }, catchStoreError),
-    getStaleChunks: Eff.fn("getStaleChunks")(function* () {
-      const rows = yield* mappers.getStaleChunks();
-      return rows as StaleChunk[];
-    }, catchStoreError),
-    upsertVectors: Eff.fn("upsertVectors")(function* (
-      vectors: { id: string; vector: number[]; metadata: any }[]
-    ) {
-      if (!vectorStore || vectors.length === 0) return;
-      yield* Eff.promise(() =>
-        vectorStore.upsert({
-          indexName,
-          vectors: vectors.map((v) => v.vector),
-          ids: vectors.map((v) => v.id),
-          metadata: vectors.map((v) => v.metadata),
-        })
-      );
-    }, catchStoreError),
-    markChunksEmbedded: Eff.fn("markChunksEmbedded")(function* (
-      chunkIds: number[]
-    ) {
-      if (chunkIds.length === 0) return;
-      yield* mappers.markChunksEmbeddedByIds(chunkIds);
-    }, catchStoreError),
+    getStaleChunks: embedding.getStaleChunks,
+    upsertVectors: embedding.upsertVectors,
+    markChunksEmbedded: embedding.markChunksEmbedded,
     getIngestLog: Eff.fn("getIngestLog")(function* (opts?: { limit?: number }) {
       const limit = opts?.limit ?? 50;
       const result = yield* mappers.getIngestLog(limit);
       return result.map(
-        (r) =>
+        (row) =>
           ({
-            ...r,
-            pages_updated: parseJsonStringArray(r.pages_updated),
-            created_at: new Date(r.created_at),
+            ...row,
+            pages_updated: parseJsonStringArray(row.pages_updated),
+            created_at: new Date(row.created_at),
           }) satisfies IngestLogEntry
       );
     }, catchStoreError),
   };
-  const inited = yield* Eff.Ref.make(false);
-  const lifecycle: BrainStore.Lifecycle = {
-    init: Eff.fn("init")(
-      function* () {
-        if (yield* Eff.Ref.get(inited)) return;
-        yield* Eff.log("Initializing database...");
-        yield* Eff.forEach(init.split(";\n").filter(Boolean), (rawSQL) =>
-          sql.unsafe(rawSQL).raw.pipe(Eff.tapError(Eff.logError))
-        ).pipe(
-          Eff.zipRight(
-            Eff.from(() =>
-              vectorStore?.createIndex({
-                indexName,
-                dimension,
-                metric: "cosine",
-              })
-            ),
-            { concurrent: true }
-          )
-        );
-        yield* Eff.Ref.set(inited, true);
-      },
-      catchStoreError,
-      Eff.withLogElapsed("Initialized database")
-    ),
-    dispose: Eff.fn("dispose")(function* () {
-      yield* Eff.logDebug("dispose");
-      yield* Eff.from(() => getClosableTursoClient(vectorStore)?.close());
-      // 由 Layer/Runtime 管理生命周期，当前无需显式释放。
-    }, Eff.tapDefect(Eff.logError)),
-    transaction: (operators) => {
-      return sql.withTransaction(operators).pipe(catchStoreError);
-    },
-  };
-  const unsafe: BrainStore.UnsafeDB = {
-    query: (text, params) =>
-      sql
-        .unsafe(text, params)
-        .unprepared.pipe(
-          Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
-          catchStoreError,
-          Eff.unsafeCoerce<any, any>
-        ),
-    get: (text, params) =>
-      sql.unsafe(text, params).unprepared.pipe(
-        Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
-        catchStoreError,
-        Eff.map((_) => _[0]),
-        Eff.unsafeCoerce<any, any>
-      ),
-    run: (text, params) =>
-      sql
-        .unsafe(text, params)
-        .raw.pipe(
-          Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
-          catchStoreError,
-          Eff.unsafeCoerce<any, any>
-        ),
-  };
+
+  return ext;
+});
+
+function makeBrainStoreService(
+  tree: BrainStoreTreeService,
+  ext: BrainStore.Ext
+): BrainStore.Service {
+  const ingestion = makeLegacyIngestion(tree);
   const features: BrainStore.Features = {
     ingestion,
-    links: link,
-    search,
-    timeline,
+    links: tree.graph.links,
+    search: tree.retrieval.search,
+    timeline: tree.graph.timeline,
     ext,
-    lifecycle,
-    unsafe,
+    lifecycle: tree.ops.lifecycle,
+    unsafe: tree.ops.internal,
   };
-  const contentPages: ContentPagesService = {
-    getPage: ingestion.getPage,
-    listPages: ingestion.listPages,
-    resolveSlugs: ingestion.resolveSlugs,
-    getTags: ingestion.getTags,
-    getVersions: ingestion.getVersions,
-    revertToVersion: ingestion.revertToVersion,
-    updateSlug: ingestion.updateSlug,
-    deletePage: ingestion.deletePage,
-    addTag: ingestion.addTag,
-    removeTag: ingestion.removeTag,
-    createVersion: Eff.fn("content.pages.compat.createVersion")(function* (
-      slug: string
-    ) {
-      return yield* ingestion.createVersion(slug).pipe(Eff.flatten);
-    }, catchStoreError),
-    putPage: Eff.fn("content.pages.compat.putPage")(function* (
-      slug: string,
-      page: PageInput
-    ) {
-      return yield* ingestion.putPage(slug, page).pipe(Eff.flatten);
-    }, catchStoreError),
-  };
-  const opsLifecycle: OpsLifecycleService = {
-    init: lifecycle.init,
-    dispose: lifecycle.dispose,
-    transaction: (effect) => sql.withTransaction(effect).pipe(catchStoreError),
-  };
-  const opsInternal: OpsInternalService = {
-    ...unsafe,
-    sql,
-    mappers,
-    vectorStore,
-  };
-  const tree = makeBrainStoreTree({
-    content: {
-      pages: contentPages,
-      chunks: ingestion,
-    },
-    graph: {
-      links: link,
-      timeline,
-    },
-    retrieval: {
-      search,
-      embedding: {
-        searchVector: search.searchVector,
-        getEmbeddingsByChunkIds: ingestion.getEmbeddingsByChunkIds,
-        getStaleChunks: ext.getStaleChunks,
-        upsertVectors: ext.upsertVectors,
-        markChunksEmbedded: ext.markChunksEmbedded,
-      },
-    },
-    ops: {
-      lifecycle: opsLifecycle,
-      internal: opsInternal,
-    },
-  });
-  const store: BrainStore.Service = {
-    ...search,
-    ...link,
+
+  return {
+    ...tree.retrieval.search,
+    ...tree.graph.links,
     ...ingestion,
-    ...timeline,
+    ...tree.graph.timeline,
     ...ext,
-    ...lifecycle,
-    ...unsafe,
+    ...tree.ops.lifecycle,
+    ...tree.ops.internal,
     tree,
     features,
   };
+}
 
-  return yield* Eff.acquireRelease(Eff.succeed(store), (store) =>
-    store.dispose()
-  );
-}, Eff.withLogElapsed("make BrainStore"));
-
-export function makeLayer(
-  options: { url: string } & BrainStore.Options
-): Eff.Layer<BrainStoreRuntime, never, never> {
+export function makeLayer(options: { url: string } & BrainStore.Options) {
   const filename = options.url.replace(/^file:/, "");
+  const indexName = DEFAULT_INDEX_NAME;
+  const dimension = options.dimension ?? 1536;
+  const vectorStore = options.vectorStore;
+  const deleteVectorsBySlug = makeDeleteVectorsBySlug(vectorStore, indexName);
+
   const SqlLive = SqliteClient.layer({ filename });
   const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
   const DatabaseLive = Layer.mergeAll(SqlLive, DrizzleLive);
-  const BrainStoreLayer = Layer.effect(BrainStore, makeStore(options)).pipe(
-    Layer.provide(DatabaseLive)
+
+  const EmbeddingLayer = Layer.effect(
+    BrainStoreEmbedding,
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      return makeRetrievalEmbedding({ mappers, vectorStore, indexName });
+    })
+  ).pipe(Layer.provide(DatabaseLive));
+
+  const ContentPagesLayer = Layer.effect(
+    ContentPages,
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      const sql = yield* SqlClient.SqlClient;
+      return makeContentPages({
+        mappers,
+        sql,
+        vectors: { deleteVectorsBySlug },
+      });
+    })
+  ).pipe(Layer.provide(DatabaseLive));
+
+  const ContentChunksLayer = Layer.effect(
+    ContentChunks,
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      const embedding = yield* BrainStoreEmbedding;
+      return makeContentChunks({
+        mappers,
+        embeddings: {
+          deleteVectorsBySlug,
+          upsertVectors: Eff.fn("content.chunks.embedding.upsertVectors")(
+            function* (
+              vectors: {
+                id: string;
+                vector: number[];
+                metadata: VectorMetadata;
+              }[],
+              opts?: { deleteSlug?: string }
+            ) {
+              if (opts?.deleteSlug) {
+                yield* deleteVectorsBySlug(opts.deleteSlug);
+              }
+              yield* embedding.upsertVectors(vectors);
+            },
+            catchStoreError
+          ),
+        },
+      });
+    })
+  ).pipe(Layer.provide(Layer.mergeAll(DatabaseLive, EmbeddingLayer)));
+
+  const GraphLinksLayer = Layer.effect(
+    BrainStoreGraphLinks,
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      return makeGraphLinks({ mappers });
+    })
+  ).pipe(Layer.provide(DatabaseLive));
+
+  const GraphTimelineLayer = Layer.effect(
+    BrainStoreGraphTimeline,
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      return makeGraphTimeline({ mappers });
+    })
+  ).pipe(Layer.provide(DatabaseLive));
+
+  const SearchLayer = Layer.effect(
+    BrainStoreSearch,
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      const backlinks = yield* BrainStoreGraphLinks;
+      const embedding = yield* BrainStoreEmbedding;
+      return makeRetrievalSearch({
+        mappers,
+        backlinks,
+        embeddings: embedding,
+        vectorSearch: embedding,
+      });
+    })
+  ).pipe(
+    Layer.provide(Layer.mergeAll(DatabaseLive, GraphLinksLayer, EmbeddingLayer))
   );
-  const TreeLayer = Layer.effect(
-    BrainStoreTree,
-    BrainStore.use((store) =>
-      Eff.sync(() => requireBrainStoreTree(store))
-    )
-  ).pipe(Layer.provide(BrainStoreLayer));
+
+  const LifecycleLayer = Layer.effect(
+    OpsLifecycle,
+    Eff.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const initialized = yield* Eff.Ref.make(false);
+      return makeOpsLifecycle({
+        sql,
+        initialized,
+        initSql: init,
+        createIndex: () =>
+          vectorStore?.createIndex({
+            indexName,
+            dimension,
+            metric: "cosine",
+          }),
+        disposeVector: () => getClosableTursoClient(vectorStore)?.close(),
+      });
+    })
+  ).pipe(Layer.provide(SqlLive));
+
+  const InternalLayer = Layer.effect(
+    OpsInternal,
+    Eff.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const mappers = yield* Mappers;
+      return makeOpsInternal({ sql, mappers, vectorStore });
+    })
+  ).pipe(Layer.provide(DatabaseLive));
+
+  const BranchLayers = Layer.mergeAll(
+    ContentPagesLayer,
+    ContentChunksLayer,
+    GraphLinksLayer,
+    GraphTimelineLayer,
+    EmbeddingLayer,
+    SearchLayer,
+    LifecycleLayer,
+    InternalLayer
+  );
+
+  const TreeLayer = makeComposedLayer.pipe(Layer.provide(BranchLayers));
+
+  const ExtLayer = Layer.effect(BrainStoreExt, makeExtService()).pipe(
+    Layer.provide(Layer.mergeAll(DatabaseLive, EmbeddingLayer))
+  );
+
+  const BrainStoreLayer = Layer.effect(
+    BrainStore,
+    Eff.gen(function* () {
+      const tree = yield* BrainStoreTree;
+      const ext = yield* BrainStoreExt;
+      return makeBrainStoreService(tree, ext);
+    })
+  ).pipe(Layer.provide(Layer.mergeAll(TreeLayer, ExtLayer)));
+
   const CompatLayer = Layer.effect(
     BrainStoreCompat,
     Eff.gen(function* () {
@@ -1061,34 +644,11 @@ export function makeLayer(
       return makeCompatBrainStore(tree, store);
     })
   ).pipe(Layer.provide(Layer.mergeAll(TreeLayer, BrainStoreLayer)));
+
   const FeatureLayers = Layer.mergeAll(
     Layer.effect(
       BrainStoreIngestion,
-      Eff.gen(function* () {
-        const tree = yield* BrainStoreTree;
-        const compat = yield* BrainStoreCompat;
-        const ingestionService: BrainStore.Ingestion = {
-          getPage: tree.content.pages.getPage,
-          listPages: tree.content.pages.listPages,
-          resolveSlugs: tree.content.pages.resolveSlugs,
-          getTags: tree.content.pages.getTags,
-          createVersion: compat.createVersion,
-          getVersions: tree.content.pages.getVersions,
-          revertToVersion: tree.content.pages.revertToVersion,
-          putPage: compat.putPage,
-          updateSlug: tree.content.pages.updateSlug,
-          deletePage: tree.content.pages.deletePage,
-          addTag: tree.content.pages.addTag,
-          removeTag: tree.content.pages.removeTag,
-          upsertChunks: tree.content.chunks.upsertChunks,
-          deleteChunks: tree.content.chunks.deleteChunks,
-          getChunks: tree.content.chunks.getChunks,
-          getChunksWithEmbeddings: compat.getChunksWithEmbeddings,
-          getEmbeddingsByChunkIds:
-            tree.retrieval.embedding.getEmbeddingsByChunkIds,
-        };
-        return ingestionService;
-      })
+      BrainStoreCompat.use((store) => Eff.succeed(store.features.ingestion))
     ),
     Layer.effect(
       BrainStoreLinks,
@@ -1109,10 +669,6 @@ export function makeLayer(
       )
     ),
     Layer.effect(
-      BrainStoreExt,
-      BrainStoreCompat.use((store) => Eff.succeed(store))
-    ),
-    Layer.effect(
       BrainStoreLifecycleService,
       BrainStoreTree.use((tree: BrainStoreTreeService) =>
         Eff.succeed(tree.ops.lifecycle)
@@ -1123,67 +679,24 @@ export function makeLayer(
       BrainStoreTree.use((tree: BrainStoreTreeService) =>
         Eff.succeed(tree.ops.internal)
       )
-    ),
-    Layer.effect(
-      ContentPages,
-      BrainStoreTree.use((tree: BrainStoreTreeService) =>
-        Eff.succeed(tree.content.pages)
-      )
-    ),
-    Layer.effect(
-      ContentChunks,
-      BrainStoreTree.use((tree: BrainStoreTreeService) =>
-        Eff.succeed(tree.content.chunks)
-      )
-    ),
-    Layer.effect(
-      BrainStoreGraphLinks,
-      BrainStoreTree.use((tree: BrainStoreTreeService) =>
-        Eff.succeed(tree.graph.links)
-      )
-    ),
-    Layer.effect(
-      BrainStoreGraphTimeline,
-      BrainStoreTree.use((tree: BrainStoreTreeService) =>
-        Eff.succeed(tree.graph.timeline)
-      )
-    ),
-    Layer.effect(
-      BrainStoreEmbedding,
-      BrainStoreTree.use((tree: BrainStoreTreeService) =>
-        Eff.succeed(tree.retrieval.embedding)
-      )
-    ),
-    Layer.effect(
-      OpsLifecycle,
-      BrainStoreTree.use((tree: BrainStoreTreeService) =>
-        Eff.succeed(tree.ops.lifecycle)
-      )
-    ),
-    Layer.effect(
-      OpsInternal,
-      BrainStoreTree.use((tree: BrainStoreTreeService) =>
-        Eff.succeed(tree.ops.internal)
-      )
     )
-  ).pipe(Layer.provide(Layer.mergeAll(TreeLayer, CompatLayer)));
+  ).pipe(Layer.provide(Layer.mergeAll(TreeLayer, CompatLayer, ExtLayer)));
+
   return Layer.mergeAll(
-    BrainStoreLayer,
+    DatabaseLive,
+    BranchLayers,
     TreeLayer,
+    ExtLayer,
+    BrainStoreLayer,
     CompatLayer,
-    FeatureLayers,
-    DatabaseLive
+    FeatureLayers
   ).pipe(
     Layer.provideMerge([Eff.Logger.minimumLogLevel("Debug"), Eff.Logger.pretty])
   );
 }
 
 export function make(options: { url: string } & BrainStore.Options) {
-  return Eff.gen(function* () {
-    const filename = options.url.replace(/^file:/, "");
-    const SqlLive = SqliteClient.layer({ filename });
-    const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
-    const DatabaseLive = Layer.mergeAll(SqlLive, DrizzleLive);
-    return makeStore(options).pipe(Eff.provide(DatabaseLive));
-  });
+  return BrainStore.use((store) => Eff.succeed(store)).pipe(
+    Eff.provide(makeLayer(options))
+  );
 }

@@ -1,5 +1,6 @@
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer, pipe } from "@yuyi919/tslibs-effect/effect-next";
+import type { SqlError } from "effect/unstable/sql";
 import { StoreError } from "../../../BrainStoreError.js";
 import { Page, PageVersion } from "../../../effect-schema.js";
 import type { SqlBuilder } from "../../../SqlBuilder.js";
@@ -8,7 +9,7 @@ import { ContentPages, type ContentPagesService } from "./interface.js";
 export interface ContentPagesTransactionRunner {
   withTransaction<A, E = never, R = never>(
     effect: Eff.Effect<A, E, R>
-  ): Eff.Effect<A, E, R>;
+  ): Eff.Effect<A, E | SqlError.SqlError, R>;
 }
 
 export interface ContentPagesVectorPort {

@@ -1,6 +1,6 @@
 ---
 phase: 09-brainstore-layered-contexts-and-boundaries
-verified: "2026-04-25T13:21:27.000Z"
+verified: "2026-04-25T13:44:00.000Z"
 status: passed
 score: 4/4 must-haves verified
 ---
@@ -15,6 +15,7 @@ score: 4/4 must-haves verified
 | 2 | The public LibSQL Promise boundary remains stable through compat-over-tree. | passed | `src/store/libsql.ts` resolves `BrainStoreCompat` in `run` and `runFlatten`. |
 | 3 | Internal search consumers use the narrow retrieval branch contract. | passed | `src/search/hybrid.ts` consumes `BrainStoreSearch`; `test/search/hybrid.test.ts` proves branch-only injection. |
 | 4 | Store assembly no longer depends on flat `store.features.*` projection. | passed | Forbidden projection grep across `src/store` returned no matches. |
+| 5 | `libsql-store.ts` delegates branch behavior to branch factories and uses `Layer` for dependency flow. | passed | Content, graph, retrieval, and ops branch layers call their dedicated factories; root/compat only adapt assembled services. |
 
 ## Required Artifacts
 
@@ -57,6 +58,8 @@ Automated verification completed with:
 - `pwsh ./scripts/check-effect-v4.ps1`
 - `rg -n "as unknown|as any" src/store/BrainStore.ts src/store/brainstore/compat/factory.ts src/store/libsql-store.ts src/store/libsql.ts src/store/brainstore/ops/internal/interface.ts`
 - `bun test test/libsql.test.ts test/ext.test.ts`
+- `bun test test/libsql.test.ts test/ext.test.ts test/store/brainstore-tree.test.ts test/store/brainstore-layers.test.ts`
+- `pwsh ./scripts/check-effect-v4.ps1`
 
 Notes:
 
