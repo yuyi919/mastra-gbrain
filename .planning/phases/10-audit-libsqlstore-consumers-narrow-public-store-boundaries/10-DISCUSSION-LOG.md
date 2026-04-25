@@ -42,7 +42,14 @@
 
 ## Corrections Made
 
-No corrections - interactive question tooling is unavailable in this Codex default execution mode, so the workflow fallback accepted the recommended assumptions and captured them as decisions.
+### Execution-time correction from user
+
+- **Original assumption:** Internal consumers should move from broad `LibSQLStore` / `StoreProvider` use to narrower Promise-shaped capability contracts while preserving the public facade.
+- **User correction:** The actual goal is for modules currently using `LibSQLStore` to directly use the Effect runtime / branch services where they are internal modules, rather than creating unnecessary Promise compatibility layers.
+- **Reason:** Promise compatibility should be limited to public/legacy boundaries. Internal workflow/tool/script paths should move toward Effect services, Layers, and runtime-provided branch contracts.
+- **Applied to CONTEXT.md:** Added D-23 and D-24, and revised the workflow/consumer/test decisions to prefer direct Effect runtime / branch-service usage over narrower Promise contracts.
+
+Earlier no-correction note: interactive question tooling was unavailable in this Codex default execution mode, so the initial workflow fallback accepted recommended assumptions. The execution-time correction above supersedes the affected assumptions.
 
 ## Folded Todos
 

@@ -24,38 +24,43 @@ This phase also absorbs the Phase 09 UAT follow-up around provider/workflow surf
 - **D-03:** Preserve all existing `StoreProvider` and `LibSQLStore` behavior; public compatibility tests remain required evidence.
 
 ### Workflow And Provider Surface
-- **D-04:** Keep `createIngestionWorkflow` accepting `{ store, embedder }`.
-- **D-05:** Narrow the workflow's `store` type to the capabilities it actually uses: page lookup, version/page/tag/chunk writes, optional transaction, and timeline batch writes.
-- **D-06:** Do not make workflow callers import or understand internal `BrainStoreTree` branches. The workflow boundary remains dependency-injected and provider-friendly.
+- **D-04:** Keep public/legacy callers able to use `createIngestionWorkflow({ store, embedder })` through compatibility wiring, but this is not the primary internal target.
+- **D-05:** Internal modules that currently use `LibSQLStore` should be migrated toward direct Effect runtime / branch-service usage instead of creating new Promise-shaped compatibility contracts.
+- **D-06:** Do not create unnecessary Promise compatibility layers merely to make a narrower facade. Promise APIs are acceptable at external/public boundaries; internal workflow/tool/script paths should prefer Effect services, Layers, and runtime-provided branch contracts.
+- **D-07:** Workflow callers should not need raw SQL, raw vector store, or `LibSQLStore`, but they may consume Effect-based store services directly when they are internal modules.
 
 ### Consumer Capability Contracts
-- **D-07:** Inventory every current `LibSQLStore` import and constructor usage across `src/**` and `test/**` before implementation changes.
-- **D-08:** Classify each consumer as public facade coverage, provider wiring, workflow/tool consumer, script utility, or replaceable internal dependency.
-- **D-09:** Tool and script modules should accept narrower capability contracts where practical, while still allowing existing public wiring to pass a `LibSQLStore` / `StoreProvider` instance.
-- **D-10:** Use `src/search/hybrid.ts` as the model pattern: an Effect path can depend on a narrow branch contract while a Promise wrapper remains compatible with `StoreProvider`.
+- **D-08:** Inventory every current `LibSQLStore` import and constructor usage across `src/**` and `test/**` before implementation changes.
+- **D-09:** Classify each consumer as public facade coverage, provider wiring, workflow/tool consumer, script utility, or replaceable internal dependency.
+- **D-10:** Replaceable internal dependencies should move to Effect runtime / branch-service consumption, not simply to narrower Promise interfaces.
+- **D-11:** Use `src/search/hybrid.ts` only as a partial model: the Effect path depending on `BrainStoreSearch` is the desired internal direction; the Promise wrapper is compatibility glue, not the target pattern for new internal modules.
 
 ### Vector And Embedding Ownership
-- **D-11:** Fold the pending vector-boundary todo into this phase.
-- **D-12:** Move `getChunksWithEmbeddings(slug)` ownership out of the legacy compat-only surface and into a branch-owned capability before tests stop reaching through raw facade internals.
-- **D-13:** Introduce a typed vector provider layer or equivalent low-level internal service so raw `LibSQLVector` access is not passed through `libsql-store.ts` into multiple branches as an ambient implementation detail.
-- **D-14:** Keep raw vector access internal or facade-only. Tests should prefer branch/provider-level seams instead of mutating `store.vectorStore` directly when they are not intentionally verifying facade internals.
+- **D-12:** Fold the pending vector-boundary todo into this phase.
+- **D-13:** Move `getChunksWithEmbeddings(slug)` ownership out of the legacy compat-only surface and into a branch-owned capability before tests stop reaching through raw facade internals.
+- **D-14:** Introduce a typed vector provider layer or equivalent low-level internal service so raw `LibSQLVector` access is not passed through `libsql-store.ts` into multiple branches as an ambient implementation detail.
+- **D-15:** Keep raw vector access internal or facade-only. Tests should prefer Effect branch/provider-level seams instead of mutating `store.vectorStore` directly when they are not intentionally verifying facade internals.
 
 ### Test Classification
-- **D-15:** Keep `test/libsql.test.ts` as public facade compatibility coverage.
-- **D-16:** Convert tests that only need workflow, branch, provider, or vector-helper behavior to narrower injection where that better proves the new boundary.
-- **D-17:** Do not convert true public compatibility tests away from `LibSQLStore`; the phase needs both public facade evidence and narrow-contract evidence.
+- **D-16:** Keep `test/libsql.test.ts` as public facade compatibility coverage.
+- **D-17:** Convert tests that only need workflow, branch, provider, or vector-helper behavior to Effect runtime / branch-service injection where that better proves the new boundary.
+- **D-18:** Do not convert true public compatibility tests away from `LibSQLStore`; the phase needs both public facade evidence and direct Effect runtime evidence.
 
 ### Effect v4 And Store Discipline
-- **D-18:** New or modified Effect store code must follow local Effect v4 rules: `Context.Service`, `Layer` composition, inferred accessor callbacks, and no v3 syntax.
-- **D-19:** Store implementation files must not use `as unknown` / `as any` to bypass type problems. If a contract is missing shape, fix the contract at the branch boundary.
-- **D-20:** `libsql-store.ts` should remain an assembly boundary. It may compose external ports/options, root, compat, and ext, but should not reimplement feature branch behavior.
+- **D-19:** New or modified Effect store code must follow local Effect v4 rules: `Context.Service`, `Layer` composition, inferred accessor callbacks, and no v3 syntax.
+- **D-20:** Store implementation files must not use `as unknown` / `as any` to bypass type problems. If a contract is missing shape, fix the contract at the branch boundary.
+- **D-21:** `libsql-store.ts` should remain an assembly boundary. It may compose external ports/options, root, compat, and ext, but should not reimplement feature branch behavior.
 
 ### Folded Todos
-- **D-21:** Fold `2026-04-25-refine-phase-9-content-chunks-and-vector-provider-layers.md` into Phase 10. It directly matches the Phase 10 boundary cleanup: branch ownership for `getChunksWithEmbeddings` and a typed vector provider layer for raw vector operations.
+- **D-22:** Fold `2026-04-25-refine-phase-9-content-chunks-and-vector-provider-layers.md` into Phase 10. It directly matches the Phase 10 vector/chunks boundary cleanup: branch ownership for `getChunksWithEmbeddings` and a typed vector provider layer for raw vector operations.
+
+### Correction Captured During Execution
+- **D-23:** Supersede the earlier "narrow Promise contract" interpretation. The user's actual target is: modules currently using `LibSQLStore` should directly use the Effect runtime / branch services wherever they are internal modules.
+- **D-24:** Existing work from Plans 10-02 and 10-03 must be reviewed against this corrected target before continuing. Keep pieces that move toward Effect services/Layers; revise or replace pieces that merely create new Promise compatibility layers.
 
 ### the agent's Discretion
 - Exact names of new narrow TypeScript interfaces, as long as they are capability-specific and live near the consuming domain or branch contract.
-- Exact ordering of consumer migration after the required inventory, as long as public facade and workflow/provider stability are protected early.
+- Exact ordering of consumer migration after the required inventory, as long as public facade stability and direct internal Effect-runtime usage are protected early.
 - Whether vector provider is introduced as a new branch under `ops/internal`, a low-level provider service beside `Mappers`, or another small internal layer, provided downstream branches consume it through a typed contract rather than raw option passing.
 
 </decisions>
