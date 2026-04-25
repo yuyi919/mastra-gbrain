@@ -20,7 +20,7 @@
 - `P10-05` Preserve all existing public `StoreProvider` and `LibSQLStore` behavior; do not widen the public API while narrowing consumers.
 
 **Depends on:** Phase 9
-**Plans:** 5/7 plans executed
+**Plans:** 6/7 plans executed
 
 Initial scope from current grep:
 - Production: `src/store/index.ts`
@@ -39,7 +39,7 @@ Plans:
 - [x] 10-03-PLAN.md - Introduce typed internal vector provider layer and rewire branch consumers
 - [x] 10-04-PLAN.md - Move `getChunksWithEmbeddings` ownership into the content chunks branch
 - [x] 10-05-PLAN.md - Move hybrid search and internal tool paths to Effect runtime services
-- [ ] 10-06-PLAN.md - Move script/import internals to Effect runtime services while preserving CLI facades
+- [x] 10-06-PLAN.md - Move script/import internals to Effect runtime services while preserving CLI facades
 - [ ] 10-07-PLAN.md - Close public facade regressions and direct-Effect boundary guards
 
 ## Phase 9: Layer BrainStore Contexts & Tighten Store Boundaries

@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 10
 current_phase_name: audit-libsqlstore-consumers-narrow-public-store-boundaries
 status: executing
-stopped_at: Completed 10-05-PLAN.md; next is 10-06 script/helper consumer narrowing
-last_updated: "2026-04-25T20:28:56.166Z"
+stopped_at: Completed 10-06-PLAN.md; next is 10-07 facade closure
+last_updated: "2026-04-25T20:39:34.989Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 17
-  completed_plans: 15
-  percent: 88
+  completed_plans: 16
+  percent: 94
 ---
 
 # Project State
@@ -21,11 +21,11 @@ progress:
 ## Current Position
 
 Phase: 10 (audit-libsqlstore-consumers-narrow-public-store-boundaries) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 **Current Phase:** 10
 **Current Phase Name:** audit-libsqlstore-consumers-narrow-public-store-boundaries
 **Status:** Ready to execute
-**Plan:** 6 of 7
+**Plan:** 7 of 7
 **Last activity:** 2026-04-25
 
 ## Accumulated Context
@@ -56,6 +56,7 @@ Plan: 6 of 7
 - [Phase 10]: Plan 10-04 moved getChunksWithEmbeddings ownership into ContentChunksService and kept LibSQLStore as facade compatibility. — Direct Effect branch ownership matches D-23/D-24 while preserving public Promise behavior.
 - [Phase 10]: Plan 10-05 made hybridSearchEffect the canonical BrainStoreSearch implementation and hybridSearch a runtime-first bridge. — This satisfies D-23/D-24 by using branch services internally while keeping public facade compatibility.
 - [Phase 10]: Plan 10-05 preserved public tool StoreProvider factories and rejected a new tools Promise contract layer. — The corrected phase goal allows Promise compatibility only at facade boundaries.
+- [Phase 10]: Plan 10-06 classified workflow/script Promise APIs as compatibility facades and routed runtime-capable internals through branch services. — This preserves public CLI/tool behavior while satisfying D-23/D-24 direct Effect runtime direction.
 
 ### Performance Metrics
 
@@ -68,8 +69,8 @@ Plan: 6 of 7
 
 ## Session Continuity
 
-Last session: 2026-04-25T20:28:49.454Z
-Stopped at: Completed 10-05-PLAN.md; next is 10-06 script/helper consumer narrowing
+Last session: 2026-04-25T20:39:34.984Z
+Stopped at: Completed 10-06-PLAN.md; next is 10-07 facade closure
 Resume file: None
 
 ## Notes
@@ -93,3 +94,4 @@ Resume file: None
 | 260425-q02 | 为项目接入 husky 与 lint-staged，并在 pre-commit 中执行 `check:fix` | 2026-04-25 | uncommitted | Completed | [260425-q02-husky-lint-staged](./quick/260425-q02-husky-lint-staged/) |
 | 260425-x3w | 使用你学到的东西，优化在项目根目录的Effect相关的skill | 2026-04-25 | bee9296 | Completed | [260425-x3w-effect-skill](./quick/260425-x3w-effect-skill/) |
 | Phase 10 P05 | 4min | 2 tasks | 5 files |
+| Phase 10 P06 | 8 min | 2 tasks | 6 files |
