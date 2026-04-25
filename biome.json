@@ -90,6 +90,7 @@
       "**/src/**/*",
       "*.ts",
       "**/scripts/**/*.ts",
+      "**/scripts/**/*.mjs",
       "**/test/**/*.ts",
       "**/tests/**/*.ts",
       "!**/dist/**/*",

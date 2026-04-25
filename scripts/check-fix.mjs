@@ -17,10 +17,20 @@ const localBiome = path.join(
 );
 const biomeCommand = existsSync(localBiome) ? localBiome : "biome";
 
-const result = spawnSync(biomeCommand, ["check", "--write", ...targets], {
-  stdio: "inherit",
-  shell: process.platform === "win32",
-});
+const result = spawnSync(
+  biomeCommand,
+  [
+    "check",
+    "--write",
+    "--no-errors-on-unmatched",
+    "--files-ignore-unknown=true",
+    ...targets,
+  ],
+  {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  }
+);
 
 if (result.error) {
   throw result.error;

@@ -1,0 +1,95 @@
+﻿{
+    "version":  "1.0",
+    "timestamp":  "2026-04-25T18:59:54+08:00",
+    "phase":  "09",
+    "phase_name":  "brainstore-layered-contexts-and-boundaries",
+    "phase_dir":  ".planning/phases/09-brainstore-layered-contexts-and-boundaries",
+    "plan":  1,
+    "task":  1,
+    "total_tasks":  20,
+    "status":  "paused",
+    "completed_tasks":  [
+                            {
+                                "id":  0,
+                                "name":  "Repair Phase 09 planning package",
+                                "status":  "done",
+                                "progress":  "Re-split Phase 09 into 10 smaller plans, restored VALIDATION.md, synced ROADMAP/STATE, and resolved RESEARCH open questions."
+                            },
+                            {
+                                "id":  0,
+                                "name":  "Re-run plan checker until green",
+                                "status":  "done",
+                                "progress":  "Fixed wave numbering, Effect guard verification coverage, inverted forbidden-pattern checks, and PowerShell-safe validation commands. Final result: VERIFICATION PASSED."
+                            }
+                        ],
+    "remaining_tasks":  [
+                            {
+                                "id":  1,
+                                "name":  "09-01 Task 1 - Freeze content.pages branch contract and folder layout",
+                                "status":  "not_started"
+                            },
+                            {
+                                "id":  2,
+                                "name":  "09-01 Task 2 - Freeze content.chunks branch contract without vector leakage",
+                                "status":  "not_started"
+                            },
+                            {
+                                "id":  3,
+                                "name":  "Execute 09-02 through 09-10 sequentially",
+                                "status":  "not_started"
+                            }
+                        ],
+    "blockers":  [
+                     {
+                         "description":  "Worktree is dirty with unrelated and user-owned changes. Resume work must avoid reverting or bundling those changes accidentally.",
+                         "type":  "technical",
+                         "workaround":  "Read touched files before editing, commit handoff separately, and keep implementation changes scoped to the active Phase 09 plan."
+                     }
+                 ],
+    "human_actions_pending":  [
+
+                              ],
+    "decisions":  [
+                      {
+                          "decision":  "Use domain-grouped BrainStoreTree with content/pages, content/chunks, graph/links, graph/timeline, retrieval/search, retrieval/embedding, ops/lifecycle, ops/internal.",
+                          "rationale":  "This was the locked user direction from discuss-phase and the completed split-brainstore todo.",
+                          "phase":  "09"
+                      },
+                      {
+                          "decision":  "Keep flat BrainStore only as a temporary compat-over-tree adapter.",
+                          "rationale":  "Internal architecture must move to tree-first while StoreProvider and Promise-facing callers remain stable.",
+                          "phase":  "09"
+                      },
+                      {
+                          "decision":  "Each branch folder uses interface + factory + index and later siblings depend only on narrow contracts.",
+                          "rationale":  "This is required by the repaired Phase 09 context and is now encoded in the 10-plan execution split.",
+                          "phase":  "09"
+                      },
+                      {
+                          "decision":  "All verification commands in planning docs must be PowerShell-safe and Effect-aware.",
+                          "rationale":  "Checker failed on bash-style \u0026\u0026 and missing check-effect-v4 usage, so this must be preserved on resume.",
+                          "phase":  "09"
+                      }
+                  ],
+    "uncommitted_files":  [
+                              ".planning/ROADMAP.md",
+                              ".planning/STATE.md",
+                              ".planning/todos/pending/2026-04-24-split-brainstore-into-layered-contexts.md (deleted)",
+                              "src/chunkers/recursive.ts",
+                              "src/ingest/workflow.ts",
+                              "src/search/hybrid.ts",
+                              "src/store/BrainStore.ts",
+                              "src/store/interface.ts",
+                              "src/store/libsql-store.ts",
+                              "src/store/libsql.ts",
+                              "test/search/hybrid.test.ts",
+                              ".planning/phases/09-brainstore-layered-contexts-and-boundaries/*",
+                              ".planning/todos/completed/*",
+                              "code-review.md",
+                              "docs/specs/*",
+                              "src/chunkers/smart.ts",
+                              "test.ts"
+                          ],
+    "next_action":  "Read 09-CONTEXT.md, 09-RESEARCH.md, 09-PATTERNS.md, 09-VALIDATION.md, then start 09-01-PLAN.md Task 1 by creating src/store/brainstore/content/pages/{interface,factory,index}.ts without importing the broad BrainStore root.",
+    "context_notes":  "We paused immediately after repairing the planning layer, not mid-implementation. Phase 09 now has a checker-passed 10-plan structure and should resume with execution from 09-01. The main risk on resume is mixing implementation with unrelated dirty-worktree files or reintroducing flat-root assumptions/power-shell-invalid verify commands."
+}

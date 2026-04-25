@@ -1,3 +1,4 @@
+completed: 2026-04-25
 ---
 created: 2026-04-24T07:32:20.817Z
 title: Split BrainStore into layered contexts

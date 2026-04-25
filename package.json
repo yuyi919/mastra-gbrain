@@ -54,7 +54,7 @@
     "typia": "^12.0.1"
   },
   "lint-staged": {
-    "*.{ts,json}": "pnpm check:fix --"
+    "*.{ts,mjs,json}": "pnpm check:fix --"
   },
   "resolutions": {
     "es-toolkit": "1.46.0"
