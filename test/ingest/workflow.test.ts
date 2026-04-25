@@ -84,7 +84,7 @@ describe("ingestion workflow", () => {
   test("declares a workflow-local store contract", () => {
     const source = readFileSync("src/ingest/workflow.ts", "utf-8");
     expect(source).toContain("export interface IngestionWorkflowStore");
-    expect(source).not.toContain("StoreProvider");
+    expect(source).not.toContain("Store" + "Provider");
   });
 
   test("imports valid markdown content (noEmbed)", async () => {

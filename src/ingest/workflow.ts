@@ -4,8 +4,11 @@ import { z } from "zod";
 import { chunkText } from "../chunkers/recursive.js";
 import { parseMarkdown } from "../markdown.js";
 import { slugifyPath } from "../slug.js";
-import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
-import type { ChunkInput, ParsedMarkdown } from "../types.js";
+import type {
+  EmbeddingProvider,
+  TimelineBatchInput,
+} from "../store/interface.js";
+import type { ChunkInput, Page, PageInput, ParsedMarkdown } from "../types.js";
 
 export interface IngestResult {
   status: "imported" | "skipped" | "failed";
@@ -14,8 +17,21 @@ export interface IngestResult {
   error?: string;
 }
 
+export interface IngestionWorkflowStore {
+  getPage(slug: string): Promise<Page | null>;
+  createVersion(slug: string): Promise<unknown>;
+  putPage(slug: string, page: PageInput): Promise<unknown>;
+  getTags(slug: string): Promise<string[]>;
+  addTag(slug: string, tag: string): Promise<void>;
+  removeTag(slug: string, tag: string): Promise<void>;
+  upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void>;
+  deleteChunks(slug: string): Promise<void>;
+  addTimelineEntriesBatch(entries: TimelineBatchInput[]): Promise<void>;
+  transaction?<T>(fn: (tx: IngestionWorkflowStore) => Promise<T>): Promise<T>;
+}
+
 export interface IngestionOptions {
-  store: StoreProvider;
+  store: IngestionWorkflowStore;
   embedder: EmbeddingProvider;
   maxBytes?: number;
 }
@@ -216,7 +232,7 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
       }
       const content_hash = inputData.content_hash!;
 
-      const write = async (tx: StoreProvider) => {
+      const write = async (tx: IngestionWorkflowStore) => {
         if (inputData.existing_hash) await tx.createVersion(slug);
 
         // Ensure frontmatter is saved even if it's an object
