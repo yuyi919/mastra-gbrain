@@ -19,10 +19,8 @@ export function createSearchTool(
         .describe("Maximum number of results to return (default 5)."),
     }),
     execute: async (inputData) => {
-      // In a real system, you would convert inputData.query to an embedding here
-      // For now, we mock the embedding part or rely on the hybridSearch internals if they do it
-      // HybridSearch uses store.searchKeyword and store.searchVector.
-      // If we don't have the real embedding, we can just do keyword search or dummy vector.
+      // Public tool compatibility accepts the facade store; hybridSearch itself
+      // uses the BrainStore runtime path when the facade provides one.
       const results = await hybridSearch(store, inputData.query, {
         embedder,
         limit: inputData.limit || 5,

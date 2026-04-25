@@ -326,13 +326,16 @@ export class LibSQLStore implements StoreProvider {
 
   async dropDBFile() {
     await this.dispose();
+    const filename = this.url.replace(/^file:/, "");
     let i = 0;
     while (i++ < 100) {
       try {
-        try {
-          // await Bun.file(this.db.filename).unlink();
-        } catch (error) {
-          // if (error?.code !== "ENOENT") throw error;
+        if (filename !== ":memory:" && filename !== "") {
+          try {
+            await Bun.file(filename).unlink();
+          } catch (error) {
+            if (getErrorCode(error) !== "ENOENT") throw error;
+          }
         }
         try {
           await Bun.file(this.vectorUrl.replace("file:", "")).unlink();
