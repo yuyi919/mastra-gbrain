@@ -38,6 +38,10 @@ export interface TextChunk {
 }
 
 export function chunkText(text: string, opts?: ChunkOptions): TextChunk[] {
+  // const breakPoints = scanBreakPoints(text);
+  // const codeFences = findCodeFences(text)
+  // return chunkDocumentWithBreakPoints(text,breakPoints, codeFences).map((chunk, index) => ({ text: chunk.text, index: index }))
+
   const chunkSize = opts?.chunkSize || 300;
   const chunkOverlap = opts?.chunkOverlap || 50;
   if (!text || text.trim().length === 0) return [];

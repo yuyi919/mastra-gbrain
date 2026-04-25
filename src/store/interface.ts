@@ -26,7 +26,7 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
-import type { BrainStore } from "./BrainStore.js";
+import type { BrainStoreRuntime } from "./BrainStore.js";
 
 export interface LinkBatchInput {
   from_slug: string;
@@ -85,7 +85,7 @@ export interface EmbeddingProvider {
 
 export interface StoreProvider extends IngestionStore, HybridSearchBackend {
   // Effect
-  brainStore: ManagedRuntime.ManagedRuntime<BrainStore, never>;
+  brainStore: ManagedRuntime.ManagedRuntime<BrainStoreRuntime, never>;
 
   // Links
   addLink(

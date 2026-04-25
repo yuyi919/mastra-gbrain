@@ -31,10 +31,36 @@ import type {
   TimelineOpts,
 } from "../types.js";
 import type { StoreError } from "./BrainStoreError.js";
+import {
+  ContentChunks,
+  type ContentChunksService,
+} from "./brainstore/content/chunks/index.js";
+import {
+  ContentPages,
+  type ContentPagesService,
+} from "./brainstore/content/pages/index.js";
+import {
+  GraphLinks as BrainStoreGraphLinks,
+  type GraphBacklinkCounts,
+  type GraphLinksService,
+} from "./brainstore/graph/links/index.js";
+import {
+  GraphTimeline as BrainStoreGraphTimeline,
+  type GraphTimelineService,
+} from "./brainstore/graph/timeline/index.js";
+import {
+  RetrievalEmbedding as BrainStoreEmbedding,
+  type RetrievalEmbeddingLookup,
+  RetrievalEmbeddingLookupService,
+  type RetrievalEmbeddingService,
+} from "./brainstore/retrieval/embedding/index.js";
+import {
+  RetrievalSearch as BrainStoreSearch,
+  type RetrievalSearchService,
+} from "./brainstore/retrieval/search/index.js";
 
 /**
- * `Eff.Effect<T, StoreError>`的别名
- * @description 用于表示数据库操作的 Effect 类型，包含 StoreError 类型的错误
+ * `Eff.Effect<T, StoreError>` 的别名。
  */
 export type EngineEffect<T> = Eff.Effect<T, StoreError>;
 export type PutReturning<T> = Eff.Effect<T, SchemaError>;
@@ -54,26 +80,23 @@ export interface TimelineBatchInput {
   detail?: string;
 }
 
+/**
+ * Transitional flat ingestion contract kept for `StoreProvider` compatibility.
+ * Tree-first callers should prefer `BrainStoreTree["content"]`.
+ */
 export interface IngestionStore {
-  // Core content
   getPage(slug: string): EngineEffect<Page | null>;
   listPages(filters?: PageFilters): EngineEffect<Page[]>;
   resolveSlugs(partial: string): EngineEffect<string[]>;
   getTags(slug: string): EngineEffect<string[]>;
-  // Versions
   createVersion(slug: string): EngineEffect<PutReturning<PageVersion>>;
   getVersions(slug: string): EngineEffect<PageVersion[]>;
   revertToVersion(slug: string, versionId: number): EngineEffect<void>;
-
   putPage(slug: string, page: PageInput): EngineEffect<PutReturning<Page>>;
   updateSlug(oldSlug: string, newSlug: string): EngineEffect<void>;
   deletePage(slug: string): EngineEffect<void>;
-
-  // Tags
   addTag(slug: string, tag: string): EngineEffect<void>;
   removeTag(slug: string, tag: string): EngineEffect<void>;
-
-  // Chunks
   upsertChunks(slug: string, chunks: ChunkInput[]): EngineEffect<void>;
   deleteChunks(slug: string): EngineEffect<void>;
   getChunks(slug: string): EngineEffect<Chunk[]>;
@@ -91,8 +114,9 @@ export interface HybridSearchBackend {
   ): EngineEffect<SearchResult[]>;
 }
 
-export interface LinkService {
-  // Links
+export type SearchStore = RetrievalSearchService;
+
+export interface LinkService extends GraphBacklinkCounts {
   addLink(
     fromSlug: string,
     toSlug: string,
@@ -113,16 +137,9 @@ export interface LinkService {
       direction?: "in" | "out" | "both";
     }
   ): EngineEffect<GraphPath[]>;
-
-  /**
-   * For a list of slugs, return how many inbound links each has.
-   * Used by hybrid search backlink boost. Single SQL query, not N+1.
-   * Slugs with zero inbound links are present in the map with value 0.
-   */
-  getBacklinkCounts(slugs: string[]): EngineEffect<Map<string, number>>;
 }
+
 export interface TimelineService {
-  // Timeline
   addTimelineEntry(
     slug: string,
     entry: TimelineInput,
@@ -131,18 +148,14 @@ export interface TimelineService {
   addTimelineEntriesBatch(entries: TimelineBatchInput[]): EngineEffect<number>;
   getTimeline(slug: string, opts?: TimelineOpts): EngineEffect<TimelineEntry[]>;
 }
+
 export interface ExtService {
-  // Raw Data
   putRawData(slug: string, source: string, data: any): EngineEffect<void>;
   getRawData(slug: string, source?: string): EngineEffect<RawData[]>;
-
-  // Files
   upsertFile(
     file: Omit<FileRecord, "id" | "page_id" | "created_at">
   ): EngineEffect<void>;
   getFile(storagePath: string): EngineEffect<FileRecord | null>;
-
-  // Config & Logs
   getConfig(key: string): EngineEffect<string | null>;
   setConfig(key: string, value: string): EngineEffect<void>;
   logIngest(log: IngestLogInput): EngineEffect<void>;
@@ -150,8 +163,6 @@ export interface ExtService {
   logMcpRequest(
     log: Omit<McpRequestLog, "id" | "created_at">
   ): EngineEffect<void>;
-
-  // Health and Maintenance Methods
   getHealthReport(): EngineEffect<DatabaseHealth>;
   getStats(): EngineEffect<BrainStats>;
   getHealth(): EngineEffect<BrainHealth>;
@@ -162,10 +173,10 @@ export interface ExtService {
   markChunksEmbedded(chunkIds: number[]): EngineEffect<void>;
   getIngestLog(opts?: { limit?: number }): EngineEffect<IngestLogEntry[]>;
 }
+
 export interface BrainStoreLifecycle {
   init(): EngineEffect<void>;
   dispose(): Eff.Effect<void>;
-  // Transaction
   transaction<T, E = never, R extends BrainStore = BrainStore>(
     fn: Eff.Effect<T, E, R>
   ): Eff.Effect<
@@ -187,24 +198,121 @@ export interface UnsafeDBService {
   run(text: string, params?: ReadonlyArray<unknown>): EngineEffect<void>;
 }
 
+export interface BrainStoreContentTree {
+  pages: ContentPagesService;
+  chunks: ContentChunksService;
+}
+
+export interface BrainStoreGraphTree {
+  links: GraphLinksService;
+  timeline: GraphTimelineService;
+}
+
+export interface BrainStoreRetrievalTree {
+  search: RetrievalSearchService;
+  embedding: RetrievalEmbeddingService;
+}
+
+export interface BrainStoreOpsTree {
+  lifecycle: BrainStoreLifecycle;
+  internal: UnsafeDBService;
+}
+
+export interface BrainStoreTree {
+  content: BrainStoreContentTree;
+  graph: BrainStoreGraphTree;
+  retrieval: BrainStoreRetrievalTree;
+  ops: BrainStoreOpsTree;
+}
+
+/**
+ * Transitional flat feature projection kept until compat-over-tree wiring lands.
+ */
+export interface BrainStoreFeatureTree {
+  ingestion: IngestionStore;
+  links: LinkService;
+  search: SearchStore;
+  timeline: TimelineService;
+  ext: ExtService;
+  lifecycle: BrainStoreLifecycle;
+  unsafe: UnsafeDBService;
+}
+
 export interface BrainStoreService
   extends LinkService,
     IngestionStore,
-    HybridSearchBackend,
+    SearchStore,
     TimelineService,
     ExtService,
     BrainStoreLifecycle,
-    UnsafeDBService {}
+    UnsafeDBService {
+  readonly tree?: BrainStoreTree;
+  readonly features: BrainStoreFeatureTree;
+}
+
+export class BrainStoreIngestion extends Context.Service<
+  BrainStoreIngestion,
+  IngestionStore
+>()("@yui-agent/brain-mastra/BrainStore/Ingestion") {}
+
+export class BrainStoreLinks extends Context.Service<
+  BrainStoreLinks,
+  LinkService
+>()("@yui-agent/brain-mastra/BrainStore/Links") {}
+
+export class BrainStoreTimeline extends Context.Service<
+  BrainStoreTimeline,
+  TimelineService
+>()("@yui-agent/brain-mastra/BrainStore/Timeline") {}
+
+export class BrainStoreExt extends Context.Service<BrainStoreExt, ExtService>()(
+  "@yui-agent/brain-mastra/BrainStore/Ext"
+) {}
+
+export class BrainStoreLifecycleService extends Context.Service<
+  BrainStoreLifecycleService,
+  BrainStoreLifecycle
+>()("@yui-agent/brain-mastra/BrainStore/Lifecycle") {}
+
+export class BrainStoreUnsafeDB extends Context.Service<
+  BrainStoreUnsafeDB,
+  UnsafeDBService
+>()("@yui-agent/brain-mastra/BrainStore/UnsafeDB") {}
+
+export class BrainStore extends Context.Service<
+  BrainStore,
+  BrainStore.Service
+>()("@yui-agent/brain-mastra/BrainStore") {}
+
+export type BrainStoreRuntime =
+  | BrainStore
+  | BrainStoreIngestion
+  | BrainStoreLinks
+  | BrainStoreSearch
+  | BrainStoreTimeline
+  | BrainStoreExt
+  | BrainStoreLifecycleService
+  | BrainStoreUnsafeDB;
 
 export declare namespace BrainStore {
   export type Service = BrainStoreService;
+  export type Tree = BrainStoreTree;
+  export type Features = BrainStoreFeatureTree;
+  export type Content = BrainStoreContentTree;
+  export type Graph = BrainStoreGraphTree;
+  export type Retrieval = BrainStoreRetrievalTree;
+  export type Ops = BrainStoreOpsTree;
   export type Link = LinkService;
   export type Ingestion = IngestionStore;
   export type HybridSearch = HybridSearchBackend;
+  export type Search = SearchStore;
+  export type Embedding = RetrievalEmbeddingService;
+  export type EmbeddingLookup = RetrievalEmbeddingLookup;
   export type Timeline = TimelineService;
   export type Ext = ExtService;
   export type Lifecycle = BrainStoreLifecycle;
   export type UnsafeDB = UnsafeDBService;
+  export type Runtime = BrainStoreRuntime;
   export type Options = {
     vectorUrl?: string;
     authToken?: string;
@@ -212,7 +320,23 @@ export declare namespace BrainStore {
     vectorStore?: LibSQLVector;
   };
 }
-export class BrainStore extends Context.Service<
-  BrainStore,
-  BrainStore.Service
->()("@yui-agent/brain-mastra/BrainStore") {}
+
+export type {
+  ContentChunksService,
+  ContentPagesService,
+  GraphBacklinkCounts,
+  GraphLinksService,
+  GraphTimelineService,
+  RetrievalEmbeddingLookup,
+  RetrievalEmbeddingService,
+  RetrievalSearchService,
+};
+export {
+  BrainStoreEmbedding,
+  BrainStoreGraphLinks,
+  BrainStoreGraphTimeline,
+  BrainStoreSearch,
+  ContentChunks,
+  ContentPages,
+  RetrievalEmbeddingLookupService,
+};

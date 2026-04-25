@@ -19,14 +19,14 @@
 **Plans:** 10 plans
 
 Plans:
-- [ ] 09-01-PLAN.md - Freeze `content.pages` and `content.chunks` folder skeletons
-- [ ] 09-02-PLAN.md - Freeze `graph.links` and `graph.timeline` folder skeletons
-- [ ] 09-03-PLAN.md - Freeze retrieval contracts and rewrite `BrainStore.ts` as a transitional barrel
-- [ ] 09-04-PLAN.md - Freeze `ops.internal` and `ops.lifecycle` branch boundaries
-- [ ] 09-05-PLAN.md - Define tree/compat roots and add Wave-0 regression scaffolds
-- [ ] 09-06-PLAN.md - Implement content and graph branch factories
-- [ ] 09-07-PLAN.md - Implement ops and retrieval branches with branch-only regression coverage
-- [ ] 09-08-PLAN.md - Assemble `BrainStoreTree` and remove flat-root projection from `libsql-store.ts`
+- [x] 09-01-PLAN.md - Freeze `content.pages` and `content.chunks` folder skeletons
+- [x] 09-02-PLAN.md - Freeze `graph.links` and `graph.timeline` folder skeletons
+- [x] 09-03-PLAN.md - Freeze retrieval contracts and rewrite `BrainStore.ts` as a transitional barrel
+- [x] 09-04-PLAN.md - Freeze `ops.internal` and `ops.lifecycle` branch boundaries
+- [x] 09-05-PLAN.md - Define tree/compat roots and add Wave-0 regression scaffolds
+- [x] 09-06-PLAN.md - Implement content and graph branch factories
+- [x] 09-07-PLAN.md - Implement ops and retrieval branches with branch-only regression coverage
+- [x] 09-08-PLAN.md - Assemble `BrainStoreTree` and remove flat-root projection from `libsql-store.ts`
 - [ ] 09-09-PLAN.md - Rebuild compat/runtime/provider wiring over `BrainStoreTree`
 - [ ] 09-10-PLAN.md - Narrow remaining consumers and close the phase with focused regressions
 

@@ -25,9 +25,30 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
-import type { TimelineBatchInput } from "./BrainStore.js";
-import { BrainStore } from "./BrainStore.js";
+import type { BrainStoreRuntime, TimelineBatchInput } from "./BrainStore.js";
+import {
+  BrainStore,
+  BrainStoreEmbedding,
+  BrainStoreExt,
+  BrainStoreGraphLinks,
+  BrainStoreGraphTimeline,
+  BrainStoreIngestion,
+  BrainStoreLifecycleService,
+  BrainStoreLinks,
+  BrainStoreSearch,
+  BrainStoreTimeline,
+  BrainStoreUnsafeDB,
+  ContentChunks,
+  ContentPages,
+} from "./BrainStore.js";
 import { StoreError } from "./BrainStoreError.js";
+import { OpsInternal } from "./brainstore/ops/internal/index.js";
+import { OpsLifecycle } from "./brainstore/ops/lifecycle/index.js";
+import {
+  BrainStoreTree,
+  type BrainStoreTreeService,
+  makeBrainStoreTree,
+} from "./brainstore/tree/index.js";
 import { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import init from "./init.sql" with { type: "text" };
 import { Mappers } from "./Mappers.js";
@@ -484,6 +505,11 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
       return out;
     }, catchStoreError),
   };
+  const search: BrainStore.Search = {
+    ...hybridSearch,
+    getBacklinkCounts: link.getBacklinkCounts,
+    getEmbeddingsByChunkIds: ingestion.getEmbeddingsByChunkIds,
+  };
 
   const timeline: BrainStore.Timeline = {
     addTimelineEntry: Eff.fn("addTimelineEntry")(function* (
@@ -904,14 +930,54 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
           Eff.unsafeCoerce<any, any>
         ),
   };
+  const features: BrainStore.Features = {
+    ingestion,
+    links: link,
+    search,
+    timeline,
+    ext,
+    lifecycle,
+    unsafe,
+  };
+  const tree = makeBrainStoreTree({
+    content: {
+      pages: ingestion,
+      chunks: ingestion,
+    },
+    graph: {
+      links: link,
+      timeline,
+    },
+    retrieval: {
+      search,
+      embedding: {
+        searchVector: search.searchVector,
+        getEmbeddingsByChunkIds: ingestion.getEmbeddingsByChunkIds,
+        getStaleChunks: ext.getStaleChunks,
+        upsertVectors: ext.upsertVectors,
+        markChunksEmbedded: ext.markChunksEmbedded,
+      },
+    },
+    ops: {
+      lifecycle,
+      internal: {
+        ...unsafe,
+        sql,
+        mappers,
+        vectorStore,
+      },
+    },
+  } as unknown as BrainStoreTreeService);
   const store: BrainStore.Service = {
-    ...hybridSearch,
+    ...search,
     ...link,
     ...ingestion,
     ...timeline,
     ...ext,
     ...lifecycle,
     ...unsafe,
+    tree: tree as unknown as BrainStore.Tree,
+    features,
   };
 
   return yield* Eff.acquireRelease(Eff.succeed(store), (store) =>
@@ -919,7 +985,9 @@ const makeStore = Eff.fn(function* (options: BrainStore.Options) {
   );
 }, Eff.withLogElapsed("make BrainStore"));
 
-export function makeLayer(options: { url: string } & BrainStore.Options) {
+export function makeLayer(
+  options: { url: string } & BrainStore.Options
+): Eff.Layer<BrainStoreRuntime, never, never> {
   const filename = options.url.replace(/^file:/, "");
   const SqlLive = SqliteClient.layer({ filename });
   const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
@@ -927,9 +995,111 @@ export function makeLayer(options: { url: string } & BrainStore.Options) {
   const BrainStoreLayer = Layer.effect(BrainStore, makeStore(options)).pipe(
     Layer.provide(DatabaseLive)
   );
-  return Layer.mergeAll(BrainStoreLayer, DatabaseLive).pipe(
+  const TreeLayer = Layer.effect(
+    BrainStoreTree,
+    BrainStore.use((store) =>
+      Eff.succeed(store.tree! as unknown as BrainStoreTreeService)
+    )
+  ).pipe(Layer.provide(BrainStoreLayer)) as any;
+  const FeatureLayers = Layer.mergeAll(
+    Layer.effect(
+      BrainStoreIngestion,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed({
+          ...tree.content.pages,
+          ...tree.content.chunks,
+          getChunksWithEmbeddings: (tree.content.chunks as any)
+            .getChunksWithEmbeddings,
+          getEmbeddingsByChunkIds:
+            tree.retrieval.embedding.getEmbeddingsByChunkIds,
+        } as unknown as BrainStore.Ingestion)
+      )
+    ),
+    Layer.effect(
+      BrainStoreLinks,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.graph.links)
+      )
+    ),
+    Layer.effect(
+      BrainStoreSearch,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.retrieval.search)
+      )
+    ),
+    Layer.effect(
+      BrainStoreTimeline,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.graph.timeline)
+      )
+    ),
+    Layer.effect(
+      BrainStoreExt,
+      BrainStore.use((store) => Eff.succeed(store as BrainStore.Ext))
+    ),
+    Layer.effect(
+      BrainStoreLifecycleService,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.ops.lifecycle)
+      )
+    ),
+    Layer.effect(
+      BrainStoreUnsafeDB,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.ops.internal)
+      )
+    ),
+    Layer.effect(
+      ContentPages,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.content.pages)
+      )
+    ),
+    Layer.effect(
+      ContentChunks,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.content.chunks)
+      )
+    ),
+    Layer.effect(
+      BrainStoreGraphLinks,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.graph.links)
+      )
+    ),
+    Layer.effect(
+      BrainStoreGraphTimeline,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.graph.timeline)
+      )
+    ),
+    Layer.effect(
+      BrainStoreEmbedding,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.retrieval.embedding)
+      )
+    ),
+    Layer.effect(
+      OpsLifecycle,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.ops.lifecycle)
+      )
+    ),
+    Layer.effect(
+      OpsInternal,
+      BrainStoreTree.use((tree: BrainStoreTreeService) =>
+        Eff.succeed(tree.ops.internal)
+      )
+    )
+  ).pipe(Layer.provide(TreeLayer));
+  return Layer.mergeAll(
+    BrainStoreLayer,
+    TreeLayer,
+    FeatureLayers,
+    DatabaseLive
+  ).pipe(
     Layer.provideMerge([Eff.Logger.minimumLogLevel("Debug"), Eff.Logger.pretty])
-  );
+  ) as unknown as Eff.Layer<BrainStoreRuntime, never, never>;
 }
 
 export function make(options: { url: string } & BrainStore.Options) {

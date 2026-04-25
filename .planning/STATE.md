@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 9
 current_phase_name: brainstore-layered-contexts-and-boundaries
 status: active
-stopped_at: Phase 09 execution completed plans 01-07 and is queued at 09-08 tree-first runtime wiring.
+stopped_at: Phase 09 execution completed plans 01-08 and is queued at 09-09 compat/runtime/provider wiring.
 last_updated: "2026-04-25T20:37:20+08:00"
 last_activity: 2026-04-25
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 10
-  completed_plans: 0
-  percent: 0
+  completed_plans: 8
+  percent: 80
 ---
 
 # Project State
@@ -23,8 +23,8 @@ progress:
 **Current Phase:** 9
 **Current Phase Name:** brainstore-layered-contexts-and-boundaries
 **Status:** Executing repaired Phase 09
-**Plan:** 7 of 10
-**Last activity:** 2026-04-25 - Completed Phase 09 plans 01-07, including branch skeletons, transitional `BrainStoreTree` barrel work, Wave-0 tree/layer scaffolds, and branch-only retrieval regression.
+**Plan:** 8 of 10
+**Last activity:** 2026-04-25 - Completed Phase 09 plans 01-08, including branch skeletons, transitional `BrainStoreTree` barrel work, Wave-0 tree/layer scaffolds, branch-only retrieval regression, and tree-first LibSQL runtime wiring.
 
 ## Accumulated Context
 
@@ -44,9 +44,9 @@ progress:
 
 ## Session Continuity
 
-Last session: 2026-04-25T20:37:20+08:00
-Stopped at: Phase 09 paused after plan 07; next action is 09-08 tree-first runtime wiring in `src/store/libsql-store.ts`.
-Resume file: .planning/phases/09-brainstore-layered-contexts-and-boundaries/09-08-PLAN.md
+Last session: 2026-04-25T20:48:55+08:00
+Stopped at: Phase 09 paused after plan 08; next action is 09-09 compat/runtime/provider wiring.
+Resume file: .planning/phases/09-brainstore-layered-contexts-and-boundaries/09-09-PLAN.md
 
 ## Notes
 

@@ -26,7 +26,7 @@ import type {
   TimelineOpts,
   VectorMetadata,
 } from "../types.js";
-import { BrainStore } from "./BrainStore.js";
+import { BrainStore, type BrainStoreRuntime } from "./BrainStore.js";
 import type { GraphNode, Page, PageVersion } from "./effect-schema.js";
 import type { StoreProvider, TimelineBatchInput } from "./interface.js";
 import { makeLayer as makeLibSQLStoreLayer } from "./libsql-store.js";
@@ -52,10 +52,10 @@ export class LibSQLStore implements StoreProvider {
   public readonly authToken?: string;
   public readonly dimension: number;
   public _brainStore:
-    | ManagedRuntime.ManagedRuntime<BrainStore, never>
+    | ManagedRuntime.ManagedRuntime<BrainStoreRuntime, never>
     | undefined = undefined;
 
-  get brainStore() {
+  get brainStore(): ManagedRuntime.ManagedRuntime<BrainStoreRuntime, never> {
     if (!this._brainStore) {
       if (this.options.vectorStore) {
         this.vectorStore = this.options.vectorStore;
@@ -87,7 +87,7 @@ export class LibSQLStore implements StoreProvider {
       });
       this._brainStore = ManagedRuntime.make(layer);
     }
-    return this._brainStore;
+    return this._brainStore!;
   }
 
   constructor(private options: LibSQLStoreOptions) {
@@ -109,12 +109,19 @@ export class LibSQLStore implements StoreProvider {
     return this.run((store) => store.query<A>(sql, params));
   }
 
-  async runFlatten<A, E = never, E2 = never>(
+  async runFlatten<
+    A,
+    E = never,
+    E2 = never,
+    R extends BrainStoreRuntime = never,
+  >(
     fn: (
       store: BrainStore.Service
-    ) => Effect.Effect<Effect.Effect<A, E2, BrainStore>, E, BrainStore>
+    ) => Effect.Effect<Effect.Effect<A, E2, R>, E, BrainStore>
   ): Promise<A> {
-    return this.run(Effect.flow(fn, Effect.flatten));
+    return this.brainStore.runPromise(
+      BrainStore.use((store) => fn(store).pipe(Effect.flatten))
+    );
   }
 
   async run<A, E = never>(

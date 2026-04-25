@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/suspicious/noShadowRestrictedNames: effect lib */
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Array, Console, Order } from "effect";
-import { BrainStore } from "../store/BrainStore.js";
+import { BrainStoreSearch } from "../store/BrainStore.js";
 import type { StoreError } from "../store/BrainStoreError.js";
 import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
 import type { SearchOpts, SearchResult } from "../types.js";
@@ -38,9 +38,9 @@ export function hybridSearchEffect(
   query: string,
   opts: HybridSearchOpts = {},
   queryVector?: number[]
-): Eff.Effect<SearchResult[], StoreError, BrainStore> {
+): Eff.Effect<SearchResult[], StoreError, BrainStoreSearch> {
   return Eff.gen(function* () {
-    const engine = yield* BrainStore;
+    const engine = yield* BrainStoreSearch;
     const limit = opts?.limit || 20;
     const offset = opts?.offset || 0;
     const innerLimit = Math.min(limit * 2, MAX_SEARCH_LIMIT);
@@ -291,7 +291,7 @@ const cosineReScore = Eff.fn("cosineReScore")(function* (
   queryEmbedding: ArrayLike<number>,
   DEBUG: boolean
 ) {
-  const engine = yield* BrainStore;
+  const engine = yield* BrainStoreSearch;
 
   const chunkIds = results
     .map((r) => r.chunk_id)
