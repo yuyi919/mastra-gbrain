@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test";
 import * as BunTester from "@yuyi919/tslibs-effect/BunTester";
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
-import { Layer, ManagedRuntime } from "@yuyi919/tslibs-effect/effect-next";
+import { Layer, ManagedRuntime } from "effect";
 import {
   makeNoopVectorProvider,
   makeVectorProvider,
