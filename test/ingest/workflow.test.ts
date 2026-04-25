@@ -1,33 +1,74 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { createIngestionWorkflow } from "../../src/ingest/workflow.js";
+import { readFileSync } from "node:fs";
+import {
+  createIngestionWorkflow,
+  type IngestionWorkflowStore,
+} from "../../src/ingest/workflow.js";
 import { parseMarkdown } from "../../src/markdown.js";
-import type {
-  EmbeddingProvider,
-  StoreProvider,
-} from "../../src/store/interface.js";
+import type { EmbeddingProvider } from "../../src/store/interface.js";
 
-function mockStore(
-  overrides: Partial<Record<string, any>> = {}
-): StoreProvider & { _calls: any[] } {
-  const calls: { method: string; args: any[] }[] = [];
-  const track =
-    (method: string) =>
-    async (...args: any[]) => {
-      calls.push({ method, args });
-      if (overrides[method]) return overrides[method](...args);
-      if (method === "getPage") return null;
-      if (method === "getTags") return [];
-    };
-  const store = new Proxy({} as any, {
-    get(_, prop: string) {
-      if (prop === "_calls") return calls;
-      if (prop === "transaction") {
-        return overrides.transaction || (async (fn: any) => fn(store));
-      }
-      return track(prop);
+type MockStore = IngestionWorkflowStore & {
+  _calls: { method: string; args: unknown[] }[];
+};
+
+type MockStoreOverrides = Partial<{
+  getPage: IngestionWorkflowStore["getPage"];
+  createVersion: IngestionWorkflowStore["createVersion"];
+  putPage: IngestionWorkflowStore["putPage"];
+  getTags: IngestionWorkflowStore["getTags"];
+  addTag: IngestionWorkflowStore["addTag"];
+  removeTag: IngestionWorkflowStore["removeTag"];
+  upsertChunks: IngestionWorkflowStore["upsertChunks"];
+  deleteChunks: IngestionWorkflowStore["deleteChunks"];
+  addTimelineEntriesBatch: IngestionWorkflowStore["addTimelineEntriesBatch"];
+  transaction: NonNullable<IngestionWorkflowStore["transaction"]>;
+}>;
+
+function mockStore(overrides: MockStoreOverrides = {}): MockStore {
+  const calls: { method: string; args: unknown[] }[] = [];
+  const store: MockStore = {
+    _calls: calls,
+    getPage: async (slug) => {
+      calls.push({ method: "getPage", args: [slug] });
+      return overrides.getPage ? overrides.getPage(slug) : null;
     },
-  });
+    createVersion: async (slug) => {
+      calls.push({ method: "createVersion", args: [slug] });
+      return overrides.createVersion?.(slug);
+    },
+    putPage: async (slug, page) => {
+      calls.push({ method: "putPage", args: [slug, page] });
+      return overrides.putPage?.(slug, page);
+    },
+    getTags: async (slug) => {
+      calls.push({ method: "getTags", args: [slug] });
+      return overrides.getTags ? overrides.getTags(slug) : [];
+    },
+    addTag: async (slug, tag) => {
+      calls.push({ method: "addTag", args: [slug, tag] });
+      await overrides.addTag?.(slug, tag);
+    },
+    removeTag: async (slug, tag) => {
+      calls.push({ method: "removeTag", args: [slug, tag] });
+      await overrides.removeTag?.(slug, tag);
+    },
+    upsertChunks: async (slug, chunks) => {
+      calls.push({ method: "upsertChunks", args: [slug, chunks] });
+      await overrides.upsertChunks?.(slug, chunks);
+    },
+    deleteChunks: async (slug) => {
+      calls.push({ method: "deleteChunks", args: [slug] });
+      await overrides.deleteChunks?.(slug);
+    },
+    addTimelineEntriesBatch: async (entries) => {
+      calls.push({ method: "addTimelineEntriesBatch", args: [entries] });
+      await overrides.addTimelineEntriesBatch?.(entries);
+    },
+    transaction: async (fn) => {
+      return overrides.transaction ? overrides.transaction(fn) : fn(store);
+    },
+  };
   return store;
 }
 
@@ -40,6 +81,12 @@ function mockEmbedder(): EmbeddingProvider {
 }
 
 describe("ingestion workflow", () => {
+  test("declares a workflow-local store contract", () => {
+    const source = readFileSync("src/ingest/workflow.ts", "utf-8");
+    expect(source).toContain("export interface IngestionWorkflowStore");
+    expect(source).not.toContain("StoreProvider");
+  });
+
   test("imports valid markdown content (noEmbed)", async () => {
     const store = mockStore();
     const workflow = createIngestionWorkflow({
@@ -66,10 +113,10 @@ This is the compiled truth.
     if (res.status === "success" && "result" in res) {
       expect((res.result as any).status).toBe("imported");
     }
-    const calls = (store as any)._calls;
-    expect(calls.some((c: any) => c.method === "putPage")).toBe(true);
-    expect(calls.filter((c: any) => c.method === "addTag")).toHaveLength(2);
-    expect(calls.some((c: any) => c.method === "upsertChunks")).toBe(true);
+    const calls = store._calls;
+    expect(calls.some((c) => c.method === "putPage")).toBe(true);
+    expect(calls.filter((c) => c.method === "addTag")).toHaveLength(2);
+    expect(calls.some((c) => c.method === "upsertChunks")).toBe(true);
   });
 
   test("skips when content hash matches", async () => {
@@ -107,9 +154,7 @@ Same content.
     if (res.status === "success" && "result" in res) {
       expect((res.result as any).status).toBe("skipped");
     }
-    expect((store as any)._calls.some((c: any) => c.method === "putPage")).toBe(
-      false
-    );
+    expect(store._calls.some((c) => c.method === "putPage")).toBe(false);
   });
 
   test("rejects frontmatter slug mismatch as skipped", async () => {
@@ -137,7 +182,7 @@ Poisoned content
       expect((res.result as any).status).toBe("skipped");
       expect((res.result as any).error).toContain("Frontmatter slug");
     }
-    expect((store as any)._calls.length).toBe(0);
+    expect(store._calls.length).toBe(0);
   });
 
   test("rejects oversized content as skipped", async () => {
@@ -160,7 +205,7 @@ Poisoned content
       expect((res.result as any).status).toBe("skipped");
       expect((res.result as any).error).toContain("Content too large");
     }
-    expect((store as any)._calls.length).toBe(0);
+    expect(store._calls.length).toBe(0);
   });
 
   test("embeds when embedBatch is provided", async () => {
@@ -185,9 +230,7 @@ ${"word ".repeat(400).trim()}
     if (res.status === "success" && "result" in res) {
       expect((res.result as any).status).toBe("imported");
     }
-    const upsert = (store as any)._calls.find(
-      (c: any) => c.method === "upsertChunks"
-    );
+    const upsert = store._calls.find((c) => c.method === "upsertChunks");
     const chunks = upsert.args[1];
     expect(chunks.some((c: any) => c.embedding instanceof Float32Array)).toBe(
       true
