@@ -20,7 +20,7 @@
 - `P10-05` Preserve all existing public `StoreProvider` and `LibSQLStore` behavior; do not widen the public API while narrowing consumers.
 
 **Depends on:** Phase 9
-**Plans:** 2/7 plans executed
+**Plans:** 3/7 plans executed
 
 Initial scope from current grep:
 - Production: `src/store/index.ts`
@@ -36,7 +36,7 @@ Carry-forward inputs:
 Plans:
 - [x] 10-01-PLAN.md - Freeze the LibSQLStore/store-boundary consumer inventory before implementation
 - [x] 10-02-PLAN.md - Narrow ingestion workflow/provider contract while preserving `{ store, embedder }`
-- [ ] 10-03-PLAN.md - Introduce typed internal vector provider layer and rewire branch consumers
+- [x] 10-03-PLAN.md - Introduce typed internal vector provider layer and rewire branch consumers
 - [ ] 10-04-PLAN.md - Move `getChunksWithEmbeddings` ownership into the content chunks branch
 - [ ] 10-05-PLAN.md - Narrow tool and hybrid search consumer contracts
 - [ ] 10-06-PLAN.md - Narrow script utility contracts and helper tests
