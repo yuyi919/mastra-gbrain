@@ -1,7 +1,6 @@
 import type { LibSQLVector } from "@mastra/libsql";
 import type * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Context } from "@yuyi919/tslibs-effect/effect-next";
-import type { Chunk } from "../types.js";
 import type { StoreError } from "./BrainStoreError.js";
 import type { BrainStoreCompat } from "./brainstore/compat/interface.js";
 import {
@@ -57,9 +56,7 @@ export type EngineEffect<T> = Eff.Effect<T, StoreError>;
 export interface IngestionStore
   extends ContentPagesService,
     ContentChunksService,
-    RetrievalEmbeddingLookup {
-  getChunksWithEmbeddings(slug: string): EngineEffect<Chunk[]>;
-}
+    RetrievalEmbeddingLookup {}
 
 export type HybridSearchBackend = RetrievalSearchService;
 export type SearchStore = RetrievalSearchService;

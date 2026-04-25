@@ -124,6 +124,21 @@ export const makeContentChunks = (
           }) satisfies Chunk
       );
     }, catchStoreError),
+    getChunksWithEmbeddings: Eff.fn("content.chunks.getChunksWithEmbeddings")(
+      function* (slug: string) {
+        const rows = yield* mappers.getChunksBySlug(slug);
+        return rows.map(
+          (row) =>
+            ({
+              ...row,
+              embedding: null,
+              model: row.model,
+              embedded_at: row.embedded_at ? new Date(row.embedded_at) : null,
+            }) satisfies Chunk
+        );
+      },
+      catchStoreError
+    ),
   };
 };
 

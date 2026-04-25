@@ -11,6 +11,7 @@ export interface ContentChunksService {
   upsertChunks(slug: string, chunks: ChunkInput[]): EngineEffect<void>;
   deleteChunks(slug: string): EngineEffect<void>;
   getChunks(slug: string): EngineEffect<Chunk[]>;
+  getChunksWithEmbeddings(slug: string): EngineEffect<Chunk[]>;
 }
 
 export class ContentChunks extends Context.Service<

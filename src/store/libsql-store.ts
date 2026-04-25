@@ -87,11 +87,7 @@ function makeLegacyIngestion(
     upsertChunks: tree.content.chunks.upsertChunks,
     deleteChunks: tree.content.chunks.deleteChunks,
     getChunks: tree.content.chunks.getChunks,
-    getChunksWithEmbeddings: Eff.fn(
-      "brainstore.compat.getChunksWithEmbeddings"
-    )(function* (slug: string) {
-      return yield* tree.content.chunks.getChunks(slug);
-    }, catchStoreError),
+    getChunksWithEmbeddings: tree.content.chunks.getChunksWithEmbeddings,
     getEmbeddingsByChunkIds: tree.retrieval.embedding.getEmbeddingsByChunkIds,
   };
 }

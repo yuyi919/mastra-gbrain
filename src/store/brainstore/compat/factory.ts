@@ -27,7 +27,7 @@ export const makeCompatBrainStore = (
     upsertChunks: tree.content.chunks.upsertChunks,
     deleteChunks: tree.content.chunks.deleteChunks,
     getChunks: tree.content.chunks.getChunks,
-    getChunksWithEmbeddings: compat.getChunksWithEmbeddings,
+    getChunksWithEmbeddings: tree.content.chunks.getChunksWithEmbeddings,
     getEmbeddingsByChunkIds: tree.retrieval.embedding.getEmbeddingsByChunkIds,
   };
   const features: BrainStoreFeatureTree = {
@@ -44,7 +44,7 @@ export const makeCompatBrainStore = (
     ...tree.retrieval.search,
     ...tree.graph.links,
     ...ingestion,
-    getChunksWithEmbeddings: compat.getChunksWithEmbeddings,
+    getChunksWithEmbeddings: tree.content.chunks.getChunksWithEmbeddings,
     getEmbeddingsByChunkIds: tree.retrieval.embedding.getEmbeddingsByChunkIds,
     ...tree.graph.timeline,
     ...tree.ops.lifecycle,
