@@ -76,15 +76,16 @@ export const makeRetrievalEmbedding = (
       const hits = vectorResults
         .map((match) => ({
           score: match.score ?? 0,
-          slug: (match.metadata?.slug ??
+          slug:
+            match.metadata?.slug ??
             (typeof match.id === "string"
               ? match.id.split("::")[0]
-              : undefined)),
+              : undefined),
           chunk_index: Number(
             match.metadata?.chunk_index ??
-            (typeof match.id === "string"
-              ? match.id.split("::")[1]
-              : undefined)
+              (typeof match.id === "string"
+                ? match.id.split("::")[1]
+                : undefined)
           ),
         }))
         .filter(

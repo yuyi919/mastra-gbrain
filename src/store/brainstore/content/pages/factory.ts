@@ -147,19 +147,28 @@ export const makeContentPages = (
 };
 
 function isDependencies(
-  service: ContentPagesService | ContentPagesDependencies | ContentPagesLayerOptions
+  service:
+    | ContentPagesService
+    | ContentPagesDependencies
+    | ContentPagesLayerOptions
 ): service is ContentPagesDependencies {
   return "mappers" in service && "sql" in service;
 }
 
 function isService(
-  service: ContentPagesService | ContentPagesDependencies | ContentPagesLayerOptions
+  service:
+    | ContentPagesService
+    | ContentPagesDependencies
+    | ContentPagesLayerOptions
 ): service is ContentPagesService {
   return "getPage" in service;
 }
 
 export const makeLayer = (
-  service: ContentPagesService | ContentPagesDependencies | ContentPagesLayerOptions
+  service:
+    | ContentPagesService
+    | ContentPagesDependencies
+    | ContentPagesLayerOptions
 ) => {
   if (isService(service)) {
     return Layer.succeed(ContentPages, service);

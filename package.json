@@ -40,6 +40,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@biomejs/biome": "catalog:",
     "@effect/platform-bun": "catalog:",
     "@effect/sql-sqlite-bun": "catalog:",
     "@types/bun": "catalog:",

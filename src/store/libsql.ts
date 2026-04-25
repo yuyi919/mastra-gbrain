@@ -329,7 +329,7 @@ export class LibSQLStore implements StoreProvider {
     let i = 0;
     while (i++ < 100) {
       try {
-      try {
+        try {
           // await Bun.file(this.db.filename).unlink();
         } catch (error) {
           // if (error?.code !== "ENOENT") throw error;

@@ -25,13 +25,11 @@ export const makeOpsInternal = (
   mappers: deps.mappers,
   vectorStore: deps.vectorStore,
   query: <T>(text: string, params?: ReadonlyArray<unknown>) =>
-    deps.sql
-      .unsafe(text, params)
-      .unprepared.pipe(
-        Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
-        StoreError.catch,
-        Eff.map((rows: ReadonlyArray<object>) => rows as T[])
-      ),
+    deps.sql.unsafe(text, params).unprepared.pipe(
+      Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
+      StoreError.catch,
+      Eff.map((rows: ReadonlyArray<object>) => rows as T[])
+    ),
   get: <T>(text: string, params?: ReadonlyArray<unknown>) =>
     deps.sql.unsafe(text, params).unprepared.pipe(
       Eff.tap(Eff.logWarning(`(unsafe) Running query: ${text}`)),
@@ -49,19 +47,28 @@ export const makeOpsInternal = (
 });
 
 function isDependencies(
-  service: OpsInternalService | OpsInternalDependencies | OpsInternalLayerOptions
+  service:
+    | OpsInternalService
+    | OpsInternalDependencies
+    | OpsInternalLayerOptions
 ): service is OpsInternalDependencies {
   return "mappers" in service && "sql" in service && !("query" in service);
 }
 
 function isService(
-  service: OpsInternalService | OpsInternalDependencies | OpsInternalLayerOptions
+  service:
+    | OpsInternalService
+    | OpsInternalDependencies
+    | OpsInternalLayerOptions
 ): service is OpsInternalService {
   return "query" in service;
 }
 
 export const makeLayer = (
-  service: OpsInternalService | OpsInternalDependencies | OpsInternalLayerOptions
+  service:
+    | OpsInternalService
+    | OpsInternalDependencies
+    | OpsInternalLayerOptions
 ) => {
   if (isService(service)) {
     return Layer.succeed(OpsInternal, service);
@@ -74,7 +81,11 @@ export const makeLayer = (
     Eff.gen(function* () {
       const sql = yield* SqlClientTag.SqlClient;
       const mappers = yield* Mappers;
-      return makeOpsInternal({ sql, mappers, vectorStore: service.vectorStore });
+      return makeOpsInternal({
+        sql,
+        mappers,
+        vectorStore: service.vectorStore,
+      });
     })
   );
 };

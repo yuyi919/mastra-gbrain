@@ -42,7 +42,6 @@ export interface ExtService {
   getIngestLog(opts?: { limit?: number }): EngineEffect<IngestLogEntry[]>;
 }
 
-export class BrainStoreExt extends Context.Service<
-  BrainStoreExt,
-  ExtService
->()("@yui-agent/brain-mastra/BrainStore/Ext") {}
+export class BrainStoreExt extends Context.Service<BrainStoreExt, ExtService>()(
+  "@yui-agent/brain-mastra/BrainStore/Ext"
+) {}

@@ -1,12 +1,12 @@
 import { SqliteClient } from "@effect/sql-sqlite-bun";
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "@yuyi919/tslibs-effect/effect-next";
-import type { BrainStoreRuntime } from "./BrainStore.js";
-import {
-  BrainStore,
-  BrainStoreExt,
-} from "./BrainStore.js";
+import { BrainStore, BrainStoreExt } from "./BrainStore.js";
 import { StoreError } from "./BrainStoreError.js";
+import {
+  BrainStoreCompat,
+  makeCompatBrainStore,
+} from "./brainstore/compat/index.js";
 import { makeLayer as makeContentChunksLayer } from "./brainstore/content/chunks/factory.js";
 import { makeLayer as makeContentPagesLayer } from "./brainstore/content/pages/factory.js";
 import { makeLayer as makeExtLayer } from "./brainstore/ext/index.js";
@@ -21,10 +21,6 @@ import {
   type BrainStoreTreeService,
   makeComposedLayer,
 } from "./brainstore/tree/index.js";
-import {
-  BrainStoreCompat,
-  makeCompatBrainStore,
-} from "./brainstore/compat/index.js";
 import init from "./init.sql" with { type: "text" };
 import { Mappers } from "./Mappers.js";
 

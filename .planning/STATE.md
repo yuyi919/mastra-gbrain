@@ -6,7 +6,7 @@ current_phase: 10
 current_phase_name: libsqlstore-consumer-boundary-audit
 status: planned
 stopped_at: Phase 10 target created by consolidating pending todos; next step is planning Phase 10.
-last_updated: "2026-04-25T23:33:26.0280000+08:00"
+last_updated: "2026-04-25T23:58:00.0000000+08:00"
 last_activity: 2026-04-25
 progress:
   total_phases: 2
@@ -60,6 +60,7 @@ Resume file: .planning/ROADMAP.md
 - Phase 9 UAT completed with one follow-up provider/workflow surface todo recorded.
 - The pending todos `narrow-brainstore-dependencies-by-feature-layer` and `stabilize-provider-ingestion-workflow-surface` were consolidated into Phase 10 and moved to completed todo records.
 - Phase 9 security verification completed with `threats_open: 0` in `.planning/phases/09-brainstore-layered-contexts-and-boundaries/09-SECURITY.md`.
+- On 2026-04-25, Phase 9 TS hygiene was backfilled by running `pnpm check:fix -- <phase-9-ts-files>` manually after discovering the hook tooling lacked a package-local `@biomejs/biome` binary. If lint-staged blocks or fails during a future commit, run `pnpm check:fix` manually, restage the fixes, then commit without bypassing hooks.
 
 ### Quick Tasks Completed
 

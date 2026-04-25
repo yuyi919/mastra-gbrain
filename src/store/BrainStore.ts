@@ -3,6 +3,7 @@ import type * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Context } from "@yuyi919/tslibs-effect/effect-next";
 import type { Chunk } from "../types.js";
 import type { StoreError } from "./BrainStoreError.js";
+import type { BrainStoreCompat } from "./brainstore/compat/interface.js";
 import {
   ContentChunks,
   type ContentChunksService,
@@ -11,6 +12,7 @@ import {
   ContentPages,
   type ContentPagesService,
 } from "./brainstore/content/pages/index.js";
+import { BrainStoreExt, type ExtService } from "./brainstore/ext/index.js";
 import {
   GraphLinks as BrainStoreGraphLinks,
   type GraphBacklinkCounts,
@@ -20,6 +22,14 @@ import {
   GraphTimeline as BrainStoreGraphTimeline,
   type GraphTimelineService,
 } from "./brainstore/graph/timeline/index.js";
+import type {
+  OpsInternal,
+  UnsafeDBService,
+} from "./brainstore/ops/internal/index.js";
+import type {
+  OpsLifecycle,
+  OpsLifecycleService,
+} from "./brainstore/ops/lifecycle/index.js";
 import {
   RetrievalEmbedding as BrainStoreEmbedding,
   type RetrievalEmbeddingLookup,
@@ -30,23 +40,9 @@ import {
   RetrievalSearch as BrainStoreSearch,
   type RetrievalSearchService,
 } from "./brainstore/retrieval/search/index.js";
-import { BrainStoreCompat } from "./brainstore/compat/interface.js";
-import {
-  BrainStoreExt,
-  type ExtService,
-} from "./brainstore/ext/index.js";
-import {
-  OpsInternal,
-  type OpsInternalService,
-  type UnsafeDBService,
-} from "./brainstore/ops/internal/index.js";
-import {
-  OpsLifecycle,
-  type OpsLifecycleService,
-} from "./brainstore/ops/lifecycle/index.js";
-import {
+import type {
   BrainStoreTree,
-  type BrainStoreTreeService,
+  BrainStoreTreeService,
 } from "./brainstore/tree/index.js";
 
 /**
