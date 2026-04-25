@@ -1,10 +1,11 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import type { IngestionWorkflowStore } from "../ingest/workflow.js";
 import { bulkImport } from "../scripts/import.js";
-import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
+import type { EmbeddingProvider } from "../store/interface.js";
 
 export function createBulkImportTool(
-  store: StoreProvider,
+  store: IngestionWorkflowStore,
   embedder: EmbeddingProvider
 ) {
   const bulkImportTool = createTool({
@@ -30,10 +31,11 @@ export function createBulkImportTool(
           message: `Successfully processed directory: ${inputData.directoryPath}`,
           summary,
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : undefined;
         return {
           success: false,
-          error: err.message || "Unknown error occurred during bulk import",
+          error: message || "Unknown error occurred during bulk import",
         };
       }
     },

@@ -150,6 +150,33 @@ test("retrieval embedding vector seam supports metadata filters", async () => {
   }
     ? Input[]
     : never = [];
+  const mappers = Object.assign(Object.create(null), {
+    searchVectorRows: () =>
+      Eff.succeed([
+        {
+          page_id: 1,
+          title: "Page A",
+          type: "concept",
+          slug: "page-a",
+          chunk_id: 10,
+          chunk_index: 0,
+          chunk_text: "Vector search A",
+          chunk_source: "compiled_truth",
+          stale: false,
+        },
+        {
+          page_id: 3,
+          title: "Page C",
+          type: "concept",
+          slug: "page-c",
+          chunk_id: 30,
+          chunk_index: 0,
+          chunk_text: "Vector search C",
+          chunk_source: "compiled_truth",
+          stale: false,
+        },
+      ]),
+  }) as RetrievalEmbeddingDependencies["mappers"];
   const embedding = makeRetrievalEmbedding({
     indexName: "chunks",
     vectors: {
@@ -170,33 +197,7 @@ test("retrieval embedding vector seam supports metadata filters", async () => {
       },
       upsert: () => Eff.void,
     },
-    mappers: {
-      searchVectorRows: () =>
-        Eff.succeed([
-          {
-            page_id: 1,
-            title: "Page A",
-            type: "concept",
-            slug: "page-a",
-            chunk_id: 10,
-            chunk_index: 0,
-            chunk_text: "Vector search A",
-            chunk_source: "compiled_truth",
-            stale: false,
-          },
-          {
-            page_id: 3,
-            title: "Page C",
-            type: "concept",
-            slug: "page-c",
-            chunk_id: 30,
-            chunk_index: 0,
-            chunk_text: "Vector search C",
-            chunk_source: "compiled_truth",
-            stale: false,
-          },
-        ]),
-    } as RetrievalEmbeddingDependencies["mappers"],
+    mappers,
   });
 
   const results = await Eff.runPromise(
@@ -504,7 +505,7 @@ test("Maintenance helpers route through runtime-backed services", async () => {
         return Eff.void;
       },
     },
-    mappers: {} as RetrievalEmbeddingDependencies["mappers"],
+    mappers: Object.create(null) as RetrievalEmbeddingDependencies["mappers"],
   });
 
   await Eff.runPromise(

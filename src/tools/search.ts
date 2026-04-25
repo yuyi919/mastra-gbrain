@@ -1,10 +1,13 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { hybridSearch } from "../search/hybrid.js";
-import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
+import {
+  type HybridSearchCompatBackend,
+  hybridSearch,
+} from "../search/hybrid.js";
+import type { EmbeddingProvider } from "../store/interface.js";
 
 export function createSearchTool(
-  store: StoreProvider,
+  store: HybridSearchCompatBackend,
   embedder: EmbeddingProvider
 ) {
   const searchTool = createTool({

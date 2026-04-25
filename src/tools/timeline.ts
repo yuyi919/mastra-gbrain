@@ -1,8 +1,12 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import type { StoreProvider } from "../store/interface.js";
+import type { TimelineEntry, TimelineOpts } from "../types.js";
 
-export function createTimelineTool(store: StoreProvider) {
+export interface TimelineToolDeps {
+  getTimeline(slug: string, opts?: TimelineOpts): Promise<TimelineEntry[]>;
+}
+
+export function createTimelineTool(store: TimelineToolDeps) {
   const timelineTool = createTool({
     id: "get-timeline",
     description:

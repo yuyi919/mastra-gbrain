@@ -1,8 +1,16 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import type { StoreProvider } from "../store/interface.js";
+import type { Page } from "../types.js";
 
-export function createPageTools(store: StoreProvider) {
+export interface PageToolDeps {
+  getPage(slug: string): Promise<Page | null>;
+  getTags(slug: string): Promise<string[]>;
+  deletePage(slug: string): Promise<void>;
+  addTag(slug: string, tag: string): Promise<void>;
+  removeTag(slug: string, tag: string): Promise<void>;
+}
+
+export function createPageTools(store: PageToolDeps) {
   const readPageTool = createTool({
     id: "read-page",
     description:

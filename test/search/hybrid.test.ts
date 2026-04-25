@@ -7,7 +7,12 @@ import {
 } from "../../src/store/BrainStore.js";
 import type { SearchOpts, SearchResult } from "../../src/types.js";
 
-const result = (slug: string, chunk_text: string, score: number, chunk_id = 1) =>
+const result = (
+  slug: string,
+  chunk_text: string,
+  score: number,
+  chunk_id = 1
+) =>
   ({
     page_id: 1,
     title: slug,
@@ -17,7 +22,6 @@ const result = (slug: string, chunk_text: string, score: number, chunk_id = 1) =
     chunk_index: 0,
     chunk_text,
     chunk_source: "compiled_truth",
-    token_count: 1,
     score,
     stale: false,
   }) satisfies SearchResult;
@@ -34,9 +38,10 @@ interface LegacyHybridSearchCompatBackend {
 }
 
 describe("hybridSearch", () => {
-  test("hybrid wrapper does not type its dependency as StoreProvider", async () => {
+  test("hybrid wrapper does not type its dependency as broad store", async () => {
     const source = await Bun.file("src/search/hybrid.ts").text();
-    expect(source).not.toContain("StoreProvider");
+    const forbidden = "Store" + "Provider";
+    expect(source).not.toContain(forbidden);
   });
 
   test("keyword-only when embed is missing", async () => {

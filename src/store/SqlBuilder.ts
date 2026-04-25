@@ -23,6 +23,7 @@ import type {
   McpRequestLog,
   PageFilters,
   PageInput,
+  PageType,
   SearchOpts,
   TimelineInput,
   TimelineOpts,
@@ -35,8 +36,10 @@ function castArray<A>(a: A | A[]) {
   return Array.isArray(a) ? a : [a];
 }
 
-export type DrizzleDb<TResultKind extends "sync" | "async" = any> =
+export type DrizzleDb<TResultKind extends "sync" | "async" = "async"> =
   BaseSQLiteDatabase<TResultKind, void, table.Schemas>;
+
+const ENTITY_PAGE_TYPES: PageType[] = ["person", "company"];
 
 /**
  * @internal
@@ -58,7 +61,7 @@ export function listPages(drizzleDb: DrizzleDb, filters: PageFilters) {
   let query = drizzleDb.select(queryFields).from(table.pages).$dynamic();
 
   const conditions = [
-    filters.type ? eq(table.pages.type, filters.type as any) : undefined,
+    filters.type ? eq(table.pages.type, filters.type) : undefined,
     filters.updated_after
       ? gte(table.pages.updated_at, filters.updated_after)
       : undefined,
@@ -1092,7 +1095,7 @@ export function countPagesWithTimeline(drizzleDb: DrizzleDb) {
 export function countEntities(drizzleDb: DrizzleDb) {
   return drizzleDb.$count(
     table.pages,
-    inArray(table.pages.type, ["person", "company"] as any)
+    inArray(table.pages.type, ENTITY_PAGE_TYPES)
   );
 }
 
@@ -1103,7 +1106,7 @@ export function countEntitiesWithLinks(drizzleDb: DrizzleDb) {
     })
     .from(table.links)
     .innerJoin(table.pages, eq(table.pages.id, table.links.to_page_id))
-    .where(inArray(table.pages.type, ["person", "company"] as any))
+    .where(inArray(table.pages.type, ENTITY_PAGE_TYPES))
     .limit(1);
 }
 
@@ -1116,7 +1119,7 @@ export function countEntitiesWithTimeline(drizzleDb: DrizzleDb) {
     })
     .from(table.timeline_entries)
     .innerJoin(table.pages, eq(table.pages.id, table.timeline_entries.page_id))
-    .where(inArray(table.pages.type, ["person", "company"] as any))
+    .where(inArray(table.pages.type, ENTITY_PAGE_TYPES))
     .limit(1);
 }
 
@@ -1139,9 +1142,9 @@ export function getMostConnectedPages(drizzleDb: DrizzleDb) {
  * 面向实例的安全 SQL 构建器。
  * 通过构造函数注入 DrizzleDb，避免每次方法调用重复传参。
  */
-export class SqlBuilder<TResultKind extends "sync" | "async" = "async"> {
-  unsafe: UnsafeSql<TResultKind>;
-  constructor(private readonly drizzleDb: DrizzleDb<TResultKind>) {
+export class SqlBuilder {
+  unsafe: UnsafeSql;
+  constructor(private readonly drizzleDb: DrizzleDb) {
     this.unsafe = new UnsafeSql(drizzleDb);
   }
 

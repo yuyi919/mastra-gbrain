@@ -120,12 +120,12 @@ export const makeRepository = <
       execute: (request) =>
         sql.onDialectOrElse({
           mysql: () =>
-            sql`insert into ${sql(options.tableName)} ${sql.insert(request as any)};
+            sql`insert into ${sql(options.tableName)} ${sql.insert(request as never)};
 select * from ${sql(options.tableName)} where ${sql(idColumn)} = LAST_INSERT_ID();`.unprepared.pipe(
-              Effect.map(([, results]) => results as any)
+              Effect.map(([, results]) => results as never)
             ),
           orElse: () =>
-            sql`insert into ${sql(options.tableName)} ${sql.insert(request as any).returning("*")}`,
+            sql`insert into ${sql(options.tableName)} ${sql.insert(request as never).returning("*")}`,
         }),
     });
     const listSchema = SqlSchema.findAll({

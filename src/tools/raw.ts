@@ -1,8 +1,13 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import type { StoreProvider } from "../store/interface.js";
+import type { RawData } from "../types.js";
 
-export function createRawDataTools(store: StoreProvider) {
+export interface RawDataToolDeps {
+  getRawData(slug: string, source?: string): Promise<RawData[]>;
+  putRawData(slug: string, source: string, data: unknown): Promise<void>;
+}
+
+export function createRawDataTools(store: RawDataToolDeps) {
   const getRawDataTool = createTool({
     id: "get-raw-data",
     description:

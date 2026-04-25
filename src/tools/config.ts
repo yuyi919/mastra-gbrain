@@ -1,8 +1,12 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import type { StoreProvider } from "../store/interface.js";
 
-export function createConfigTools(store: StoreProvider) {
+export interface ConfigToolDeps {
+  getConfig(key: string): Promise<string | null>;
+  setConfig(key: string, value: string): Promise<void>;
+}
+
+export function createConfigTools(store: ConfigToolDeps) {
   const configTool = createTool({
     id: "get-config",
     description: "Get a global configuration value by key.",

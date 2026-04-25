@@ -11,7 +11,7 @@ export class Mappers extends Context.Service<Mappers, SqlBuilder>()(
   {
     make: Eff.gen(function* () {
       const db = yield* SqliteDrizzle.DB;
-      return new SqlBuilder(db as any);
+      return new SqlBuilder(db as never);
     }),
   }
 ) {

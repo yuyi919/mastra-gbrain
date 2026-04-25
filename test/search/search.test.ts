@@ -29,6 +29,12 @@ function makeResult(overrides: Partial<SearchResult> = {}): SearchResult {
   };
 }
 
+function withoutChunkId(result: SearchResult): SearchResult {
+  const copy = { ...result };
+  delete (copy as Partial<SearchResult>).chunk_id;
+  return copy;
+}
+
 describe("rrfFusion", () => {
   BunTester.it.effect("normalizes scores to 0-1 range", () => {
     const list: SearchResult[] = [
@@ -127,16 +133,18 @@ describe("rrfFusion", () => {
   BunTester.it.effect(
     "falls back to text prefix when chunk_id is missing",
     () => {
-      const chunk1 = makeResult({
-        slug: "a",
-        chunk_id: undefined as any,
-        chunk_text: "same text",
-      });
-      const chunk2 = makeResult({
-        slug: "a",
-        chunk_id: undefined as any,
-        chunk_text: "same text",
-      });
+      const chunk1 = withoutChunkId(
+        makeResult({
+          slug: "a",
+          chunk_text: "same text",
+        })
+      );
+      const chunk2 = withoutChunkId(
+        makeResult({
+          slug: "a",
+          chunk_text: "same text",
+        })
+      );
 
       return Eff.gen(function* () {
         const results = yield* rrfFusion([[chunk1, chunk2]], 60);

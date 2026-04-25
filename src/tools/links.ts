@@ -1,8 +1,20 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import type { StoreProvider } from "../store/interface.js";
+import type { Link } from "../types.js";
 
-export function createLinksTools(store: StoreProvider) {
+export interface LinksToolDeps {
+  getLinks(slug: string): Promise<Link[]>;
+  getBacklinks(slug: string): Promise<Link[]>;
+  addLink(
+    fromSlug: string,
+    toSlug: string,
+    linkType?: string,
+    context?: string
+  ): Promise<void>;
+  removeLink(fromSlug: string, toSlug: string): Promise<void>;
+}
+
+export function createLinksTools(store: LinksToolDeps) {
   const linksTool = createTool({
     id: "get-links",
     description: "Get all outgoing links and backlinks for a specific page.",

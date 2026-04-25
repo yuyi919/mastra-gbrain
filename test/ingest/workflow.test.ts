@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import type { Schema } from "effect";
 import { Effect, Layer, ManagedRuntime } from "effect";
+import type { SqlError } from "effect/unstable/sql";
 import {
   createIngestionWorkflow,
   type IngestionWorkflowStore,
+  type IngestResult,
 } from "../../src/ingest/workflow.js";
 import { parseMarkdown } from "../../src/markdown.js";
+import type { StoreError } from "../../src/store/BrainStoreError.js";
 import { ContentChunks } from "../../src/store/brainstore/content/chunks/index.js";
 import { ContentPages } from "../../src/store/brainstore/content/pages/index.js";
 import { GraphTimeline } from "../../src/store/brainstore/graph/timeline/index.js";
@@ -30,6 +34,10 @@ type MockStoreOverrides = Partial<{
   addTimelineEntriesBatch: IngestionWorkflowStore["addTimelineEntriesBatch"];
   transaction: NonNullable<IngestionWorkflowStore["transaction"]>;
 }>;
+
+function resultOf(runResult: { result: unknown }): IngestResult {
+  return runResult.result as IngestResult;
+}
 
 function mockStore(overrides: MockStoreOverrides = {}): MockStore {
   const calls: { method: string; args: unknown[] }[] = [];
@@ -132,7 +140,7 @@ This is the compiled truth.
     });
     expect(res.status).toBe("success");
     if (res.status === "success" && "result" in res) {
-      expect((res.result as any).status).toBe("imported");
+      expect(resultOf(res).status).toBe("imported");
     }
     const calls = store._calls;
     expect(calls.some((c) => c.method === "putPage")).toBe(true);
@@ -197,7 +205,12 @@ This is the compiled truth.
     const lifecycle = OpsLifecycle.of({
       init: () => Effect.succeed(undefined),
       dispose: () => Effect.succeed(undefined),
-      transaction: (effect) => effect,
+      transaction: <T, E, R>(effect: Effect.Effect<T, E, R>) =>
+        effect as Effect.Effect<
+          T,
+          StoreError | Exclude<E, SqlError.SqlError | Schema.SchemaError>,
+          R
+        >,
     });
     const brainStore = ManagedRuntime.make(
       Layer.mergeAll(
@@ -246,7 +259,7 @@ Runtime compiled truth.
 
     expect(res.status).toBe("success");
     if (res.status === "success" && "result" in res) {
-      expect((res.result as any).status).toBe("imported");
+      expect(resultOf(res).status).toBe("imported");
     }
     expect(calls.map((c) => c.method)).toEqual([
       "getPage",
@@ -292,7 +305,7 @@ Same content.
     });
     expect(res.status).toBe("success");
     if (res.status === "success" && "result" in res) {
-      expect((res.result as any).status).toBe("skipped");
+      expect(resultOf(res).status).toBe("skipped");
     }
     expect(store._calls.some((c) => c.method === "putPage")).toBe(false);
   });
@@ -319,8 +332,8 @@ Poisoned content
     });
     expect(res.status).toBe("success");
     if (res.status === "success" && "result" in res) {
-      expect((res.result as any).status).toBe("skipped");
-      expect((res.result as any).error).toContain("Frontmatter slug");
+      expect(resultOf(res).status).toBe("skipped");
+      expect(resultOf(res).error).toContain("Frontmatter slug");
     }
     expect(store._calls.length).toBe(0);
   });
@@ -342,8 +355,8 @@ Poisoned content
     });
     expect(res.status).toBe("success");
     if (res.status === "success" && "result" in res) {
-      expect((res.result as any).status).toBe("skipped");
-      expect((res.result as any).error).toContain("Content too large");
+      expect(resultOf(res).status).toBe("skipped");
+      expect(resultOf(res).error).toContain("Content too large");
     }
     expect(store._calls.length).toBe(0);
   });
@@ -368,7 +381,7 @@ ${"word ".repeat(400).trim()}
     });
     expect(res.status).toBe("success");
     if (res.status === "success" && "result" in res) {
-      expect((res.result as any).status).toBe("imported");
+      expect(resultOf(res).status).toBe("imported");
     }
     const upsert = store._calls.find((c) => c.method === "upsertChunks");
     const chunks = upsert?.args[1];

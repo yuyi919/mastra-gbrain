@@ -1,10 +1,13 @@
 import { createTool } from "@mastra/core/tools";
 import * as typia from "typia";
 import z from "zod";
-import type { StoreProvider } from "../store/interface.js";
-import type { PageFilters } from "../types.js";
+import type { Page, PageFilters } from "../types.js";
 
-export function createListPagesTool(store: StoreProvider) {
+export interface ListPagesToolDeps {
+  listPages(filters?: PageFilters): Promise<Page[]>;
+}
+
+export function createListPagesTool(store: ListPagesToolDeps) {
   const listPagesTool = createTool({
     id: "list-pages",
     description:
