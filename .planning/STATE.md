@@ -2,37 +2,35 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 9
-current_phase_name: brainstore-layered-contexts-and-boundaries
-status: completed
-stopped_at: Phase 09 completed with verification passed; next autonomous step is milestone lifecycle audit.
-last_updated: "2026-04-25T22:54:26.9816634+08:00"
+current_phase: 10
+current_phase_name: libsqlstore-consumer-boundary-audit
+status: planned
+stopped_at: Phase 10 target created by consolidating pending todos; next step is planning Phase 10.
+last_updated: "2026-04-25T23:00:23.6811548+08:00"
 last_activity: 2026-04-25
 progress:
-  total_phases: 1
+  total_phases: 2
   completed_phases: 1
   total_plans: 10
   completed_plans: 10
-  percent: 100
+  percent: 50
 ---
 
 # Project State
 
 ## Current Position
 
-**Current Phase:** 9
-**Current Phase Name:** brainstore-layered-contexts-and-boundaries
-**Status:** Milestone complete
-**Plan:** 10 of 10 complete
+**Current Phase:** 10
+**Current Phase Name:** libsqlstore-consumer-boundary-audit
+**Status:** Planned
+**Plan:** not planned yet
 **Last activity:** 2026-04-25
 
 ## Accumulated Context
 
 ### Pending Todos
 
-- 2 pending todos in `.planning/todos/pending/`
-- 2026-04-24 `narrow-brainstore-dependencies-by-feature-layer` - audit modules and narrow dependencies to feature layers
-- 2026-04-25 `stabilize-provider-ingestion-workflow-surface` - follow up on Phase 09 UAT provider/workflow surface gap
+- 0 pending todos in `.planning/todos/pending/`
 
 ### Roadmap Evolution
 
@@ -43,12 +41,13 @@ progress:
 - Todo `2026-04-24-split-brainstore-into-layered-contexts` was completed on 2026-04-25 by making it the primary guidance for the repaired Phase 9 plan.
 - On 2026-04-25 the repaired plan was split into 10 smaller execution plans and a dedicated validation contract was restored.
 - Phase 9 completed on 2026-04-25 with 10/10 plans, compat-over-tree runtime wiring, branch-only retrieval verification, and Effect v4 checks passing.
+- Phase 10 added on 2026-04-25 by consolidating the pending dependency-narrowing and provider/workflow UAT todos into a broader `LibSQLStore` consumer-boundary audit.
 
 ## Session Continuity
 
-Last session: 2026-04-25T13:08:55.161Z
-Stopped at: Phase 09 completed with verification passed; next autonomous step is milestone lifecycle audit.
-Resume file: .planning/phases/09-brainstore-layered-contexts-and-boundaries/09-VERIFICATION.md
+Last session: 2026-04-25T23:00:23.6811548+08:00
+Stopped at: Phase 10 target created; next step is `$gsd-plan-phase 10`.
+Resume file: .planning/ROADMAP.md
 
 ## Notes
 
@@ -59,6 +58,7 @@ Resume file: .planning/phases/09-brainstore-layered-contexts-and-boundaries/09-V
 - The completed todo `2026-04-24-split-brainstore-into-layered-contexts` is now considered absorbed into Phase 9 planning.
 - Phase 9 learnings were extracted to `.planning/phases/09-brainstore-layered-contexts-and-boundaries/09-LEARNINGS.md` on 2026-04-25.
 - Phase 9 UAT completed with one follow-up provider/workflow surface todo recorded.
+- The pending todos `narrow-brainstore-dependencies-by-feature-layer` and `stabilize-provider-ingestion-workflow-surface` were consolidated into Phase 10 and moved to completed todo records.
 
 ### Quick Tasks Completed
 

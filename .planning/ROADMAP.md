@@ -4,8 +4,34 @@
 
 - [x] **v1.0 milestone** - Phases 1-8 (shipped 2026-04-24)
 - [x] **Post-v1.0 store refactor** - Phase 9 (reopened 2026-04-25, completed 2026-04-25)
+- [ ] **Post-v1.0 consumer boundary cleanup** - Phase 10
 
 ## Active Development
+
+## Phase 10: Audit LibSQLStore Consumers & Narrow Public Store Boundaries
+
+**Goal:** Consolidate the remaining BrainStore dependency-narrowing and provider/workflow follow-up work into one consumer-boundary refactor that audits every current `LibSQLStore` reference, narrows modules to the smallest stable store contract they need, and keeps `LibSQLStore` as a deliberate Promise facade rather than the default dependency for internal modules.
+
+**Requirements**
+- `P10-01` Inventory every current `LibSQLStore` import/constructor usage across `src/**` and `test/**`, classify each as public facade coverage, provider wiring, workflow/tool consumer, script utility, or replaceable internal dependency.
+- `P10-02` Replace broad `LibSQLStore`/`BrainStore` dependencies with capability-specific contracts wherever the caller does not need the full public Promise facade.
+- `P10-03` Stabilize the provider and ingestion workflow surface from Phase 09 UAT so workflow callers keep the intended `{ store, embedder }` boundary without learning internal branch services.
+- `P10-04` Keep public compatibility tests for `LibSQLStore` where they intentionally verify the facade, but convert internal or helper tests to branch/provider-level injection when that better proves the new seams.
+- `P10-05` Preserve all existing public `StoreProvider` and `LibSQLStore` behavior; do not widen the public API while narrowing consumers.
+
+**Depends on:** Phase 9
+**Plans:** not planned yet
+
+Initial scope from current grep:
+- Production: `src/store/index.ts`
+- Core facade: `src/store/libsql.ts`
+- Workflow/provider: `src/workflow/index.ts`, `src/ingest/workflow.ts`, `test/ingest/workflow.test.ts`
+- Direct `LibSQLStore` regression/users: `test/libsql.test.ts`, `test/ext.test.ts`, `test/integration.test.ts`, `test/tools.test.ts`, `test/store_extensions.test.ts`, `test/llama_embedder.test.ts`, `test/scripts/doctor.test.ts`, `test/scripts/embed.test.ts`
+
+Carry-forward inputs:
+- Consolidated todo: `narrow-brainstore-dependencies-by-feature-layer`
+- Consolidated todo: `stabilize-provider-ingestion-workflow-surface`
+- Phase 09 UAT gap: provider/workflow surface stability should become follow-up work rather than an immediate Phase 09 fix.
 
 ## Phase 9: Layer BrainStore Contexts & Tighten Store Boundaries
 
@@ -36,7 +62,7 @@ Plans:
 
 ## Carry-Forward Inputs
 
-- Deferred todo: narrow module dependencies to feature-specific layers for reuse and testability.
+- Phase 10 now owns the consolidated `LibSQLStore` consumer audit and provider/workflow surface follow-up.
 - Imported review input: `./code-review.md`
 - Phase 9 repair is now guided directly by completed todo `2026-04-24-split-brainstore-into-layered-contexts.md`.
 
