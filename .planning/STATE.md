@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 10
 current_phase_name: audit-libsqlstore-consumers-narrow-public-store-boundaries
-status: executing
-stopped_at: Completed 10-06-PLAN.md; next is 10-07 facade closure
-last_updated: "2026-04-25T20:39:34.989Z"
+status: verifying
+stopped_at: Completed 10-07-PLAN.md
+last_updated: "2026-04-25T20:52:14.899Z"
 last_activity: 2026-04-25
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 17
-  completed_plans: 16
-  percent: 94
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -24,7 +24,7 @@ Phase: 10 (audit-libsqlstore-consumers-narrow-public-store-boundaries) — EXECU
 Plan: 7 of 7
 **Current Phase:** 10
 **Current Phase Name:** audit-libsqlstore-consumers-narrow-public-store-boundaries
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Plan:** 7 of 7
 **Last activity:** 2026-04-25
 
@@ -57,6 +57,8 @@ Plan: 7 of 7
 - [Phase 10]: Plan 10-05 made hybridSearchEffect the canonical BrainStoreSearch implementation and hybridSearch a runtime-first bridge. — This satisfies D-23/D-24 by using branch services internally while keeping public facade compatibility.
 - [Phase 10]: Plan 10-05 preserved public tool StoreProvider factories and rejected a new tools Promise contract layer. — The corrected phase goal allows Promise compatibility only at facade boundaries.
 - [Phase 10]: Plan 10-06 classified workflow/script Promise APIs as compatibility facades and routed runtime-capable internals through branch services. — This preserves public CLI/tool behavior while satisfying D-23/D-24 direct Effect runtime direction.
+- [Phase 10]: Phase 10 closure preserves LibSQLStore as public Promise facade while enforcing zero unclassified broad StoreProvider matches in internal lanes. — Plan 10-07 final guards passed and 10-FACADE-REGRESSION.md records public facade matches as intentional evidence.
+- [Phase 10]: Tool dependencies use capability-specific structural deps rather than the rejected old Promise-contract layer. — Final old Promise-contract name guard and broad StoreProvider internal-lane guard both passed.
 
 ### Performance Metrics
 
@@ -69,8 +71,8 @@ Plan: 7 of 7
 
 ## Session Continuity
 
-Last session: 2026-04-25T20:39:34.984Z
-Stopped at: Completed 10-06-PLAN.md; next is 10-07 facade closure
+Last session: 2026-04-25T20:52:14.895Z
+Stopped at: Completed 10-07-PLAN.md
 Resume file: None
 
 ## Notes
@@ -95,3 +97,4 @@ Resume file: None
 | 260425-x3w | 使用你学到的东西，优化在项目根目录的Effect相关的skill | 2026-04-25 | bee9296 | Completed | [260425-x3w-effect-skill](./quick/260425-x3w-effect-skill/) |
 | Phase 10 P05 | 4min | 2 tasks | 5 files |
 | Phase 10 P06 | 8 min | 2 tasks | 6 files |
+| Phase 10 P07 | 10 min | 2 tasks | 17 files |

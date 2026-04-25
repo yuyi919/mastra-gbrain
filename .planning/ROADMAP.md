@@ -4,8 +4,7 @@
 
 - [x] **v1.0 milestone** - Phases 1-8 (shipped 2026-04-24)
 - [x] **Post-v1.0 store refactor** - Phase 9 (reopened 2026-04-25, completed 2026-04-25)
-- [ ] **Post-v1.0 consumer boundary cleanup** - Phase 10
-
+- [x] **Post-v1.0 consumer boundary cleanup** - Phase 10 (completed 2026-04-25)
 ## Active Development
 
 ## Phase 10: Audit LibSQLStore Consumers & Narrow Public Store Boundaries
@@ -20,7 +19,7 @@
 - `P10-05` Preserve all existing public `StoreProvider` and `LibSQLStore` behavior; do not widen the public API while narrowing consumers.
 
 **Depends on:** Phase 9
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Initial scope from current grep:
 - Production: `src/store/index.ts`
@@ -40,7 +39,7 @@ Plans:
 - [x] 10-04-PLAN.md - Move `getChunksWithEmbeddings` ownership into the content chunks branch
 - [x] 10-05-PLAN.md - Move hybrid search and internal tool paths to Effect runtime services
 - [x] 10-06-PLAN.md - Move script/import internals to Effect runtime services while preserving CLI facades
-- [ ] 10-07-PLAN.md - Close public facade regressions and direct-Effect boundary guards
+- [x] 10-07-PLAN.md - Close public facade regressions and direct-Effect boundary guards
 
 ## Phase 9: Layer BrainStore Contexts & Tighten Store Boundaries
 
