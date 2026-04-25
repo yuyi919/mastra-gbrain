@@ -3,7 +3,7 @@ import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Array, Console, Order } from "effect";
 import { BrainStoreSearch } from "../store/BrainStore.js";
 import type { StoreError } from "../store/BrainStoreError.js";
-import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
+import type { EmbeddingProvider } from "../store/interface.js";
 import type { SearchOpts, SearchResult } from "../types.js";
 import { dedupResults } from "./dedup.js";
 import { autoDetectDetail } from "./intent.js";
@@ -33,6 +33,23 @@ export interface HybridSearchOpts extends SearchOpts {
 /** Maximum results returned by search operations. Internal bulk operations (listPages) are not clamped. */
 const MAX_SEARCH_LIMIT = 100;
 const RRF_K = 60;
+
+export interface BrainStoreSearchRuntimeCarrier {
+  readonly brainStore?: {
+    runPromise<A, E>(
+      effect: Eff.Effect<A, E, BrainStoreSearch>
+    ): Promise<A>;
+  };
+}
+
+interface LegacyHybridSearchCompatBackend {
+  searchKeyword(query: string, opts?: SearchOpts): Promise<SearchResult[]>;
+  searchVector(embedding: number[], opts?: SearchOpts): Promise<SearchResult[]>;
+}
+
+export type HybridSearchCompatBackend =
+  | BrainStoreSearchRuntimeCarrier
+  | (BrainStoreSearchRuntimeCarrier & LegacyHybridSearchCompatBackend);
 
 export function hybridSearchEffect(
   query: string,
@@ -165,27 +182,28 @@ export function hybridSearchEffect(
 }
 
 export async function hybridSearch(
-  backend: StoreProvider,
+  backend: HybridSearchCompatBackend,
   query: string,
   opts: HybridSearchOpts,
   queryVector?: number[]
 ): Promise<SearchResult[]> {
-  // Primary path: real stores provide a BrainStore runtime.
+  // Primary path: public facades and internal callers provide a BrainStore runtime.
   if (backend.brainStore?.runPromise) {
     return backend.brainStore.runPromise(
       hybridSearchEffect(query, opts, queryVector)
     );
   }
 
-  // Compatibility path for lightweight test doubles that only mock
-  // searchKeyword/searchVector and don't provide brainStore runtime.
+  // Legacy compatibility glue for lightweight callers that only mock the old
+  // Promise search methods. New internal modules should provide brainStore.
+  const compatBackend = backend as LegacyHybridSearchCompatBackend;
   const limit = opts?.limit || 20;
   const offset = opts?.offset || 0;
   const innerLimit = Math.min(limit * 2, MAX_SEARCH_LIMIT);
   const detail = opts?.detail ?? autoDetectDetail(query) ?? "high";
   const searchOpts: SearchOpts = { limit: innerLimit, detail };
 
-  const keywordResults = await backend.searchKeyword(query, searchOpts);
+  const keywordResults = await compatBackend.searchKeyword(query, searchOpts);
   if (!opts.embedder && !queryVector) {
     return dedupResults(keywordResults, opts.dedupOpts).slice(
       offset,
@@ -195,7 +213,7 @@ export async function hybridSearch(
 
   let vectorResults: SearchResult[][] = [];
   if (queryVector) {
-    vectorResults = [await backend.searchVector(queryVector, searchOpts)];
+    vectorResults = [await compatBackend.searchVector(queryVector, searchOpts)];
   } else if (opts.embedder) {
     let queries = [query];
     if (opts.expansion && opts.expandFn) {
@@ -204,7 +222,7 @@ export async function hybridSearch(
     const batched = await opts.embedder.embedBatch(queries);
     vectorResults = await Promise.all(
       batched.map((v) =>
-        backend.searchVector(Array.fromIterable(v), searchOpts)
+        compatBackend.searchVector(Array.fromIterable(v), searchOpts)
       )
     );
   }
