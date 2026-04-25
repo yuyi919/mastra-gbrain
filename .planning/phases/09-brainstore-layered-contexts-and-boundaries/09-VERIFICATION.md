@@ -1,6 +1,6 @@
 ---
 phase: 09-brainstore-layered-contexts-and-boundaries
-verified: "2026-04-25T13:44:00.000Z"
+verified: "2026-04-25T14:00:00.000Z"
 status: passed
 score: 4/4 must-haves verified
 ---
@@ -15,7 +15,7 @@ score: 4/4 must-haves verified
 | 2 | The public LibSQL Promise boundary remains stable through compat-over-tree. | passed | `src/store/libsql.ts` resolves `BrainStoreCompat` in `run` and `runFlatten`. |
 | 3 | Internal search consumers use the narrow retrieval branch contract. | passed | `src/search/hybrid.ts` consumes `BrainStoreSearch`; `test/search/hybrid.test.ts` proves branch-only injection. |
 | 4 | Store assembly no longer depends on flat `store.features.*` projection. | passed | Forbidden projection grep across `src/store` returned no matches. |
-| 5 | `libsql-store.ts` delegates branch behavior to branch factories and uses `Layer` for dependency flow. | passed | Content, graph, retrieval, and ops branch layers call their dedicated factories; root/compat only adapt assembled services. |
+| 5 | `libsql-store.ts` delegates branch behavior to branch factory `makeLayer` boundaries and uses `Layer` for dependency flow. | passed | Content, graph, retrieval, and ops `makeLayer` exports now acquire branch dependencies internally; `libsql-store.ts` only composes returned Layers and passes external options/ports. |
 
 ## Required Artifacts
 
@@ -23,7 +23,7 @@ score: 4/4 must-haves verified
 |----------|----------|--------|---------|
 | `src/store/brainstore/tree/factory.ts` | Root tree assembly | passed | Tree factory assembles domain branches before compat projection. |
 | `src/store/brainstore/compat/factory.ts` | Flat compatibility adapter over `BrainStoreTree` | passed | Adapter derives branch surfaces from `tree` and preserves legacy-only helpers. |
-| `src/store/libsql-store.ts` | Runtime layer wiring for tree + compat + feature tags | passed | Adds `CompatLayer` and derives feature layers from tree/compat. |
+| `src/store/libsql-store.ts` | Runtime layer wiring for tree + compat + feature tags | passed | Adds `CompatLayer`, derives feature layers from tree/compat, and delegates branch construction to branch `makeLayer` exports. |
 | `src/store/libsql.ts` | Public Promise bridge over compatibility runtime | passed | Runtime helper methods use `BrainStoreCompat`. |
 | `test/search/hybrid.test.ts` | Branch-only search injection regression | passed | Existing regression passed. |
 | `test/ext.test.ts` | Compat-backed stale/vector helper regression | passed | Test now clears local SQLite residue before initialization. |
@@ -60,6 +60,8 @@ Automated verification completed with:
 - `bun test test/libsql.test.ts test/ext.test.ts`
 - `bun test test/libsql.test.ts test/ext.test.ts test/store/brainstore-tree.test.ts test/store/brainstore-layers.test.ts`
 - `pwsh ./scripts/check-effect-v4.ps1`
+- `rg -n "makeContentPages\\(|makeContentChunks\\(|makeGraphLinks\\(|makeGraphTimeline\\(|makeRetrievalEmbedding\\(|makeRetrievalSearch\\(|makeOpsLifecycle\\(|makeOpsInternal\\(" src/store/libsql-store.ts`
+- `rg -n "as unknown|as any|: any|<any" src/store/libsql-store.ts src/store/brainstore/content src/store/brainstore/graph src/store/brainstore/retrieval src/store/brainstore/ops`
 
 Notes:
 

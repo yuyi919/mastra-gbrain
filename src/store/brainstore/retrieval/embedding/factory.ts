@@ -2,11 +2,16 @@ import type { LibSQLVector } from "@mastra/libsql";
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "@yuyi919/tslibs-effect/effect-next";
 import type {
+  ChunkSource,
+  PageType,
   SearchOpts,
   SearchResult,
+  StaleChunk,
   VectorMetadata,
 } from "../../../../types.js";
 import { StoreError } from "../../../BrainStoreError.js";
+import { Mappers } from "../../../Mappers.js";
+import type { SqlBuilder } from "../../../SqlBuilder.js";
 import {
   RetrievalEmbedding,
   RetrievalEmbeddingLookupService,
@@ -14,9 +19,22 @@ import {
 } from "./interface.js";
 
 export interface RetrievalEmbeddingDependencies {
-  mappers: any;
+  mappers: SqlBuilder;
   vectorStore?: LibSQLVector;
   indexName: string;
+}
+
+export interface RetrievalEmbeddingLayerOptions {
+  vectorStore?: LibSQLVector;
+  indexName: string;
+}
+
+type VectorFilterValue = { $eq: string } | { $nin: string[] };
+
+interface VectorQueryMatch {
+  id?: string;
+  score?: number;
+  metadata?: Partial<VectorMetadata>;
 }
 
 export const makeRetrievalEmbedding = (
@@ -28,7 +46,7 @@ export const makeRetrievalEmbedding = (
     opts?: SearchOpts & { slug?: string }
   ) {
     const limit = opts?.limit ?? 10;
-    const filter: Record<string, any> = {};
+    const filter: Record<string, VectorFilterValue> = {};
     if (opts?.type) filter.type = { $eq: opts.type };
     if (opts?.detail === "low") filter.chunk_source = { $eq: "compiled_truth" };
     if (opts?.slug) {
@@ -40,7 +58,7 @@ export const makeRetrievalEmbedding = (
       () =>
         deps.vectorStore?.query({
           indexName: deps.indexName,
-          queryVector: Array.from(queryVector) as any,
+          queryVector: Array.from(queryVector),
           topK: limit * 2,
           filter: Object.keys(filter).length > 0 ? filter : undefined,
         }) ?? []
@@ -53,18 +71,21 @@ export const makeRetrievalEmbedding = (
       opts?: SearchOpts & { slug?: string }
     ) {
       const limit = opts?.limit ?? 10;
-      const vectorResults = yield* queryVectors(queryVector, opts);
+      const vectorResults: ReadonlyArray<VectorQueryMatch> =
+        yield* queryVectors(queryVector, opts);
       const hits = vectorResults
-        .map((match: any) => ({
-          score: match.score as number,
+        .map((match) => ({
+          score: match.score ?? 0,
           slug: (match.metadata?.slug ??
             (typeof match.id === "string"
               ? match.id.split("::")[0]
-              : undefined)) as string | undefined,
-          chunk_index: (match.metadata?.chunk_index ??
+              : undefined)),
+          chunk_index: Number(
+            match.metadata?.chunk_index ??
             (typeof match.id === "string"
-              ? Number(match.id.split("::")[1])
-              : undefined)) as number | undefined,
+              ? match.id.split("::")[1]
+              : undefined)
+          ),
         }))
         .filter(
           (hit): hit is { score: number; slug: string; chunk_index: number } =>
@@ -91,28 +112,34 @@ export const makeRetrievalEmbedding = (
         out.push({
           page_id: row.page_id,
           title: row.title,
-          type: row.type as any,
+          type: row.type as PageType,
           slug: row.slug,
           chunk_id: row.chunk_id,
           chunk_index: row.chunk_index,
           chunk_text: row.chunk_text,
-          chunk_source: row.chunk_source as any,
+          chunk_source: row.chunk_source as ChunkSource,
           score: hit.score,
           stale: !!row.stale,
         });
         if (out.length >= limit) break;
       }
       return out;
-    }, catchStoreError) as RetrievalEmbeddingService["searchVector"],
+    }, catchStoreError),
     getEmbeddingsByChunkIds: Eff.fn(
       "retrieval.embedding.getEmbeddingsByChunkIds"
     )(function* (_ids: number[]) {
       return new Map<number, Float32Array>();
-    }, catchStoreError) as RetrievalEmbeddingService["getEmbeddingsByChunkIds"],
+    }, catchStoreError),
     getStaleChunks: Eff.fn("retrieval.embedding.getStaleChunks")(function* () {
       const rows = yield* deps.mappers.getStaleChunks();
-      return rows as any;
-    }, catchStoreError) as RetrievalEmbeddingService["getStaleChunks"],
+      return rows.map(
+        (row) =>
+          ({
+            ...row,
+            chunk_source: row.chunk_source as ChunkSource,
+          }) satisfies StaleChunk
+      );
+    }, catchStoreError),
     upsertVectors: Eff.fn("retrieval.embedding.upsertVectors")(function* (
       vectors: { id: string; vector: number[]; metadata: VectorMetadata }[]
     ) {
@@ -125,26 +152,75 @@ export const makeRetrievalEmbedding = (
           metadata: vectors.map((vector) => vector.metadata),
         })
       );
-    }, catchStoreError) as RetrievalEmbeddingService["upsertVectors"],
+    }, catchStoreError),
     markChunksEmbedded: Eff.fn("retrieval.embedding.markChunksEmbedded")(
       function* (chunkIds: number[]) {
         if (chunkIds.length === 0) return;
         yield* deps.mappers.markChunksEmbeddedByIds(chunkIds);
       },
       catchStoreError
-    ) as RetrievalEmbeddingService["markChunksEmbedded"],
-  } as RetrievalEmbeddingService;
+    ),
+  };
 };
 
-export const makeLayer = (
-  service: RetrievalEmbeddingService | RetrievalEmbeddingDependencies
-) => {
-  const resolved =
-    "mappers" in service ? makeRetrievalEmbedding(service) : service;
-  return Layer.merge(
-    Layer.succeed(RetrievalEmbedding, resolved),
+const makeLayerFromService = (service: RetrievalEmbeddingService) =>
+  Layer.merge(
+    Layer.succeed(RetrievalEmbedding, service),
     Layer.succeed(RetrievalEmbeddingLookupService, {
-      getEmbeddingsByChunkIds: resolved.getEmbeddingsByChunkIds,
+      getEmbeddingsByChunkIds: service.getEmbeddingsByChunkIds,
     })
   );
+
+function isDependencies(
+  service:
+    | RetrievalEmbeddingService
+    | RetrievalEmbeddingDependencies
+    | RetrievalEmbeddingLayerOptions
+): service is RetrievalEmbeddingDependencies {
+  return "mappers" in service;
+}
+
+function isService(
+  service:
+    | RetrievalEmbeddingService
+    | RetrievalEmbeddingDependencies
+    | RetrievalEmbeddingLayerOptions
+): service is RetrievalEmbeddingService {
+  return "searchVector" in service;
+}
+
+export const makeLayer = (
+  service:
+    | RetrievalEmbeddingService
+    | RetrievalEmbeddingDependencies
+    | RetrievalEmbeddingLayerOptions
+) => {
+  if (isService(service)) {
+    return makeLayerFromService(service);
+  }
+  if (isDependencies(service)) {
+    return makeLayerFromService(makeRetrievalEmbedding(service));
+  }
+
+  const EmbeddingLayer = Layer.effect(
+    RetrievalEmbedding,
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      return makeRetrievalEmbedding({
+        mappers,
+        vectorStore: service.vectorStore,
+        indexName: service.indexName,
+      });
+    })
+  );
+
+  const LookupLayer = Layer.effect(
+    RetrievalEmbeddingLookupService,
+    Eff.gen(function* () {
+      const embedding = yield* RetrievalEmbedding;
+      return { getEmbeddingsByChunkIds: embedding.getEmbeddingsByChunkIds };
+    })
+  ).pipe(Layer.provide(EmbeddingLayer));
+
+  return Layer.merge(EmbeddingLayer, LookupLayer);
 };

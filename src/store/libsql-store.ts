@@ -1,7 +1,6 @@
 import { SqliteClient } from "@effect/sql-sqlite-bun";
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer, pipe } from "@yuyi919/tslibs-effect/effect-next";
-import { SqlClient } from "effect/unstable/sql";
 import type {
   AccessToken,
   BrainHealth,
@@ -12,39 +11,28 @@ import type {
   IngestLogInput,
   PageInput,
   RawData,
-  VectorMetadata,
 } from "../types.js";
 import type { BrainStoreRuntime } from "./BrainStore.js";
 import {
   BrainStore,
   BrainStoreEmbedding,
   BrainStoreExt,
-  BrainStoreGraphLinks,
-  BrainStoreGraphTimeline,
   BrainStoreIngestion,
   BrainStoreLifecycleService,
   BrainStoreLinks,
   BrainStoreSearch,
   BrainStoreTimeline,
   BrainStoreUnsafeDB,
-  ContentChunks,
-  ContentPages,
 } from "./BrainStore.js";
 import { StoreError } from "./BrainStoreError.js";
-import { makeContentChunks } from "./brainstore/content/chunks/factory.js";
-import { makeContentPages } from "./brainstore/content/pages/factory.js";
-import { makeGraphLinks } from "./brainstore/graph/links/factory.js";
-import { makeGraphTimeline } from "./brainstore/graph/timeline/factory.js";
-import {
-  OpsInternal,
-  makeOpsInternal,
-} from "./brainstore/ops/internal/index.js";
-import {
-  OpsLifecycle,
-  makeOpsLifecycle,
-} from "./brainstore/ops/lifecycle/index.js";
-import { makeRetrievalEmbedding } from "./brainstore/retrieval/embedding/factory.js";
-import { makeRetrievalSearch } from "./brainstore/retrieval/search/factory.js";
+import { makeLayer as makeContentChunksLayer } from "./brainstore/content/chunks/factory.js";
+import { makeLayer as makeContentPagesLayer } from "./brainstore/content/pages/factory.js";
+import { makeLayer as makeGraphLinksLayer } from "./brainstore/graph/links/factory.js";
+import { makeLayer as makeGraphTimelineLayer } from "./brainstore/graph/timeline/factory.js";
+import { makeLayer as makeOpsInternalLayer } from "./brainstore/ops/internal/index.js";
+import { makeLayer as makeOpsLifecycleLayer } from "./brainstore/ops/lifecycle/index.js";
+import { makeLayer as makeRetrievalEmbeddingLayer } from "./brainstore/retrieval/embedding/factory.js";
+import { makeLayer as makeRetrievalSearchLayer } from "./brainstore/retrieval/search/factory.js";
 import {
   BrainStoreTree,
   type BrainStoreTreeService,
@@ -497,118 +485,47 @@ export function makeLayer(options: { url: string } & BrainStore.Options) {
   const DrizzleLive = Mappers.makeLayer().pipe(Layer.provide(SqlLive));
   const DatabaseLive = Layer.mergeAll(SqlLive, DrizzleLive);
 
-  const EmbeddingLayer = Layer.effect(
-    BrainStoreEmbedding,
-    Eff.gen(function* () {
-      const mappers = yield* Mappers;
-      return makeRetrievalEmbedding({ mappers, vectorStore, indexName });
-    })
-  ).pipe(Layer.provide(DatabaseLive));
+  const EmbeddingLayer = makeRetrievalEmbeddingLayer({
+    vectorStore,
+    indexName,
+  }).pipe(Layer.provide(DatabaseLive));
 
-  const ContentPagesLayer = Layer.effect(
-    ContentPages,
-    Eff.gen(function* () {
-      const mappers = yield* Mappers;
-      const sql = yield* SqlClient.SqlClient;
-      return makeContentPages({
-        mappers,
-        sql,
-        vectors: { deleteVectorsBySlug },
-      });
-    })
-  ).pipe(Layer.provide(DatabaseLive));
+  const ContentPagesLayer = makeContentPagesLayer({
+    vectors: { deleteVectorsBySlug },
+  }).pipe(Layer.provide(DatabaseLive));
 
-  const ContentChunksLayer = Layer.effect(
-    ContentChunks,
-    Eff.gen(function* () {
-      const mappers = yield* Mappers;
-      const embedding = yield* BrainStoreEmbedding;
-      return makeContentChunks({
-        mappers,
-        embeddings: {
-          deleteVectorsBySlug,
-          upsertVectors: Eff.fn("content.chunks.embedding.upsertVectors")(
-            function* (
-              vectors: {
-                id: string;
-                vector: number[];
-                metadata: VectorMetadata;
-              }[],
-              opts?: { deleteSlug?: string }
-            ) {
-              if (opts?.deleteSlug) {
-                yield* deleteVectorsBySlug(opts.deleteSlug);
-              }
-              yield* embedding.upsertVectors(vectors);
-            },
-            catchStoreError
-          ),
-        },
-      });
-    })
-  ).pipe(Layer.provide(Layer.mergeAll(DatabaseLive, EmbeddingLayer)));
+  const ContentChunksLayer = makeContentChunksLayer({
+    embeddings: {
+      deleteVectorsBySlug,
+    },
+  }).pipe(Layer.provide(Layer.mergeAll(DatabaseLive, EmbeddingLayer)));
 
-  const GraphLinksLayer = Layer.effect(
-    BrainStoreGraphLinks,
-    Eff.gen(function* () {
-      const mappers = yield* Mappers;
-      return makeGraphLinks({ mappers });
-    })
-  ).pipe(Layer.provide(DatabaseLive));
+  const GraphLinksLayer = makeGraphLinksLayer().pipe(
+    Layer.provide(DatabaseLive)
+  );
 
-  const GraphTimelineLayer = Layer.effect(
-    BrainStoreGraphTimeline,
-    Eff.gen(function* () {
-      const mappers = yield* Mappers;
-      return makeGraphTimeline({ mappers });
-    })
-  ).pipe(Layer.provide(DatabaseLive));
+  const GraphTimelineLayer = makeGraphTimelineLayer().pipe(
+    Layer.provide(DatabaseLive)
+  );
 
-  const SearchLayer = Layer.effect(
-    BrainStoreSearch,
-    Eff.gen(function* () {
-      const mappers = yield* Mappers;
-      const backlinks = yield* BrainStoreGraphLinks;
-      const embedding = yield* BrainStoreEmbedding;
-      return makeRetrievalSearch({
-        mappers,
-        backlinks,
-        embeddings: embedding,
-        vectorSearch: embedding,
-      });
-    })
-  ).pipe(
+  const SearchLayer = makeRetrievalSearchLayer().pipe(
     Layer.provide(Layer.mergeAll(DatabaseLive, GraphLinksLayer, EmbeddingLayer))
   );
 
-  const LifecycleLayer = Layer.effect(
-    OpsLifecycle,
-    Eff.gen(function* () {
-      const sql = yield* SqlClient.SqlClient;
-      const initialized = yield* Eff.Ref.make(false);
-      return makeOpsLifecycle({
-        sql,
-        initialized,
-        initSql: init,
-        createIndex: () =>
-          vectorStore?.createIndex({
-            indexName,
-            dimension,
-            metric: "cosine",
-          }),
-        disposeVector: () => getClosableTursoClient(vectorStore)?.close(),
-      });
-    })
-  ).pipe(Layer.provide(SqlLive));
+  const LifecycleLayer = makeOpsLifecycleLayer({
+    initSql: init,
+    createIndex: () =>
+      vectorStore?.createIndex({
+        indexName,
+        dimension,
+        metric: "cosine",
+      }),
+    disposeVector: () => getClosableTursoClient(vectorStore)?.close(),
+  }).pipe(Layer.provide(SqlLive));
 
-  const InternalLayer = Layer.effect(
-    OpsInternal,
-    Eff.gen(function* () {
-      const sql = yield* SqlClient.SqlClient;
-      const mappers = yield* Mappers;
-      return makeOpsInternal({ sql, mappers, vectorStore });
-    })
-  ).pipe(Layer.provide(DatabaseLive));
+  const InternalLayer = makeOpsInternalLayer({ vectorStore }).pipe(
+    Layer.provide(DatabaseLive)
+  );
 
   const BranchLayers = Layer.mergeAll(
     ContentPagesLayer,

@@ -18,11 +18,16 @@ key-files:
   created: []
   modified:
     - src/store/BrainStore.ts
+    - src/store/brainstore/content/chunks/factory.ts
     - src/store/brainstore/content/pages/factory.ts
     - src/store/brainstore/compat/factory.ts
+    - src/store/brainstore/graph/links/factory.ts
+    - src/store/brainstore/graph/timeline/factory.ts
     - src/store/brainstore/ops/internal/factory.ts
     - src/store/brainstore/ops/internal/interface.ts
     - src/store/brainstore/ops/lifecycle/factory.ts
+    - src/store/brainstore/retrieval/embedding/factory.ts
+    - src/store/brainstore/retrieval/search/factory.ts
     - src/store/libsql-store.ts
     - src/store/libsql.ts
 key-decisions:
@@ -55,6 +60,7 @@ completed: 2026-04-25
 - Routed `LibSQLStore.run` and `runFlatten` through `BrainStoreCompat` while preserving their Promise-facing public shape.
 - Removed `as unknown` / `as any` casts from the touched store runtime modules by making the compat and tree adapters explicit.
 - Corrected the runtime assembly gap: `libsql-store.ts` now builds content, graph, retrieval, and ops branches through their dedicated factories and wires their dependencies through `Layer`.
+- Corrected the follow-up Layer boundary gap: branch `makeLayer` exports now own dependency acquisition for SQL, mappers, backlinks, embeddings, lifecycle refs, and unsafe DB internals; `libsql-store.ts` only passes external ports/options and composes the returned Layers.
 
 ## Task Commits
 
@@ -77,6 +83,7 @@ Planned for the Phase 09 closeout commit.
 - Preserved `getChunksWithEmbeddings` on the legacy compat surface because it is not yet branch-owned.
 - Preserved legacy nested `createVersion` / `putPage` behavior on the compat surface while keeping tree content pages flattened.
 - Promoted branch factory usage to a hard runtime assembly rule: `libsql-store.ts` may adapt root/compat/ext, but must not duplicate content/graph/retrieval/ops branch implementations.
+- Promoted branch `makeLayer` usage to the actual runtime construction boundary; direct `Layer.effect(... makeX(...))` branch assembly does not belong in `libsql-store.ts`.
 - Left `src/store/index.ts` unchanged because the existing provider factory already points at `LibSQLStore` and required no API movement.
 
 ## Deviations from Plan
@@ -92,6 +99,8 @@ None.
 - `bun test test/libsql.test.ts test/ingest/workflow.test.ts` - passed.
 - `bun test test/libsql.test.ts test/ext.test.ts` - passed after the no-cast store cleanup.
 - `bun test test/libsql.test.ts test/ext.test.ts test/store/brainstore-tree.test.ts test/store/brainstore-layers.test.ts` - passed after factory/Layer assembly correction.
+- `rg -n "makeContentPages\\(|makeContentChunks\\(|makeGraphLinks\\(|makeGraphTimeline\\(|makeRetrievalEmbedding\\(|makeRetrievalSearch\\(|makeOpsLifecycle\\(|makeOpsInternal\\(" src/store/libsql-store.ts` - no matches after branch `makeLayer` delegation.
+- `rg -n "as unknown|as any|: any|<any" src/store/libsql-store.ts src/store/brainstore/content src/store/brainstore/graph src/store/brainstore/retrieval src/store/brainstore/ops` - no matches in the touched branch assembly surface.
 - `tsc --noEmit` - passed.
 - `pwsh ./scripts/check-effect-v4.ps1` - passed.
 

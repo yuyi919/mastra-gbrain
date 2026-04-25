@@ -2,6 +2,7 @@ import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "@yuyi919/tslibs-effect/effect-next";
 import { StoreError } from "../../../BrainStoreError.js";
 import { GraphNode } from "../../../effect-schema.js";
+import { Mappers } from "../../../Mappers.js";
 import type { SqlBuilder } from "../../../SqlBuilder.js";
 import {
   GraphBacklinkCountsService,
@@ -108,18 +109,38 @@ export const makeGraphLinks = (
   };
 };
 
-export const makeLayer = (
-  service: GraphLinksService | GraphLinksDependencies
-) =>
+const makeLayerFromService = (service: GraphLinksService) =>
   Layer.merge(
-    Layer.succeed(
-      GraphLinks,
-      "mappers" in service ? makeGraphLinks(service) : service
-    ),
+    Layer.succeed(GraphLinks, service),
     Layer.succeed(GraphBacklinkCountsService, {
-      getBacklinkCounts: ("mappers" in service
-        ? makeGraphLinks(service)
-        : service
-      ).getBacklinkCounts,
+      getBacklinkCounts: service.getBacklinkCounts,
     })
   );
+
+export const makeLayer = (
+  service?: GraphLinksService | GraphLinksDependencies
+) => {
+  if (service) {
+    return makeLayerFromService(
+      "mappers" in service ? makeGraphLinks(service) : service
+    );
+  }
+
+  const LinksLayer = Layer.effect(
+    GraphLinks,
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      return makeGraphLinks({ mappers });
+    })
+  );
+
+  const BacklinkCountsLayer = Layer.effect(
+    GraphBacklinkCountsService,
+    Eff.gen(function* () {
+      const links = yield* GraphLinks;
+      return { getBacklinkCounts: links.getBacklinkCounts };
+    })
+  ).pipe(Layer.provide(LinksLayer));
+
+  return Layer.merge(LinksLayer, BacklinkCountsLayer);
+};

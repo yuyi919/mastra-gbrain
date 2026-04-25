@@ -1,6 +1,6 @@
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "@yuyi919/tslibs-effect/effect-next";
-import type { SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/unstable/sql";
 import { StoreError } from "../../../BrainStoreError.js";
 import { OpsLifecycle, type OpsLifecycleService } from "./interface.js";
 
@@ -13,6 +13,12 @@ export interface OpsLifecycleDependencies {
   };
   initSql: string;
   initialized: Eff.Ref.Ref<boolean>;
+  createIndex?: () => Promise<void> | void;
+  disposeVector?: () => Promise<void> | void;
+}
+
+export interface OpsLifecycleLayerOptions {
+  initSql: string;
   createIndex?: () => Promise<void> | void;
   disposeVector?: () => Promise<void> | void;
 }
@@ -42,10 +48,48 @@ export const makeOpsLifecycle = (
   };
 };
 
+function isDependencies(
+  service:
+    | OpsLifecycleService
+    | OpsLifecycleDependencies
+    | OpsLifecycleLayerOptions
+): service is OpsLifecycleDependencies {
+  return "initialized" in service;
+}
+
+function isService(
+  service:
+    | OpsLifecycleService
+    | OpsLifecycleDependencies
+    | OpsLifecycleLayerOptions
+): service is OpsLifecycleService {
+  return "init" in service && "dispose" in service && "transaction" in service;
+}
+
 export const makeLayer = (
-  service: OpsLifecycleService | OpsLifecycleDependencies
-) =>
-  Layer.succeed(
+  service:
+    | OpsLifecycleService
+    | OpsLifecycleDependencies
+    | OpsLifecycleLayerOptions
+) => {
+  if (isService(service)) {
+    return Layer.succeed(OpsLifecycle, service);
+  }
+  if (isDependencies(service)) {
+    return Layer.succeed(OpsLifecycle, makeOpsLifecycle(service));
+  }
+  return Layer.effect(
     OpsLifecycle,
-    "initialized" in service ? makeOpsLifecycle(service) : service
+    Eff.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const initialized = yield* Eff.Ref.make(false);
+      return makeOpsLifecycle({
+        sql,
+        initialized,
+        initSql: service.initSql,
+        createIndex: service.createIndex,
+        disposeVector: service.disposeVector,
+      });
+    })
   );
+};

@@ -2,6 +2,7 @@ import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer } from "@yuyi919/tslibs-effect/effect-next";
 import type { TimelineBatchInput } from "../../../BrainStore.js";
 import { StoreError } from "../../../BrainStoreError.js";
+import { Mappers } from "../../../Mappers.js";
 import type { SqlBuilder } from "../../../SqlBuilder.js";
 import { GraphTimeline, type GraphTimelineService } from "./interface.js";
 
@@ -57,9 +58,19 @@ export const makeGraphTimeline = (
 };
 
 export const makeLayer = (
-  service: GraphTimelineService | GraphTimelineDependencies
-) =>
-  Layer.succeed(
+  service?: GraphTimelineService | GraphTimelineDependencies
+) => {
+  if (service) {
+    return Layer.succeed(
+      GraphTimeline,
+      "mappers" in service ? makeGraphTimeline(service) : service
+    );
+  }
+  return Layer.effect(
     GraphTimeline,
-    "mappers" in service ? makeGraphTimeline(service) : service
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      return makeGraphTimeline({ mappers });
+    })
   );
+};

@@ -1,8 +1,9 @@
 import * as Eff from "@yuyi919/tslibs-effect/effect-next";
 import { Layer, pipe } from "@yuyi919/tslibs-effect/effect-next";
-import type { SqlError } from "effect/unstable/sql";
+import { SqlClient, type SqlError } from "effect/unstable/sql";
 import { StoreError } from "../../../BrainStoreError.js";
 import { Page, PageVersion } from "../../../effect-schema.js";
+import { Mappers } from "../../../Mappers.js";
 import type { SqlBuilder } from "../../../SqlBuilder.js";
 import { ContentPages, type ContentPagesService } from "./interface.js";
 
@@ -19,6 +20,10 @@ export interface ContentPagesVectorPort {
 export interface ContentPagesDependencies {
   mappers: SqlBuilder;
   sql: ContentPagesTransactionRunner;
+  vectors?: ContentPagesVectorPort;
+}
+
+export interface ContentPagesLayerOptions {
   vectors?: ContentPagesVectorPort;
 }
 
@@ -83,7 +88,7 @@ export const makeContentPages = (
         Eff.gen(function* () {
           const versions = yield* mappers.getVersionsBySlug(slug);
           const targetVersion = versions.find(
-            (entry: any) => entry.id === versionId
+            (entry) => entry.id === versionId
           );
           if (!targetVersion) return;
 
@@ -141,10 +146,37 @@ export const makeContentPages = (
   return pages;
 };
 
+function isDependencies(
+  service: ContentPagesService | ContentPagesDependencies | ContentPagesLayerOptions
+): service is ContentPagesDependencies {
+  return "mappers" in service && "sql" in service;
+}
+
+function isService(
+  service: ContentPagesService | ContentPagesDependencies | ContentPagesLayerOptions
+): service is ContentPagesService {
+  return "getPage" in service;
+}
+
 export const makeLayer = (
-  service: ContentPagesService | ContentPagesDependencies
-) =>
-  Layer.succeed(
+  service: ContentPagesService | ContentPagesDependencies | ContentPagesLayerOptions
+) => {
+  if (isService(service)) {
+    return Layer.succeed(ContentPages, service);
+  }
+  if (isDependencies(service)) {
+    return Layer.succeed(ContentPages, makeContentPages(service));
+  }
+  return Layer.effect(
     ContentPages,
-    "mappers" in service ? makeContentPages(service) : service
+    Eff.gen(function* () {
+      const mappers = yield* Mappers;
+      const sql = yield* SqlClient.SqlClient;
+      return makeContentPages({
+        mappers,
+        sql,
+        vectors: service.vectors,
+      });
+    })
   );
+};
