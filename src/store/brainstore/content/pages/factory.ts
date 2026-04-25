@@ -74,7 +74,7 @@ export const makeContentPages = (
         compiled_truth: pageResult.compiled_truth || "",
         frontmatter: pageResult.frontmatter || "{}",
       });
-      return yield* PageVersion.decode(result[0]);
+      return PageVersion.decode(result[0]);
     }, catchStoreError),
     getVersions: Eff.fn("content.pages.getVersions")(function* (slug: string) {
       const rows = yield* mappers.getVersionsBySlug(slug);
@@ -113,7 +113,7 @@ export const makeContentPages = (
         Eff.gen(function* () {
           const record = yield* mappers.upsertPage(slug, page);
           yield* pages.createVersion(slug).pipe(Eff.asVoid);
-          return yield* Page.decode(record[0]);
+          return Page.decode(record[0]);
         })
       );
     }, catchStoreError),

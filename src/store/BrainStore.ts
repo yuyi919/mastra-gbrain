@@ -6,27 +6,17 @@ import type { SchemaError } from "effect/Schema";
 import type { SqlError } from "effect/unstable/sql";
 import type { SqlClient } from "effect/unstable/sql/SqlClient";
 import type {
-  AccessToken,
-  BrainHealth,
-  BrainStats,
   Chunk,
   ChunkInput,
-  DatabaseHealth,
-  FileRecord,
   GraphNode,
   GraphPath,
-  IngestLogEntry,
-  IngestLogInput,
   Link,
-  McpRequestLog,
   Page,
   PageFilters,
   PageInput,
   PageVersion,
-  RawData,
   SearchOpts,
   SearchResult,
-  StaleChunk,
   TimelineEntry,
   TimelineInput,
   TimelineOpts,
@@ -61,6 +51,10 @@ import {
   type RetrievalSearchService,
 } from "./brainstore/retrieval/search/index.js";
 import { BrainStoreCompat } from "./brainstore/compat/interface.js";
+import {
+  BrainStoreExt,
+  type ExtService,
+} from "./brainstore/ext/index.js";
 
 /**
  * `Eff.Effect<T, StoreError>` 的别名。
@@ -150,31 +144,6 @@ export interface TimelineService {
   ): EngineEffect<void>;
   addTimelineEntriesBatch(entries: TimelineBatchInput[]): EngineEffect<number>;
   getTimeline(slug: string, opts?: TimelineOpts): EngineEffect<TimelineEntry[]>;
-}
-
-export interface ExtService {
-  putRawData(slug: string, source: string, data: any): EngineEffect<void>;
-  getRawData(slug: string, source?: string): EngineEffect<RawData[]>;
-  upsertFile(
-    file: Omit<FileRecord, "id" | "page_id" | "created_at">
-  ): EngineEffect<void>;
-  getFile(storagePath: string): EngineEffect<FileRecord | null>;
-  getConfig(key: string): EngineEffect<string | null>;
-  setConfig(key: string, value: string): EngineEffect<void>;
-  logIngest(log: IngestLogInput): EngineEffect<void>;
-  verifyAccessToken(tokenHash: string): EngineEffect<AccessToken | null>;
-  logMcpRequest(
-    log: Omit<McpRequestLog, "id" | "created_at">
-  ): EngineEffect<void>;
-  getHealthReport(): EngineEffect<DatabaseHealth>;
-  getStats(): EngineEffect<BrainStats>;
-  getHealth(): EngineEffect<BrainHealth>;
-  getStaleChunks(): EngineEffect<StaleChunk[]>;
-  upsertVectors(
-    vectors: { id: string; vector: number[]; metadata: any }[]
-  ): EngineEffect<void>;
-  markChunksEmbedded(chunkIds: number[]): EngineEffect<void>;
-  getIngestLog(opts?: { limit?: number }): EngineEffect<IngestLogEntry[]>;
 }
 
 export interface BrainStoreLifecycle {
@@ -272,10 +241,6 @@ export class BrainStoreTimeline extends Context.Service<
   TimelineService
 >()("@yui-agent/brain-mastra/BrainStore/Timeline") {}
 
-export class BrainStoreExt extends Context.Service<BrainStoreExt, ExtService>()(
-  "@yui-agent/brain-mastra/BrainStore/Ext"
-) {}
-
 export class BrainStoreLifecycleService extends Context.Service<
   BrainStoreLifecycleService,
   BrainStoreLifecycle
@@ -341,6 +306,7 @@ export type {
 };
 export {
   BrainStoreEmbedding,
+  BrainStoreExt,
   BrainStoreGraphLinks,
   BrainStoreGraphTimeline,
   BrainStoreSearch,

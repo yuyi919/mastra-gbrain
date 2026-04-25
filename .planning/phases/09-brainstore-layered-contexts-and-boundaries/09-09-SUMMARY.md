@@ -20,7 +20,11 @@ key-files:
     - src/store/BrainStore.ts
     - src/store/brainstore/content/chunks/factory.ts
     - src/store/brainstore/content/pages/factory.ts
+    - src/store/brainstore/content/pages/interface.ts
     - src/store/brainstore/compat/factory.ts
+    - src/store/brainstore/ext/factory.ts
+    - src/store/brainstore/ext/index.ts
+    - src/store/brainstore/ext/interface.ts
     - src/store/brainstore/graph/links/factory.ts
     - src/store/brainstore/graph/timeline/factory.ts
     - src/store/brainstore/ops/internal/factory.ts
@@ -61,6 +65,8 @@ completed: 2026-04-25
 - Removed `as unknown` / `as any` casts from the touched store runtime modules by making the compat and tree adapters explicit.
 - Corrected the runtime assembly gap: `libsql-store.ts` now builds content, graph, retrieval, and ops branches through their dedicated factories and wires their dependencies through `Layer`.
 - Corrected the follow-up Layer boundary gap: branch `makeLayer` exports now own dependency acquisition for SQL, mappers, backlinks, embeddings, lifecycle refs, and unsafe DB internals; `libsql-store.ts` only passes external ports/options and composes the returned Layers.
+- Split `BrainStore.Ext` into `brainstore/ext/{interface,factory,index}.ts` and kept `libsql-store.ts` responsible only for composing `makeExtLayer()`.
+- Restored the delayed decode contract for `createVersion` and `putPage` so content pages align with `BrainStore.Ingestion` and `LibSQLStore.runFlatten`.
 
 ## Task Commits
 
@@ -70,7 +76,10 @@ Planned for the Phase 09 closeout commit.
 
 - `src/store/BrainStore.ts` - includes `BrainStoreCompat` in the runtime union.
 - `src/store/brainstore/content/pages/factory.ts` - allows transaction runners to expose SQL errors so Layer-provided `SqlClient` can be used directly.
+- `src/store/brainstore/content/pages/interface.ts` - aligns `createVersion` and `putPage` with the delayed `PutReturning` ingestion contract.
 - `src/store/brainstore/compat/factory.ts` - derives the flat compat adapter from `BrainStoreTree` branches.
+- `src/store/brainstore/ext/factory.ts` - owns the extension feature implementation and `BrainStoreExt` layer construction.
+- `src/store/brainstore/ext/interface.ts` - owns the `ExtService` contract and `BrainStoreExt` Context service.
 - `src/store/brainstore/ops/internal/factory.ts` - uses typed SQL and mapper dependencies and normalizes unsafe DB errors through `StoreError`.
 - `src/store/brainstore/ops/internal/interface.ts` - types the internal mapper handle as the actual `SqlBuilder` service.
 - `src/store/brainstore/ops/lifecycle/factory.ts` - accepts real `SqlClient` transaction/unsafe error channels and owns lifecycle error mapping.
@@ -84,6 +93,7 @@ Planned for the Phase 09 closeout commit.
 - Preserved legacy nested `createVersion` / `putPage` behavior on the compat surface while keeping tree content pages flattened.
 - Promoted branch factory usage to a hard runtime assembly rule: `libsql-store.ts` may adapt root/compat/ext, but must not duplicate content/graph/retrieval/ops branch implementations.
 - Promoted branch `makeLayer` usage to the actual runtime construction boundary; direct `Layer.effect(... makeX(...))` branch assembly does not belong in `libsql-store.ts`.
+- Promoted Ext to a first-class `brainstore/ext` branch module instead of keeping its implementation embedded in `libsql-store.ts`.
 - Left `src/store/index.ts` unchanged because the existing provider factory already points at `LibSQLStore` and required no API movement.
 
 ## Deviations from Plan
@@ -101,6 +111,7 @@ None.
 - `bun test test/libsql.test.ts test/ext.test.ts test/store/brainstore-tree.test.ts test/store/brainstore-layers.test.ts` - passed after factory/Layer assembly correction.
 - `rg -n "makeContentPages\\(|makeContentChunks\\(|makeGraphLinks\\(|makeGraphTimeline\\(|makeRetrievalEmbedding\\(|makeRetrievalSearch\\(|makeOpsLifecycle\\(|makeOpsInternal\\(" src/store/libsql-store.ts` - no matches after branch `makeLayer` delegation.
 - `rg -n "as unknown|as any|: any|<any" src/store/libsql-store.ts src/store/brainstore/content src/store/brainstore/graph src/store/brainstore/retrieval src/store/brainstore/ops` - no matches in the touched branch assembly surface.
+- `rg -n "use\\(\\([^)]*:" src/store src/search src/tools test` - no explicit `XXX.use((xxx: XXX) => ...)` callback type annotations remain.
 - `tsc --noEmit` - passed.
 - `pwsh ./scripts/check-effect-v4.ps1` - passed.
 
