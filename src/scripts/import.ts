@@ -9,8 +9,11 @@ import {
 } from "node:fs/promises";
 import { cpus, homedir, totalmem } from "node:os";
 import { join, relative } from "node:path";
-import { createIngestionWorkflow } from "../ingest/workflow.js";
-import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
+import {
+  createIngestionWorkflow,
+  type IngestionWorkflowStore,
+} from "../ingest/workflow.js";
+import type { EmbeddingProvider } from "../store/interface.js";
 
 function defaultWorkers(): number {
   const cpuCount = cpus().length;
@@ -64,7 +67,7 @@ async function findMarkdownFiles(dir: string): Promise<string[]> {
  */
 export async function bulkImport(
   baseDir: string,
-  storeInstance?: StoreProvider,
+  storeInstance?: IngestionWorkflowStore,
   embedderInstance?: EmbeddingProvider,
   options: { workerCount?: number; fresh?: boolean } = {}
 ): Promise<{ imported: number; skipped: number; failed: number }> {
@@ -94,14 +97,21 @@ export async function bulkImport(
     }
   }
 
-  // If providers are not passed (CLI mode), we initialize default ones
-  let activeStore = storeInstance;
+  // If providers are not passed (CLI mode), initialize only the owned default.
+  let ownedStore:
+    | (IngestionWorkflowStore & { init(): Promise<void> })
+    | undefined;
   let activeEmbedder = embedderInstance;
 
-  if (!activeStore) {
+  if (!storeInstance) {
     const { createDefaultStore } = await import("../store/index.js");
-    activeStore = createDefaultStore();
-    await (activeStore as any).init();
+    ownedStore = createDefaultStore();
+    await ownedStore.init();
+  }
+
+  const activeStore = storeInstance ?? ownedStore;
+  if (!activeStore) {
+    throw new Error("No ingestion store available");
   }
 
   if (!activeEmbedder) {

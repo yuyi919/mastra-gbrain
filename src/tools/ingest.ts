@@ -1,10 +1,13 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { createIngestionWorkflow } from "../ingest/workflow.js";
-import type { EmbeddingProvider, StoreProvider } from "../store/interface.js";
+import {
+  createIngestionWorkflow,
+  type IngestionWorkflowStore,
+} from "../ingest/workflow.js";
+import type { EmbeddingProvider } from "../store/interface.js";
 
 export function createIngestTool(
-  store: StoreProvider,
+  store: IngestionWorkflowStore,
   embedder: EmbeddingProvider
 ) {
   const ingestTool = createTool({

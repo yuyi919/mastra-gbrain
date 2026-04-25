@@ -7,6 +7,7 @@ import {
 } from "../../src/ingest/workflow.js";
 import { parseMarkdown } from "../../src/markdown.js";
 import type { EmbeddingProvider } from "../../src/store/interface.js";
+import { Page } from "../../src/types.js";
 
 type MockStore = IngestionWorkflowStore & {
   _calls: { method: string; args: unknown[] }[];
@@ -80,6 +81,21 @@ function mockEmbedder(): EmbeddingProvider {
   };
 }
 
+function mockPage(content_hash: string): Page {
+  return Page.decodeUnsafe({
+    id: 1,
+    slug: "concepts/same",
+    type: "concept",
+    title: "Same",
+    compiled_truth: "Same content.",
+    timeline: "",
+    frontmatter: "{}",
+    content_hash,
+    created_at: "2024-01-01T00:00:00.000Z",
+    updated_at: "2024-01-01T00:00:00.000Z",
+  });
+}
+
 describe("ingestion workflow", () => {
   test("declares a workflow-local store contract", () => {
     const source = readFileSync("src/ingest/workflow.ts", "utf-8");
@@ -140,7 +156,7 @@ Same content.
       )
       .digest("hex");
     const store = mockStore({
-      getPage: async () => ({ content_hash: hash }),
+      getPage: async () => mockPage(hash),
     });
     const workflow = createIngestionWorkflow({
       store,
@@ -231,9 +247,16 @@ ${"word ".repeat(400).trim()}
       expect((res.result as any).status).toBe("imported");
     }
     const upsert = store._calls.find((c) => c.method === "upsertChunks");
-    const chunks = upsert.args[1];
-    expect(chunks.some((c: any) => c.embedding instanceof Float32Array)).toBe(
-      true
-    );
+    const chunks = upsert?.args[1];
+    if (!Array.isArray(chunks)) throw new Error("Expected upsert chunks");
+    expect(
+      chunks.some(
+        (c) =>
+          c !== null &&
+          typeof c === "object" &&
+          "embedding" in c &&
+          c.embedding instanceof Float32Array
+      )
+    ).toBe(true);
   });
 });

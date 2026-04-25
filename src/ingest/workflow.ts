@@ -26,7 +26,7 @@ export interface IngestionWorkflowStore {
   removeTag(slug: string, tag: string): Promise<void>;
   upsertChunks(slug: string, chunks: ChunkInput[]): Promise<void>;
   deleteChunks(slug: string): Promise<void>;
-  addTimelineEntriesBatch(entries: TimelineBatchInput[]): Promise<void>;
+  addTimelineEntriesBatch(entries: TimelineBatchInput[]): Promise<unknown>;
   transaction?<T>(fn: (tx: IngestionWorkflowStore) => Promise<T>): Promise<T>;
 }
 
