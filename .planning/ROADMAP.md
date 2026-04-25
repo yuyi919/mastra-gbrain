@@ -20,7 +20,7 @@
 - `P10-05` Preserve all existing public `StoreProvider` and `LibSQLStore` behavior; do not widen the public API while narrowing consumers.
 
 **Depends on:** Phase 9
-**Plans:** not planned yet
+**Plans:** 7 plans
 
 Initial scope from current grep:
 - Production: `src/store/index.ts`
@@ -32,6 +32,15 @@ Carry-forward inputs:
 - Consolidated todo: `narrow-brainstore-dependencies-by-feature-layer`
 - Consolidated todo: `stabilize-provider-ingestion-workflow-surface`
 - Phase 09 UAT gap: provider/workflow surface stability should become follow-up work rather than an immediate Phase 09 fix.
+
+Plans:
+- [ ] 10-01-PLAN.md - Freeze the LibSQLStore/store-boundary consumer inventory before implementation
+- [ ] 10-02-PLAN.md - Narrow ingestion workflow/provider contract while preserving `{ store, embedder }`
+- [ ] 10-03-PLAN.md - Introduce typed internal vector provider layer and rewire branch consumers
+- [ ] 10-04-PLAN.md - Move `getChunksWithEmbeddings` ownership into the content chunks branch
+- [ ] 10-05-PLAN.md - Narrow tool and hybrid search consumer contracts
+- [ ] 10-06-PLAN.md - Narrow script utility contracts and helper tests
+- [ ] 10-07-PLAN.md - Close public facade regressions and final boundary guards
 
 ## Phase 9: Layer BrainStore Contexts & Tighten Store Boundaries
 
