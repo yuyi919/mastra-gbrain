@@ -10,6 +10,7 @@ import { parseMarkdown } from "../../src/markdown.js";
 import { ContentChunks } from "../../src/store/brainstore/content/chunks/index.js";
 import { ContentPages } from "../../src/store/brainstore/content/pages/index.js";
 import { GraphTimeline } from "../../src/store/brainstore/graph/timeline/index.js";
+import { OpsLifecycle } from "../../src/store/brainstore/ops/lifecycle/index.js";
 import type { EmbeddingProvider } from "../../src/store/interface.js";
 import { Page, type PageInput } from "../../src/types.js";
 
@@ -193,11 +194,17 @@ This is the compiled truth.
       },
       getTimeline: () => Effect.succeed([]),
     });
+    const lifecycle = OpsLifecycle.of({
+      init: () => Effect.succeed(undefined),
+      dispose: () => Effect.succeed(undefined),
+      transaction: (effect) => effect,
+    });
     const brainStore = ManagedRuntime.make(
       Layer.mergeAll(
         Layer.succeed(ContentPages, pages),
         Layer.succeed(ContentChunks, chunks),
-        Layer.succeed(GraphTimeline, timeline)
+        Layer.succeed(GraphTimeline, timeline),
+        Layer.succeed(OpsLifecycle, lifecycle)
       )
     );
     const fail = async () => {

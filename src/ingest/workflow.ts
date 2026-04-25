@@ -1,9 +1,15 @@
 import { createHash } from "node:crypto";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
+import * as Eff from "@yuyi919/tslibs-effect/effect-next";
+import type { ManagedRuntime } from "effect";
 import { z } from "zod";
 import { chunkText } from "../chunkers/recursive.js";
 import { parseMarkdown } from "../markdown.js";
 import { slugifyPath } from "../slug.js";
+import { ContentChunks } from "../store/brainstore/content/chunks/index.js";
+import { ContentPages } from "../store/brainstore/content/pages/index.js";
+import { GraphTimeline } from "../store/brainstore/graph/timeline/index.js";
+import { OpsLifecycle } from "../store/brainstore/ops/lifecycle/index.js";
 import type {
   EmbeddingProvider,
   TimelineBatchInput,
@@ -17,7 +23,30 @@ export interface IngestResult {
   error?: string;
 }
 
+export type IngestionWorkflowRuntime =
+  | ContentPages
+  | ContentChunks
+  | GraphTimeline
+  | OpsLifecycle;
+
+export interface IngestionPersistInput {
+  slug: string;
+  parsed: ParsedMarkdown;
+  contentHash: string;
+  existingHash?: string | null;
+  chunks: ChunkInput[];
+}
+
+/**
+ * Public workflow compatibility glue for existing `{ store, embedder }` callers.
+ * Internal lanes should prefer the `brainStore` runtime path below instead of
+ * treating this Promise-shaped contract as the target store model.
+ */
 export interface IngestionWorkflowStore {
+  readonly brainStore?: Pick<
+    ManagedRuntime.ManagedRuntime<IngestionWorkflowRuntime, never>,
+    "runPromise"
+  >;
   getPage(slug: string): Promise<Page | null>;
   createVersion(slug: string): Promise<unknown>;
   putPage(slug: string, page: PageInput): Promise<unknown>;
@@ -35,6 +64,94 @@ export interface IngestionOptions {
   embedder: EmbeddingProvider;
   maxBytes?: number;
 }
+
+export const getIngestionPageEffect = Eff.fn("ingest.workflow.getPage")(
+  function* (slug: string) {
+    const pages = yield* ContentPages;
+    return yield* pages.getPage(slug);
+  }
+);
+
+function timelineEntriesFromParsed(
+  slug: string,
+  parsed: ParsedMarkdown
+): TimelineBatchInput[] {
+  if (!parsed.timeline) return [];
+  return parsed.timeline
+    .split("\n")
+    .filter((line) => line.trim().startsWith("- "))
+    .map((line) => {
+      const match = line.match(/-\s+(\d{4}(?:-\d{2}-\d{2})?):\s+(.*)/);
+      if (match) {
+        return {
+          slug,
+          date: match[1],
+          summary: match[2],
+          source: slug,
+          detail: "",
+        };
+      }
+      return {
+        slug,
+        date: "",
+        summary: line.substring(2).trim(),
+        source: slug,
+        detail: "",
+      };
+    })
+    .filter((entry) => entry.date !== "");
+}
+
+const persistIngestionWriteEffect = Eff.fn("ingest.workflow.persist.write")(
+  function* (input: IngestionPersistInput) {
+    const pages = yield* ContentPages;
+    const chunks = yield* ContentChunks;
+    const timeline = yield* GraphTimeline;
+    const { slug, parsed } = input;
+
+    if (input.existingHash) {
+      yield* yield* pages.createVersion(slug);
+    }
+
+    yield* yield* pages.putPage(slug, {
+      type: parsed.type,
+      title: parsed.title,
+      frontmatter: parsed.frontmatter || {},
+      compiled_truth: parsed.compiled_truth,
+      timeline: parsed.timeline,
+      content_hash: input.contentHash,
+    });
+
+    const existingTags = yield* pages.getTags(slug);
+    const newTags = new Set(parsed.tags);
+    for (const old of existingTags) {
+      if (!newTags.has(old)) {
+        yield* pages.removeTag(slug, old);
+      }
+    }
+    for (const tag of parsed.tags) {
+      yield* pages.addTag(slug, tag);
+    }
+
+    if (input.chunks.length > 0) {
+      yield* chunks.upsertChunks(slug, input.chunks);
+    } else {
+      yield* chunks.deleteChunks(slug);
+    }
+
+    const entries = timelineEntriesFromParsed(slug, parsed);
+    if (entries.length > 0) {
+      yield* timeline.addTimelineEntriesBatch(entries);
+    }
+  }
+);
+
+export const persistIngestionEffect = Eff.fn("ingest.workflow.persist")(
+  function* (input: IngestionPersistInput) {
+    const lifecycle = yield* OpsLifecycle;
+    yield* lifecycle.transaction(persistIngestionWriteEffect(input));
+  }
+);
 
 export function createIngestionWorkflow(deps: IngestionOptions) {
   const { store, embedder, maxBytes = 5000000 } = deps;
@@ -98,7 +215,9 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
         )
         .digest("hex");
 
-      const existing = await deps.store.getPage(slug);
+      const existing = deps.store.brainStore
+        ? await deps.store.brainStore.runPromise(getIngestionPageEffect(slug))
+        : await deps.store.getPage(slug);
       return {
         slug,
         status: "ready" as const,
@@ -261,36 +380,23 @@ export function createIngestionWorkflow(deps: IngestionOptions) {
           await tx.deleteChunks(slug);
         }
 
-        if (parsed.timeline) {
-          const lines = parsed.timeline
-            .split("\n")
-            .filter((l) => l.trim().startsWith("- "));
-          const entries = lines
-            .map((line) => {
-              const match = line.match(/-\s+(\d{4}(?:-\d{2}-\d{2})?):\s+(.*)/);
-              if (match) {
-                return {
-                  slug,
-                  date: match[1],
-                  summary: match[2],
-                  source: slug,
-                  detail: "",
-                };
-              }
-              return {
-                slug,
-                date: "",
-                summary: line.substring(2).trim(),
-                source: slug,
-                detail: "",
-              };
-            })
-            .filter((e) => e.date !== "");
+        const entries = timelineEntriesFromParsed(slug, parsed);
+        if (entries.length > 0) {
           await tx.addTimelineEntriesBatch(entries);
         }
       };
 
-      if (deps.store.transaction) {
+      if (deps.store.brainStore) {
+        await deps.store.brainStore.runPromise(
+          persistIngestionEffect({
+            slug,
+            parsed,
+            contentHash: content_hash,
+            existingHash: inputData.existing_hash,
+            chunks: inputData.chunks as ChunkInput[],
+          })
+        );
+      } else if (deps.store.transaction) {
         await deps.store.transaction(write);
       } else {
         await write(deps.store);
