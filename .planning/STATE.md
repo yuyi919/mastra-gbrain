@@ -6,7 +6,7 @@ current_phase: 10
 current_phase_name: audit-libsqlstore-consumers-narrow-public-store-boundaries
 status: completed
 stopped_at: Completed 10-07-PLAN.md
-last_updated: "2026-04-26T05:16:40.884Z"
+last_updated: "2026-04-26T05:46:45.696Z"
 last_activity: 2026-04-26
 progress:
   total_phases: 2
@@ -24,7 +24,7 @@ Phase: 10 (audit-libsqlstore-consumers-narrow-public-store-boundaries) — EXECU
 Plan: 7 of 7
 **Current Phase:** 10
 **Current Phase Name:** audit-libsqlstore-consumers-narrow-public-store-boundaries
-**Status:** Milestone complete
+**Status:** v1.0 milestone complete
 **Plan:** Not started
 **Last activity:** 2026-04-26
 
@@ -33,6 +33,17 @@ Plan: 7 of 7
 ### Pending Todos
 
 - 1 pending todo in `.planning/todos/pending/`
+
+### Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-04-26:
+
+| Category | Item | Status |
+|----------|------|--------|
+| quick_task | 260425-q01-gsd-help-zh-docs | missing |
+| quick_task | 260425-q02-husky-lint-staged | missing |
+| quick_task | 260425-x3w-effect-skill | missing |
+| todo | 2026-04-25-refine-phase-9-content-chunks-and-vector-provider-layers.md | pending |
 
 ### Roadmap Evolution
 

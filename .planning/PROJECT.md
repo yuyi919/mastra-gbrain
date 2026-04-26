@@ -8,7 +8,8 @@ Provide reliable ingestion, indexing, and hybrid retrieval for multilingual note
 
 ## Current State
 
-- `v1.0` is closed and archived as of 2026-04-24.
+- `v1.0` milestone was finalized on 2026-04-26 (initially shipped on 2026-04-24).
+- The post-ship store boundary follow-up (Phases 09-10) is completed and archived.
 - The store runtime migration, regression repair, type-safety cleanup, and milestone evidence backfill are complete.
 - The repository is ready to begin the next implementation cycle without more milestone repair work.
 
@@ -25,4 +26,4 @@ Provide reliable ingestion, indexing, and hybrid retrieval for multilingual note
 - Continue development from code-first tasks, using archived v1.0 documents only as historical reference.
 
 ---
-*Last updated: 2026-04-24 after v1.0 milestone close*
+*Last updated: 2026-04-26 after v1.0 milestone finalization*

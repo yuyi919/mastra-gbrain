@@ -1,23 +1,24 @@
-﻿# Milestones
+# Milestones
 
-## v1.0 milestone (Shipped: 2026-04-24)
+## v1.0 milestone (Finalized: 2026-04-26, Initial ship: 2026-04-24)
 
-**Phases completed:** 8 phases, 4 active-roadmap plans, archive reconciled
+**Scope at final close:** baseline shipment plus post-v1.0 hardening/refactor follow-up (Phases 09-10)
 
 **Key accomplishments:**
 
-- Replaced the core Promise-first store runtime with the BrainStore/Effect runtime in phased waves.
-- Repaired the regressions and type-safety fallout from the runtime migration.
-- Produced a performance report and next-step Effect roadmap for the upper layers.
-- Finished the remaining `libsql.ts` Promise-to-Effect adapter routing.
-- Backfilled missing archived verification and validation evidence so the milestone can be replayed from planning artifacts.
-- Reconciled milestone bookkeeping after the earlier archive pass.
+- Replaced the Promise-first store runtime path with Effect/BrainStore layering and stabilized adapter behavior.
+- Completed the Phase 09 layered BrainStore refactor with branch-first dependency boundaries.
+- Completed the Phase 10 consumer-boundary audit with runtime-first internal paths and public facade compatibility retained.
+- Added final facade regression evidence and verification closure for the store boundary program.
+- Extracted Phase 09 and Phase 10 learnings for continuity and future planning.
 
-**Known deferred items at close:** 2 pending todos in `.planning/todos/pending/`
+**Known deferred items at close:** 4 items acknowledged as deferred (3 quick tasks, 1 pending todo; see `.planning/STATE.md` → Deferred Items)
 
 **Archive notes:**
 
-- Archived phases 01-04 live under `.planning/milestones/v1.0-phases/`.
-- Post-archive closure phases 05-08 remain in `.planning/phases/` until an explicit cleanup/archive pass is requested.
+- Archived roadmap snapshot: `.planning/milestones/v1.0-ROADMAP.md`
+- Archived requirements snapshot: `.planning/milestones/v1.0-REQUIREMENTS.md`
+- Archived audit report: `.planning/milestones/v1.0-MILESTONE-AUDIT.md`
+- Archived phase history: `.planning/milestones/v1.0-phases/` (includes legacy and post-v1.0 follow-up phases)
 
 ---
